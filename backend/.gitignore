@@ -1,0 +1,54 @@
+# Node
+node_modules/
+
+# Environment
+.env
+.env.*
+
+# Logs
+logs/
+*.log
+
+# Build
+dist/
+build/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+
+# Vercel
+.vercel/
+
+# Mongo
+mongodb-data/
+
+# WhatsApp Sessions
+backend/.wwebjs_auth/
+backend/.wwebjs_cache/
+
+# Uploads
+uploads/
+
+# Cache
+.cache/
+
+# Temporary
+tmp/
+temp/
+
+# Coverage
+coverage/
+
+# npm
+npm-debug.log*
+
+# Secrets
+*.pem
+*.key

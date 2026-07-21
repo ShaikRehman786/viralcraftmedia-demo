@@ -1,0 +1,44 @@
+{
+  "name": "ViralCraft Media CRM",
+  "short_name": "VCM CRM",
+  "description": "ViralCraft Media - Enterprise CRM for Video Production & Creative Services",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#0F172A",
+  "background_color": "#0F172A",
+  "categories": ["business", "productivity", "communication"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/logoooooooooo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logoooooooooo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View CRM Dashboard",
+      "url": "/",
+      "icons": [{ "src": "/logoooooooooo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Notifications",
+      "short_name": "Notifications",
+      "description": "View Notification Center",
+      "url": "/notifications",
+      "icons": [{ "src": "/logoooooooooo.png", "sizes": "192x192" }]
+    }
+  ]
+}

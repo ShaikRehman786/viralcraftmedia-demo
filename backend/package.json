@@ -24,6 +24,7 @@
     "morgan": "^1.11.0",
     "qrcode": "^1.5.4",
     "resend": "^6.17.2",
+    "socket.io": "^4.8.3",
     "web-push": "^3.6.7",
     "whatsapp-web.js": "^1.34.7"
   },

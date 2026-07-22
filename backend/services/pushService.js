@@ -14,14 +14,116 @@ function buildPayload(notification) {
     ? (notification.actionUrl.startsWith('http') ? notification.actionUrl : `${baseUrl}${notification.actionUrl}`)
     : baseUrl;
 
+  const rawTitle = notification.title || '';
+  const rawMessage = notification.message || '';
+  const lowerTitle = rawTitle.toLowerCase();
+
+  let formattedTitle = rawTitle || 'New Notification';
+  let formattedBody = rawMessage;
+  let tag = 'vcm-general';
+
+  // 1. Authentication
+  if (lowerTitle.includes('login') || lowerTitle.includes('sign in')) {
+    formattedTitle = `🟢 Super Admin Login`;
+    const emailMatch = rawMessage.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/);
+    if (emailMatch) {
+      formattedBody = `Super Admin "${emailMatch[1]}" signed in successfully.`;
+    } else {
+      formattedBody = `Super Admin signed in successfully.`;
+    }
+    tag = 'vcm-auth';
+  } else if (lowerTitle.includes('logout') || lowerTitle.includes('sign out')) {
+    formattedTitle = `🔴 Super Admin Logout`;
+    tag = 'vcm-auth';
+  }
+  // 2. Enquiries / Leads
+  else if (lowerTitle.includes('enquiry') || lowerTitle.includes('lead')) {
+    formattedTitle = `📩 New Service Enquiry`;
+    const match = rawMessage.match(/New enquiry for (.+?) from (.+?) \((.+?)\)/);
+    const clientMatch = rawMessage.match(/Client (.+?) submitted an enquiry for (.+?)\./);
+    if (match) {
+      formattedBody = `A new ${match[1]} enquiry has been submitted by ${match[2]}.`;
+    } else if (clientMatch) {
+      formattedBody = `A new ${clientMatch[2]} enquiry has been submitted by ${clientMatch[1]}.`;
+    } else {
+      formattedBody = rawMessage;
+    }
+    tag = 'vcm-enquiry';
+  }
+  // 3. Payments
+  else if (lowerTitle.includes('payment')) {
+    if (lowerTitle.includes('received') || lowerTitle.includes('success')) {
+      formattedTitle = `💳 Payment Received`;
+      const match = rawMessage.match(/₹([\d,]+) received from (.+?) for (.+?)\./);
+      const match2 = rawMessage.match(/₹([\d,]+) received from (.+?)(?: for (.+?))?$/);
+      if (match) {
+        formattedBody = `Advance payment of ₹${match[1]} received from ${match[2]}.`;
+      } else if (match2) {
+        formattedBody = `Advance payment of ₹${match2[1]} received from ${match2[2]}.`;
+      } else {
+        formattedBody = rawMessage;
+      }
+    } else if (lowerTitle.includes('failed')) {
+      formattedTitle = `⚠️ Payment Failed`;
+      tag = 'vcm-payment';
+    } else {
+      formattedTitle = `⏳ Payment Pending`;
+    }
+    tag = 'vcm-payment';
+  }
+  // 4. Projects / Orders
+  else if (lowerTitle.includes('project') || lowerTitle.includes('order')) {
+    if (lowerTitle.includes('created') || lowerTitle.includes('received')) {
+      formattedTitle = `🚀 New Project Created`;
+      const projMatch = rawMessage.match(/Project (.+?) has been auto-created/);
+      if (projMatch) {
+        formattedBody = `Project "${projMatch[1]}" has been created successfully.`;
+      } else {
+        formattedBody = rawMessage;
+      }
+    } else if (lowerTitle.includes('delivered') || lowerTitle.includes('ready')) {
+      formattedTitle = `📦 Project Delivered`;
+    } else if (lowerTitle.includes('assigned')) {
+      formattedTitle = `🤝 Project Assigned`;
+    } else {
+      formattedTitle = `📁 Project Update`;
+    }
+    tag = 'vcm-project';
+  }
+  // 5. Tasks
+  else if (lowerTitle.includes('task')) {
+    if (lowerTitle.includes('assigned')) {
+      formattedTitle = `📋 Task Assigned`;
+    } else if (lowerTitle.includes('completed') || lowerTitle.includes('submit')) {
+      formattedTitle = `✅ Task Completed`;
+    } else if (lowerTitle.includes('rejected')) {
+      formattedTitle = `❌ Task Rejected`;
+    } else if (lowerTitle.includes('approved')) {
+      formattedTitle = `👍 Task Approved`;
+    } else {
+      formattedTitle = `📝 Task Update`;
+    }
+    tag = 'vcm-task';
+  }
+  // 6. Staff / User approvals
+  else if (lowerTitle.includes('staff') || lowerTitle.includes('employee') || lowerTitle.includes('invite')) {
+    formattedTitle = `👥 Staff Management`;
+    tag = 'vcm-staff';
+  }
+  // 7. System / Whatsapp
+  else if (lowerTitle.includes('system') || lowerTitle.includes('whatsapp') || lowerTitle.includes('error')) {
+    formattedTitle = `⚙️ System Alert`;
+    tag = 'vcm-system';
+  }
+
   return JSON.stringify({
-    title: `${notification.title || 'New Notification'} | ViralCraft Media`,
-    body: notification.message,
+    title: formattedTitle,
+    body: formattedBody,
     icon: `${baseUrl}/logoooooooooo.png`,
     badge: `${baseUrl}/favicon.svg`,
     image: notification.metadata?.image || `${baseUrl}/website%20header.png`,
     vibrate: [200, 100, 200],
-    tag: `vcm-${notification._id || Date.now()}`,
+    tag: tag,
     renotify: true,
     requireInteraction: true,
     silent: false,
@@ -31,8 +133,8 @@ function buildPayload(notification) {
       notificationId: notification._id || '',
       referenceId: notification.referenceId || '',
       referenceModel: notification.referenceModel || '',
-      title: notification.title || '',
-      message: notification.message || '',
+      title: formattedTitle,
+      message: formattedBody,
       type: notification.type || 'info',
       priority: notification.priority || 'medium'
     },

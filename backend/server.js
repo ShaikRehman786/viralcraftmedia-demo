@@ -29,12 +29,15 @@ const startServer = async () => {
     // Initialize Socket.io with CORS parameters matching Express
     const allowedOrigins = [
       config.clientUrl,
+      'https://viralcraftmedia-demo.vercel.app',
+      'https://viralcraftmedia-demo.onrender.com',
       'https://viralcraftmedia.com',
-      'https://www.viralcraftmedia.com'
+      'https://www.viralcraftmedia.com',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5000',
+      'http://localhost:3000'
     ].filter(Boolean);
-    if (config.nodeEnv === 'development') {
-      allowedOrigins.push('http://localhost:5173', 'http://localhost:5174', 'http://localhost:5000');
-    }
     const io = new Server(server, {
       cors: {
         origin: allowedOrigins,

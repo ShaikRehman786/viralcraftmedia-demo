@@ -189,8 +189,14 @@ export const logout = async (req, res, next) => {
       await req.user.save();
     }
 
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    const isProduction = config.nodeEnv === 'production';
+    const clearOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax'
+    };
+    res.clearCookie('accessToken', clearOptions);
+    res.clearCookie('refreshToken', clearOptions);
 
     if (req.user) {
       await logEvent({
@@ -405,8 +411,14 @@ export const logoutAllDevices = async (req, res, next) => {
     req.user.refreshTokens = [];
     await req.user.save();
 
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    const isProduction = config.nodeEnv === 'production';
+    const clearOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax'
+    };
+    res.clearCookie('accessToken', clearOptions);
+    res.clearCookie('refreshToken', clearOptions);
 
     await logEvent({
       userId: req.user._id,

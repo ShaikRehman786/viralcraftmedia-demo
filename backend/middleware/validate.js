@@ -54,12 +54,15 @@ export const validateCsrfToken = (req, res, next) => {
   const clientUrl = process.env.CLIENT_URL;
   const allowedOrigins = [
     clientUrl,
+    'https://viralcraftmedia-demo.vercel.app',
+    'https://viralcraftmedia-demo.onrender.com',
     'https://viralcraftmedia.com',
-    'https://www.viralcraftmedia.com'
+    'https://www.viralcraftmedia.com',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5000',
+    'http://localhost:3000'
   ].filter(Boolean);
-  if (nodeEnv === 'development') {
-    allowedOrigins.push('http://localhost:5173', 'http://localhost:5000');
-  }
 
   // Skip CSRF check for GET/HEAD/OPTIONS requests and webhook endpoints
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {

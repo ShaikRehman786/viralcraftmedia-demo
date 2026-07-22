@@ -11,24 +11,22 @@ const app = express();
 
 // Security Headers via Helmet
 app.use(helmet({
-  contentSecurityPolicy: false // Allow inline scripts for dashboard flexibility
+  contentSecurityPolicy: false, // Allow inline scripts for dashboard flexibility
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 
 // CORS Configuration
 const allowedOrigins = [
   config.clientUrl,
+  'https://viralcraftmedia-demo.vercel.app',
+  'https://viralcraftmedia-demo.onrender.com',
   'https://viralcraftmedia.com',
-  'https://www.viralcraftmedia.com'
+  'https://www.viralcraftmedia.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5000',
+  'http://localhost:3000'
 ].filter(Boolean);
-
-// Allow localhost origins only in development
-if (config.nodeEnv === 'development') {
-  allowedOrigins.push(
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5000'
-  );
-}
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -43,7 +41,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Request body size limits & JSON parsers

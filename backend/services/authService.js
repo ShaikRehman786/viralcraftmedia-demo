@@ -99,8 +99,14 @@ export const rotateRefreshToken = async (oldToken, res) => {
     // 4. Generate new tokens
     return await getSignedTokenResponse(user, 200, res);
   } catch (err) {
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    const isProduction = config.nodeEnv === 'production';
+    const clearOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax'
+    };
+    res.clearCookie('accessToken', clearOptions);
+    res.clearCookie('refreshToken', clearOptions);
     throw new Error('Invalid or expired session. Please log in again.');
   }
 };

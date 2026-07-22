@@ -22,13 +22,8 @@ import {
 
 axios.defaults.withCredentials = true;
 
-const getSocketUrl = () => {
-  const origin = window.location.origin;
-  if (origin.includes('localhost:5173') || origin.includes('localhost:5174')) {
-    return 'http://localhost:5000';
-  }
-  return origin;
-};
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'https://viralcraftmedia-demo.onrender.com';
+const getSocketUrl = () => SOCKET_URL;
 
 function formatTS(date) {
   if (!date) return '—';

@@ -2,13 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-const getSocketUrl = () => {
-  const origin = window.location.origin;
-  if (origin.includes('localhost:5173') || origin.includes('localhost:5174')) {
-    return 'http://localhost:5000';
-  }
-  return origin;
-};
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'https://viralcraftmedia-demo.onrender.com';
+const getSocketUrl = () => SOCKET_URL;
 import {
   Bell, CheckCheck, Trash2, X, Search, Filter, ChevronDown,
   Clock, ArrowUpDown, Loader2, Inbox

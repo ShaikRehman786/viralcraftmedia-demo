@@ -10,6 +10,7 @@ import Footer from './components/Footer.jsx';
 import AnimatedCounter from './components/shared/AnimatedCounter.jsx';
 import { clientTestimonials } from './data/clientTestimonials.js';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'https://viralcraftmedia-demo.onrender.com';
 
 const PodcastEditingPage = React.lazy(() => import('./components/PodcastEditingPage.jsx'));
 const MarketingPage = React.lazy(() => import('./components/MarketingPage.jsx'));
@@ -202,7 +203,7 @@ function LandingPage() {
 
     setEnquiryStatus('loading');
     try {
-      const res = await fetch('/api/enquiries', {
+      const res = await fetch(`${API_BASE}/api/enquiries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -437,7 +438,7 @@ function LandingPage() {
     if (!validate()) { toast('Please fix form errors', 'error'); return; }
     setStatus('loading');
     try {
-      const res = await fetch('/api/enquiries', {
+      const res = await fetch(`${API_BASE}/api/enquiries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -475,10 +476,10 @@ function LandingPage() {
     setPayId('');
     try {
       toast('Creating order...', 'info');
-      const cRes = await fetch('/api/config');
+      const cRes = await fetch(`${API_BASE}/api/config`);
       if (!cRes.ok) throw new Error('Config fetch failed');
       const cData = await cRes.json();
-      const oRes = await fetch('/api/create-order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: price }) });
+      const oRes = await fetch(`${API_BASE}/api/create-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: price }) });
       if (!oRes.ok) throw new Error('Order creation failed');
       const oData = await oRes.json();
       if (typeof window.Razorpay === 'undefined') throw new Error('Razorpay unavailable');
@@ -489,7 +490,7 @@ function LandingPage() {
         handler: async (resp) => {
           toast('Verifying...', 'info');
           try {
-            const vRes = await fetch('/api/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ razorpay_order_id: oData.orderId, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature, name, contact: `91${phone}`, videoLink: link, instructions, clipCount: jobs, amount: price, platform }) });
+            const vRes = await fetch(`${API_BASE}/api/verify-payment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ razorpay_order_id: oData.orderId, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature, name, contact: `91${phone}`, videoLink: link, instructions, clipCount: jobs, amount: price, platform }) });
             if (!vRes.ok) throw new Error('Verify failed');
             const vData = await vRes.json();
             if (vData.success) {

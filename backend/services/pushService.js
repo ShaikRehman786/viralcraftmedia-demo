@@ -15,7 +15,7 @@ function buildPayload(notification) {
     : baseUrl;
 
   return JSON.stringify({
-    title: 'ViralCraft Media',
+    title: `${notification.title || 'New Notification'} | ViralCraft Media`,
     body: notification.message,
     icon: `${baseUrl}/logoooooooooo.png`,
     badge: `${baseUrl}/favicon.svg`,
@@ -25,6 +25,7 @@ function buildPayload(notification) {
     renotify: true,
     requireInteraction: true,
     silent: false,
+    timestamp: notification.createdAt ? new Date(notification.createdAt).getTime() : Date.now(),
     data: {
       url: actionUrl,
       notificationId: notification._id || '',
@@ -53,7 +54,12 @@ async function sendToSubscription(subscription, payload) {
         }
       },
       payload,
-      { TTL: 86400 }
+      { 
+        TTL: 86400,
+        headers: {
+          'Urgency': 'high'
+        }
+      }
     );
     return true;
   } catch (err) {

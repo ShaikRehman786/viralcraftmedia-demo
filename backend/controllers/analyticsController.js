@@ -13,7 +13,7 @@ export const getDashboardStats = async (req, res, next) => {
     today.setHours(0, 0, 0, 0);
 
     // 1. Orders Today & Revenue Today
-    const todayOrders = await Order.find({ paymentStatus: 'success', createdAt: { $gte: today } });
+    const todayOrders = await Order.find({ paymentStatus: 'success', createdAt: { $gte: today } }).select('amount').lean();
     const ordersToday = todayOrders.length;
     const revenueToday = todayOrders.reduce((sum, ord) => sum + ord.amount, 0);
 
@@ -34,11 +34,11 @@ export const getDashboardStats = async (req, res, next) => {
     const projectsDelayed = await Project.countDocuments({ estimatedCompletion: { $lt: today }, status: { $ne: 'completed' } });
 
     // 5. Success Payments & Revenue Overview
-    const successOrders = await Order.find({ paymentStatus: 'success' });
+    const successOrders = await Order.find({ paymentStatus: 'success' }).select('amount').lean();
     const totalRevenue = successOrders.reduce((sum, ord) => sum + ord.amount, 0);
 
     // 6. Turnaround Speed (TAT)
-    const completedProjects = await Project.find({ status: 'completed' });
+    const completedProjects = await Project.find({ status: 'completed' }).select('createdAt updatedAt').lean();
     let totalDeliveryHours = 0;
     let completedCount = 0;
     for (const proj of completedProjects) {
@@ -58,7 +58,7 @@ export const getDashboardStats = async (req, res, next) => {
     const customerSatisfaction = Math.max(3.8, Math.min(5.0, rawCsat)).toFixed(1);
 
     // 8. Editor / Employee Productivity Metrics (Leaderboard stats)
-    const editors = await User.find({ role: 'EMPLOYEE', status: 'active' });
+    const editors = await User.find({ role: 'EMPLOYEE', status: 'active' }).select('name email department').lean();
     const employeeProductivity = [];
     for (const ed of editors) {
       const totalTasks = await Task.countDocuments({ assignedTo: ed._id });
@@ -66,7 +66,7 @@ export const getDashboardStats = async (req, res, next) => {
       const rejectedTasksCount = await Task.countDocuments({ assignedTo: ed._id, status: 'rejected' });
       
       // Calculate average approval speed
-      const userApprovedTasks = await Task.find({ assignedTo: ed._id, status: 'approved' });
+      const userApprovedTasks = await Task.find({ assignedTo: ed._id, status: 'approved' }).select('createdAt updatedAt').lean();
       let elapsedTotalMs = 0;
       for (const t of userApprovedTasks) {
         if (t.updatedAt && t.createdAt) {
@@ -97,7 +97,7 @@ export const getDashboardStats = async (req, res, next) => {
     employeeProductivity.sort((a, b) => b.completedTasks - a.completedTasks);
 
     // 9. Manager Productivity metrics
-    const managers = await User.find({ role: 'MANAGER', status: 'active' });
+    const managers = await User.find({ role: 'MANAGER', status: 'active' }).select('name').lean();
     const managerProductivity = [];
     for (const m of managers) {
       const managedCount = await Project.countDocuments({ manager: m._id });
@@ -146,7 +146,8 @@ export const getDashboardStats = async (req, res, next) => {
 
     const recentOrders = await Order.find({ paymentStatus: 'success' })
       .sort({ createdAt: -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
 
     return res.status(200).json({
       success: true,

@@ -556,6 +556,29 @@ export const addTaskComment = async (req, res, next) => {
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
+
+    // Verify user has access to this task
+    const project = await Project.findById(task.project);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const isAdmin = req.user.role === 'SUPER_ADMIN';
+    const isManager = req.user.role === 'MANAGER';
+    const isEmployee = req.user.role === 'EMPLOYEE' && task.assignedTo?.toString() === req.user._id.toString();
+    
+    let isClient = false;
+    if (req.user.role === 'CLIENT') {
+      const clientDoc = await Client.findOne({ phone: req.user.phone });
+      if (clientDoc && project.client?.toString() === clientDoc._id.toString()) {
+        isClient = true;
+      }
+    }
+
+    if (!isAdmin && !isManager && !isEmployee && !isClient) {
+      return res.status(403).json({ error: 'You do not have permission to comment on this task.' });
+    }
+
     task.comments.push({
       sender: req.user._id,
       senderName: req.user.name,
@@ -578,6 +601,11 @@ export const trackTaskTime = async (req, res, next) => {
     const task = await Task.findById(req.params.id);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Verify user is assigned to this task
+    if (task.assignedTo?.toString() !== req.user._id.toString() && req.user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'You are not assigned to this task.' });
     }
 
     // Calculate elapsed time if pausing or completing
@@ -801,6 +829,18 @@ export const acceptProjectAssignment = async (req, res, next) => {
       return res.status(404).json({ error: 'Project not found' });
     }
     console.log('Project Found');
+
+    // Verify user has access to accept this project assignment
+    if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'Only authorized employees can accept project assignments.' });
+    }
+
+    const isSuggested = project.suggestedEmployee?.toString() === user._id.toString();
+    const isAssigned = project.employees?.some(id => id.toString() === user._id.toString());
+
+    if (!isSuggested && !isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'You are not authorized to accept this project assignment.' });
+    }
 
     // Prevent multiple employee acceptance
     if (project.assignmentStatus === 'Accepted' && project.employeeId && project.employeeId.toString() !== user._id.toString()) {

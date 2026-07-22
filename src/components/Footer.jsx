@@ -20,7 +20,7 @@ export default function Footer() {
       <div className="container">
         <div className="ft-grid">
           <div className="ft-brand">
-            <img className="ft-logo-img" src="/logoooooooooo.png" alt="ViralCraftMedia" loading="eager" decoding="async" />
+            <img className="ft-logo-img" src="/logoooooooooo.png" alt="ViralCraftMedia" loading="lazy" decoding="async" />
             <p className="ft-tagline">Luxury Creative Editing Studio.<br />Hyderabad, Telangana</p>
             <div className="ft-social">
               <a href="https://www.instagram.com/viralcraftsocial" target="_blank" rel="noopener noreferrer" className="ft-social-link" aria-label="Instagram">

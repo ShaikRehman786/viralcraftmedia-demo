@@ -21,9 +21,10 @@ self.addEventListener('push', (event) => {
       image: data.image || '/website%20header.png',
       vibrate: data.vibrate || [200, 100, 200],
       tag: data.tag || `vcm-${Date.now()}`,
-      renotify: true,
-      requireInteraction: true,
-      silent: false,
+      renotify: data.renotify !== undefined ? data.renotify : true,
+      requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
+      silent: data.silent !== undefined ? data.silent : false,
+      timestamp: data.timestamp || Date.now(),
       data: data.data || {},
       actions: data.actions || [
         { action: 'open', title: 'View Details' },
@@ -40,6 +41,7 @@ self.addEventListener('push', (event) => {
       vibrate: [200, 100, 200],
       tag: `vcm-${Date.now()}`,
       requireInteraction: true,
+      timestamp: Date.now(),
       data: { url: '/' }
     };
     event.waitUntil(self.registration.showNotification(title, options));

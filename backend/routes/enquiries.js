@@ -1,5 +1,6 @@
 import express from 'express';
 import { protect, authorize } from '../middleware/auth.js';
+import { apiLimiter } from '../middleware/rateLimiter.js';
 import {
   createEnquiry,
   getEnquiries,
@@ -12,8 +13,8 @@ import {
 
 const router = express.Router();
 
-// Public route to submit an enquiry
-router.post('/', createEnquiry);
+// Public route to submit an enquiry (Rate Limited)
+router.post('/', apiLimiter, createEnquiry);
 
 // Protected routes (Admin / Manager only)
 router.get('/', protect, authorize('SUPER_ADMIN', 'MANAGER'), getEnquiries);

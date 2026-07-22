@@ -26,11 +26,7 @@ import {
   DownloadCloud,
   Scissors,
   TrendingUp,
-  Home,
-  Play,
-  Heart,
-  MessageCircle,
-  Bookmark
+  Home
 } from 'lucide-react';
 
 function IconWrapper({ icon: Icon, size = 32, color = 'var(--accent)', className = '', ...props }) {
@@ -70,6 +66,92 @@ function useDebounce(fn, _delay) {
   }, []);
 }
 
+function ReelVideo({ src }) {
+  const videoRef = useRef(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setInView(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '100px' });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      src={inView ? src : undefined}
+      preload="metadata"
+      autoPlay
+      muted
+      loop
+      playsInline
+      className="reel-video-element"
+    />
+  );
+}
+
+function useSmoothScroll(ref, speed, initialOffset = 0) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let y = initialOffset;
+    let running = false;
+    let frameId;
+
+    const getSetHeight = () => {
+      const firstSet = el.querySelector('.showcase-set');
+      return firstSet ? firstSet.offsetHeight : el.scrollHeight / 2;
+    };
+
+    const animate = () => {
+      if (!running) return;
+      y -= speed;
+      const setH = getSetHeight();
+      if (setH > 0 && Math.abs(y) >= setH) {
+        y += setH;
+      }
+      el.style.transform = `translate3d(0, ${y}px, 0)`;
+      frameId = requestAnimationFrame(animate);
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      const isIntersecting = entries[0].isIntersecting;
+      if (isIntersecting) {
+        if (!running) {
+          running = true;
+          frameId = requestAnimationFrame(animate);
+        }
+      } else {
+        running = false;
+        if (frameId) cancelAnimationFrame(frameId);
+      }
+    }, { threshold: 0.05 });
+
+    const heroSection = document.getElementById('top');
+    if (heroSection) {
+      observer.observe(heroSection);
+    } else {
+      running = true;
+      frameId = requestAnimationFrame(animate);
+    }
+
+    return () => {
+      running = false;
+      if (frameId) cancelAnimationFrame(frameId);
+      if (observer) observer.disconnect();
+    };
+  }, [ref, speed, initialOffset]);
+}
+
 function LandingPage() {
   const clients = clientTestimonials;
 
@@ -91,6 +173,8 @@ function LandingPage() {
   const [customQty, setCustomQty] = useState('');
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('idle');
+  const leftTrackRef = useRef(null);
+  const rightTrackRef = useRef(null);
 
   // Enquiry / Consultation form states
   const [enquiryName, setEnquiryName] = useState('');
@@ -232,10 +316,20 @@ function LandingPage() {
     setPrice(calcPrice);
   }, [selection, customQty]);
 
+  useSmoothScroll(leftTrackRef, 0.5, 0);
+  useSmoothScroll(rightTrackRef, 0.5, -200);
+
   useEffect(() => {
     preloadImage('/logoooooooooo.png');
     preloadImage('/website header.png');
   }, []);
+
+  useDebounce(() => {
+    const l = leftTrackRef.current;
+    const r = rightTrackRef.current;
+    if (l) l.style.transform = 'translate3d(0, 0, 0)';
+    if (r) r.style.transform = 'translate3d(0, -200px, 0)';
+  }, 200);
 
   const validate = () => {
     const e = {};
@@ -517,25 +611,40 @@ function LandingPage() {
               </div>
               <div className="hero-right">
                 <div className="showcase-mesh"></div>
-                <div className="hero-mockup">
-                  <div className="hero-mockup-phone">
-                    <div className="hero-mockup-phone-inner">
-                      <div className="hero-mockup-notch"></div>
-                      <div className="hero-mockup-content">
-                        <span className="hero-mockup-reel-badge">Reel Preview</span>
-                        <div className="hero-mockup-reel-icon">
-                          <Play />
-                        </div>
-                        <div className="hero-mockup-captions">
-                          <div className="hero-mockup-caption"></div>
-                          <div className="hero-mockup-caption"></div>
-                          <div className="hero-mockup-caption"></div>
-                        </div>
-                        <div className="hero-mockup-actions">
-                          <div className="hero-mockup-action"><Heart /></div>
-                          <div className="hero-mockup-action"><MessageCircle /></div>
-                          <div className="hero-mockup-action"><Bookmark /></div>
-                        </div>
+                <div className="showcase-gallery">
+                  <div className="showcase-col">
+                    <div className="showcase-track" ref={leftTrackRef}>
+                      <div className="showcase-set">
+                        {['/Video-937.mp4', '/Video-554.mp4', '/Video-736.mp4', '/Video-879.mp4', '/Video-375.mp4'].map((src) => (
+                          <div key={src} className="showcase-card">
+                            <ReelVideo src={src} />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="showcase-set">
+                        {['/Video-937.mp4', '/Video-554.mp4', '/Video-736.mp4', '/Video-879.mp4', '/Video-375.mp4'].map((src) => (
+                          <div key={`dup-${src}`} className="showcase-card">
+                            <ReelVideo src={src} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="showcase-col">
+                    <div className="showcase-track" ref={rightTrackRef}>
+                      <div className="showcase-set">
+                        {['/Video-736.mp4', '/Video-879.mp4', '/Video-375.mp4', '/Video-937.mp4', '/Video-554.mp4'].map((src) => (
+                          <div key={src} className="showcase-card">
+                            <ReelVideo src={src} />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="showcase-set">
+                        {['/Video-736.mp4', '/Video-879.mp4', '/Video-375.mp4', '/Video-937.mp4', '/Video-554.mp4'].map((src) => (
+                          <div key={`dup-${src}`} className="showcase-card">
+                            <ReelVideo src={src} />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

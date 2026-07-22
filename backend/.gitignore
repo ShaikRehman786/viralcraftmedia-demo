@@ -52,3 +52,15 @@ npm-debug.log*
 # Secrets
 *.pem
 *.key
+
+
+# WhatsApp Web JS
+backend/.wwebjs_auth/
+backend/.wwebjs_cache/
+
+# Cache
+*.log
+.cache/
+
+# Node
+node_modules/

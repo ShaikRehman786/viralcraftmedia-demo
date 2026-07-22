@@ -1,16 +1,22 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load environmental variables
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load backend-specific .env from the backend directory
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+// Also load root .env (lower priority) for shared variables
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const requiredEnv = [
   'RAZORPAY_KEY_ID',
   'RAZORPAY_KEY_SECRET',
   'JWT_SECRET',
   'JWT_REFRESH_SECRET',
-  'EMAIL_FROM',
-  'ADMIN_EMAIL',
+  'CLIENT_URL',
   'APP_URL'
 ];
 
@@ -38,11 +44,12 @@ export const config = {
   emailFrom: process.env.EMAIL_FROM,
   adminEmail: process.env.ADMIN_EMAIL,
   appUrl: process.env.APP_URL,
+  clientUrl: process.env.CLIENT_URL,
   
   // ##################################
   // MONGODB CONFIGURATION
   // ##################################
-  mongoUri: process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/viralcraftmedia',
+  mongoUri: process.env.MONGO_URI || process.env.MONGODB_URI,
   
   // ##################################
   // JWT CONFIGURATION

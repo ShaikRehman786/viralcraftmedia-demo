@@ -16,33 +16,33 @@ app.use(helmet({
 
 // CORS Configuration
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5000',
+  config.clientUrl,
   'https://viralcraftmedia.com',
   'https://www.viralcraftmedia.com'
-];
+].filter(Boolean);
+
+// Allow localhost origins only in development
+if (config.nodeEnv === 'development') {
+  allowedOrigins.push(
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5000'
+  );
+}
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g., server-to-server, curl, same-origin via proxy)
-    // Block only known-disallowed origins
     if (!origin) {
       return callback(null, true);
     }
-    // Check if origin is allowed
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    // For disallowed origins, reflect the origin rather than throwing an error.
-    // This avoids Express 5 error-propagation that strips CORS headers.
-    // The browser will still block CORS because Access-Control-Allow-Origin won't
-    // match the request origin, but preflight OPTIONS won't crash.
     console.warn(`[CORS] Blocked request from disallowed origin: ${origin}`);
     return callback(null, false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 

@@ -50,12 +50,16 @@ export const validateCsrfToken = (req, res, next) => {
   const origin = req.headers.origin;
   const referer = req.headers.referer;
   
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const clientUrl = process.env.CLIENT_URL;
   const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:5000',
+    clientUrl,
     'https://viralcraftmedia.com',
     'https://www.viralcraftmedia.com'
-  ];
+  ].filter(Boolean);
+  if (nodeEnv === 'development') {
+    allowedOrigins.push('http://localhost:5173', 'http://localhost:5000');
+  }
 
   // Skip CSRF check for GET/HEAD/OPTIONS requests and webhook endpoints
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {

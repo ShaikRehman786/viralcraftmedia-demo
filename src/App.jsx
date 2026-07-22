@@ -10,7 +10,7 @@ import Footer from './components/Footer.jsx';
 import AnimatedCounter from './components/shared/AnimatedCounter.jsx';
 import { clientTestimonials } from './data/clientTestimonials.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://viralcraftmedia-demo.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL;
 
 const PodcastEditingPage = React.lazy(() => import('./components/PodcastEditingPage.jsx'));
 const MarketingPage = React.lazy(() => import('./components/MarketingPage.jsx'));

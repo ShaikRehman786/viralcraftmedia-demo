@@ -5,7 +5,7 @@ import App from './App.jsx'
 import { registerServiceWorker } from './services/pushInit.js'
 
 import axios from 'axios'
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'https://viralcraftmedia-demo.onrender.com'
+axios.defaults.baseURL = import.meta.env.VITE_API_URL
 axios.defaults.withCredentials = true
 
 registerServiceWorker().then(reg => {

@@ -1,47 +1,18 @@
-const CACHE_NAME = 'vcm-crm-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/logoooooooooo.png',
-  '/favicon.svg',
-  '/website%20header.png',
-  '/manifest.json'
-];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
-      );
-    })
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
   );
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).catch(() => cached);
-    })
-  );
-});
-
 self.addEventListener('push', (event) => {
   if (!event.data) return;
-
   try {
     const data = event.data.json();
-
     const title = data.title || 'ViralCraft Media';
     const options = {
       body: data.body || '',
@@ -59,9 +30,8 @@ self.addEventListener('push', (event) => {
         { action: 'close', title: 'Dismiss' }
       ]
     };
-
     event.waitUntil(self.registration.showNotification(title, options));
-  } catch (err) {
+  } catch (_err) {
     const title = 'ViralCraft Media';
     const options = {
       body: event.data.text(),
@@ -78,27 +48,20 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
   const action = event.action;
   const data = event.notification.data || {};
   const url = data.url || '/';
-
   if (action === 'close') return;
-
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.host) && 'focus' in client) {
           client.focus();
-          if (url && client.url !== url) {
-            client.navigate(url);
-          }
+          if (url && client.url !== url) client.navigate(url);
           return;
         }
       }
-      if (self.clients.openWindow) {
-        self.clients.openWindow(url);
-      }
+      if (self.clients.openWindow) self.clients.openWindow(url);
     })
   );
 });

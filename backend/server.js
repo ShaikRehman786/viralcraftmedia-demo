@@ -27,9 +27,17 @@ const startServer = async () => {
     const server = http.createServer(app);
 
     // Initialize Socket.io with CORS parameters matching Express
+    const allowedOrigins = [
+      config.clientUrl,
+      'https://viralcraftmedia.com',
+      'https://www.viralcraftmedia.com'
+    ].filter(Boolean);
+    if (config.nodeEnv === 'development') {
+      allowedOrigins.push('http://localhost:5173', 'http://localhost:5174', 'http://localhost:5000');
+    }
     const io = new Server(server, {
       cors: {
-        origin: ['http://localhost:5173', 'http://localhost:5174','http://localhost:5000'],
+        origin: allowedOrigins,
         credentials: true
       }
     });

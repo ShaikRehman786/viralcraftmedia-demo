@@ -30,7 +30,7 @@ import PaymentsPage from './PaymentsPage.jsx';
 
 axios.defaults.withCredentials = true;
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'https://viralcraftmedia-demo.onrender.com';
+const SOCKET_URL = import.meta.env.VITE_API_URL;
 const getSocketUrl = () => SOCKET_URL;
 
 export default function DashboardPage() {

@@ -6330,3 +6330,132 @@ img { max-width: 100%; display: block; }
   }
 }
 
+/* =====================================================================
+   PRODUCTION READY RESPONSIVE & POLISH OVERRIDES
+   ===================================================================== */
+
+/* 1. Header, Search Bar, and Notification Bell Mobile Polish */
+@media (max-width: 768px) {
+  .header-right {
+    gap: 8px !important;
+  }
+  .notif-bell-wrapper {
+    order: 3 !important; /* Move notification bell to the far right */
+  }
+  .avatar {
+    order: 2 !important; /* Move avatar to the middle position */
+  }
+  .header-search {
+    order: 1 !important; /* Keep search on the left of right-aligned controls */
+  }
+}
+
+@media (max-width: 600px) {
+  /* Collapse Search Bar to standard 36px icon button to prevent header overlap */
+  .header-search {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    background: var(--gray-100) !important;
+    border-radius: var(--r-md) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+  }
+  .header-search input {
+    display: none !important;
+  }
+  .header-search svg {
+    position: static !important;
+    transform: none !important;
+    margin: 0 !important;
+    color: var(--gray-500) !important;
+  }
+  .search-shortcut {
+    display: none !important;
+  }
+  
+  /* Prevent header padding overflow on very small devices */
+  .app-header {
+    padding: 0 16px !important;
+    gap: 12px !important;
+  }
+}
+
+/* 2. Notification Dropdown Mobile Responsive Viewport Fix */
+@media (max-width: 480px) {
+  .notif-panel {
+    position: fixed !important;
+    top: calc(var(--topbar-h) + 8px) !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    max-height: calc(100vh - var(--topbar-h) - 24px) !important;
+    z-index: 1000 !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+  }
+}
+
+/* 3. WhatsApp Automation Page Polish & Responsive Stacking */
+@media (max-width: 768px) {
+  .wa-page {
+    gap: 16px !important;
+  }
+  .wa-grid {
+    gap: 12px !important;
+  }
+  .wa-card {
+    padding: 16px !important;
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 576px) {
+  /* Mobile stack actions and QR buttons */
+  .wa-qr-actions {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+  .wa-qr-actions .wa-btn,
+  .wa-card button {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 10px 14px !important;
+    font-size: 0.8125rem !important;
+  }
+  .wa-btn {
+    white-space: normal !important; /* Allow wrapping for long button texts */
+    text-align: center !important;
+  }
+  
+  .wa-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+  
+  .wa-status-row {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+}
+
+/* 4. Invoice/Payment Cards Responsive Layout */
+@media (max-width: 576px) {
+  .data-card.flex-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  .data-card.flex-row > div:last-child {
+    align-items: flex-start !important;
+    margin-top: 4px !important;
+  }
+  .data-card.flex-row .flex-col.items-end {
+    align-items: flex-start !important;
+  }
+}
+
+

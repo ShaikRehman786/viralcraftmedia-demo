@@ -24,6 +24,14 @@ const socketDispatcher = (userId, event, data) => {
 };
 let connectionStatus = 'DISCONNECTED';
 let qrCodeData = '';
+let isInitializing = false;
+
+// Handle raw unhandled rejections inside chromium processes once at module level
+process.on('unhandledRejection', (reason, p) => {
+  if (reason && reason.message && reason.message.includes('Navigating frame was detached')) {
+    console.warn('[WA-AUTOMATION] Recovered from detached chromium browser frame initialization warning.');
+  }
+});
 
 // Health monitoring metrics
 let lastHeartbeat = null;
@@ -33,15 +41,24 @@ let sessionRestored = false;
 let heartbeatInterval = null;
 let lastQrGeneratedAt = null;
 
-const clearSessionDir = () => {
-  try {
-    const sessionPath = path.join(process.cwd(), '.wwebjs_auth', 'session-vcm-crm-whatsapp');
-    if (fs.existsSync(sessionPath)) {
-      console.log(`[WA-AUTOMATION] Wiping session credentials directory: ${sessionPath}`);
+const clearSessionDir = async (retries = 5, delay = 500) => {
+  const sessionPath = path.join(process.cwd(), '.wwebjs_auth', 'session-vcm-crm-whatsapp');
+  if (!fs.existsSync(sessionPath)) return;
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`[WA-AUTOMATION] Wiping session credentials directory (attempt ${i + 1}): ${sessionPath}`);
       fs.rmSync(sessionPath, { recursive: true, force: true });
+      console.log(`[WA-AUTOMATION] Wiped session credentials directory successfully.`);
+      return;
+    } catch (err) {
+      console.warn(`[WA-AUTOMATION] Failed to wipe session credentials directory on attempt ${i + 1}: ${err.message}`);
+      if (i < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        console.error('[WA-AUTOMATION] Final attempt to clear session directory failed:', err.message);
+      }
     }
-  } catch (err) {
-    console.error('[WA-AUTOMATION] Failed to clear session directory:', err.message);
   }
 };
 
@@ -762,95 +779,105 @@ const whatsappService = {
   client: null,
 
   init: async (socketIo) => {
-    io = socketIo;
-    console.log('WhatsApp Started');
-
-    // Load caches on startup
-    await refreshCache();
-    // Periodically refresh cache (every 5 minutes)
-    if (!whatsappService.cacheInterval) {
-      whatsappService.cacheInterval = setInterval(refreshCache, 5 * 60 * 1000);
+    if (isInitializing) {
+      console.log('[WA-AUTOMATION] WhatsApp initialization already in progress. Skipping duplicate call.');
+      return;
     }
+    isInitializing = true;
+    try {
+      io = socketIo;
+      console.log('[WA-AUTOMATION] Initializing WhatsApp client...');
 
-    // 1. Production-grade duplicate client instance check & cleanup
-    if (client) {
-      console.log('[WA-AUTOMATION] Cleaning up existing WhatsApp client instance to prevent duplicate handlers and memory leaks...');
-      try {
-        client.removeAllListeners();
-        await client.destroy().catch(() => {});
-      } catch (err) {
-        console.warn('[WA-AUTOMATION] Old client cleanup warning:', err.message);
+      // Load caches on startup
+      await refreshCache();
+      // Periodically refresh cache (every 5 minutes)
+      if (!whatsappService.cacheInterval) {
+        whatsappService.cacheInterval = setInterval(refreshCache, 5 * 60 * 1000);
       }
-      client = null;
-      whatsappService.client = null;
-    }
 
-    // 2. Production background health monitoring heartbeat
-    if (!heartbeatInterval) {
-      heartbeatInterval = setInterval(async () => {
-        // Active connection check
-        if (client && connectionStatus === 'CONNECTED') {
-          try {
-            const state = await client.getState().catch(() => null);
-            if (state) {
-              lastHeartbeat = new Date();
-            } else {
-              console.warn('[WA-AUTOMATION] Heartbeat: Client state returned null. Reconnecting...');
+      // 1. Production-grade duplicate client instance check & cleanup
+      if (client) {
+        console.log('[WA-AUTOMATION] Cleaning up existing WhatsApp client instance to prevent duplicate handlers and memory leaks...');
+        try {
+          client.removeAllListeners();
+          await client.destroy().catch(() => {});
+        } catch (err) {
+          console.warn('[WA-AUTOMATION] Old client cleanup warning:', err.message);
+        }
+        client = null;
+        whatsappService.client = null;
+      }
+
+      // 2. Production background health monitoring heartbeat
+      if (!heartbeatInterval) {
+        heartbeatInterval = setInterval(async () => {
+          // Active connection check
+          if (client && connectionStatus === 'CONNECTED') {
+            try {
+              const state = await client.getState().catch(() => null);
+              if (state) {
+                lastHeartbeat = new Date();
+              } else {
+                console.warn('[WA-AUTOMATION] Heartbeat: Client state returned null. Reconnecting...');
+                reconnectCount++;
+                await whatsappService.reconnect();
+              }
+            } catch (err) {
+              console.error('[WA-AUTOMATION] Heartbeat check failed:', err.message);
               reconnectCount++;
               await whatsappService.reconnect();
             }
-          } catch (err) {
-            console.error('[WA-AUTOMATION] Heartbeat check failed:', err.message);
+          }
+          
+          // QR code expiration fallback (3 minutes timeout)
+          if (connectionStatus === 'DISCONNECTED' && lastQrGeneratedAt && (Date.now() - lastQrGeneratedAt > 3 * 60 * 1000)) {
+            console.log('[WA-AUTOMATION] Heartbeat: QR code has expired (3 minutes timeout). Re-initializing client to generate new QR...');
+            lastQrGeneratedAt = null;
             reconnectCount++;
             await whatsappService.reconnect();
           }
-        }
-        
-        // QR code expiration fallback (3 minutes timeout)
-        if (connectionStatus === 'DISCONNECTED' && lastQrGeneratedAt && (Date.now() - lastQrGeneratedAt > 3 * 60 * 1000)) {
-          console.log('[WA-AUTOMATION] Heartbeat: QR code has expired (3 minutes timeout). Re-initializing client to generate new QR...');
-          lastQrGeneratedAt = null;
-          reconnectCount++;
-          await whatsappService.reconnect();
-        }
-      }, 45 * 1000);
-    }
-
-    try {
-      let sessionRecord = await WhatsAppSession.findOne();
-      if (!sessionRecord) {
-        sessionRecord = new WhatsAppSession();
-        await sessionRecord.save();
+        }, 45 * 1000);
       }
 
-      client = new Client({
-        authStrategy: new LocalAuth({
-          clientId: 'vcm-crm-whatsapp'
-        }),
-        puppeteer: {
-          headless: true,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu'
-          ]
+        let sessionRecord = await WhatsAppSession.findOne();
+        if (!sessionRecord) {
+          sessionRecord = new WhatsAppSession();
+          await sessionRecord.save();
         }
-      });
 
-      // Handle raw unhandled rejections inside chromium processes
-      process.on('unhandledRejection', (reason, p) => {
-        if (reason && reason.message && reason.message.includes('Navigating frame was detached')) {
-          console.warn('Recovered from detached chromium browser frame initialization warning.');
-        } else {
-          console.error('Unhandled Promise Rejection:', reason);
-        }
-      });
+        client = new Client({
+          authStrategy: new LocalAuth({
+            clientId: 'vcm-crm-whatsapp'
+          }),
+          authTimeoutMs: 60000,
+          qrMaxRetries: 5,
+          takeoverOnConflict: true,
+          puppeteer: {
+            headless: true,
+            args: [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-accelerated-2d-canvas',
+              '--no-first-run',
+              '--no-zygote',
+              '--disable-gpu',
+              '--disable-extensions',
+              '--disable-default-apps',
+              '--disable-features=site-per-process',
+              '--disable-web-security',
+              '--single-process',
+              '--disable-features=IsolateOrigins',
+              '--disable-site-isolation-trials',
+              '--disable-renderer-backgrounding',
+              '--disable-backgrounding-occluded-windows',
+              '--disable-ipc-flooding-protection'
+            ],
+            timeout: 60000
+          }
+        });
 
-      whatsappService.client = client;
+        whatsappService.client = client;
 
       client.on('qr', async (qr) => {
         connectionStatus = 'DISCONNECTED';
@@ -925,7 +952,7 @@ const whatsappService = {
 
           // Wipe invalid credentials to force fresh QR setup
           await client.destroy().catch(() => {});
-          clearSessionDir();
+          await clearSessionDir();
           await whatsappService.init(io);
         } catch (err) {
           console.error('Auth failure handler failed:', err.message);
@@ -947,7 +974,7 @@ const whatsappService = {
 
           // Clear credentials folder and trigger fresh QR code generation
           await client.destroy().catch(() => {});
-          clearSessionDir();
+          await clearSessionDir();
           await whatsappService.init(io);
         } catch (err) {
           console.error('Disconnect callback DB update failed:', err);
@@ -1085,6 +1112,8 @@ const whatsappService = {
       });
     } catch (err) {
       console.error('WhatsApp Service init failed:', err.message);
+    } finally {
+      isInitializing = false;
     }
   },
 
@@ -1146,9 +1175,11 @@ const whatsappService = {
       }
 
       // Completely destroy, wipe session directory, and reinitialize to auto-generate a fresh QR
+      console.log('[WA-AUTOMATION] Logging out and destroying client...');
       await client.destroy().catch(() => {});
-      clearSessionDir();
+      await clearSessionDir();
       await whatsappService.init(io);
+      console.log('[WA-AUTOMATION] Client destroyed and session wiped.');
     } catch (err) {
       console.error('WhatsApp client logout crash:', err.message);
     }
@@ -1196,6 +1227,7 @@ const whatsappService = {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
       }
+      await clearSessionDir(); // Wipe credentials to force fresh QR immediately!
       await whatsappService.init(io);
       return { success: true, message: 'QR generation triggered' };
     } catch (err) {

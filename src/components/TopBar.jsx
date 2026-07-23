@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  Search, Menu, Command, LayoutDashboard, ClipboardList,
+  Search, Menu, LayoutDashboard, ClipboardList,
   CalendarDays, Users, ShieldCheck, UserPlus,
   MessageCircle, Receipt, Bell, Plus, Download, ArrowRight
 } from 'lucide-react';
@@ -178,9 +178,6 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
               readOnly
               onFocus={open}
             />
-            <kbd className="search-shortcut">
-              <Command size={12} />K
-            </kbd>
           </div>
 
           <NotificationBell

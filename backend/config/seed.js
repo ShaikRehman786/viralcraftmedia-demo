@@ -6,20 +6,23 @@ dotenv.config();
 
 export const seedSuperAdmin = async () => {
   try {
-    // Check if a SUPER_ADMIN already exists in the system
-    const existingAdmin = await User.findOne({ role: 'SUPER_ADMIN' });
-    if (existingAdmin) {
-      console.log('Super Admin account already exists. Seeding skipped.');
-      return;
-    }
-
     // Retrieve seed details from environment
     const name = process.env.SUPER_ADMIN_NAME;
     const email = process.env.SUPER_ADMIN_EMAIL;
     const password = process.env.SUPER_ADMIN_PASSWORD;
 
     if (!name || !email || !password) {
-      console.warn('[WARNING] Initial Super Admin credentials not set in environment (.env). Initial seed skipped.');
+      console.warn('[WARNING] Initial Super Admin credentials not set in environment (.env). Initial seed/update skipped.');
+      return;
+    }
+
+    // Check if a SUPER_ADMIN already exists in the system
+    const existingAdmin = await User.findOne({ role: 'SUPER_ADMIN' });
+    if (existingAdmin) {
+      console.log('Super Admin account already exists. Syncing/updating password to environment-configured value...');
+      existingAdmin.password = password; // mongoose schema pre-save hook will hash this securely
+      await existingAdmin.save();
+      console.log('✅ Super Admin account password successfully updated.');
       return;
     }
 

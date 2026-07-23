@@ -1,11 +1,22 @@
 import { config } from '../config/env.js';
 
+const allowedOrigins = [
+  config.clientUrl,
+  'https://viralcraftmedia-demo.vercel.app',
+  'https://viralcraftmedia-demo.onrender.com',
+  'https://viralcraftmedia.com',
+  'https://www.viralcraftmedia.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5000',
+  'http://localhost:3000'
+].filter(Boolean);
+
 // Set CORS headers on error responses so the browser can read the error message.
-// The cors() middleware in app.js already blocks disallowed origins before they reach here,
-// so we simply reflect whatever Origin header is present without re-checking.
+// Validate origin against whitelisted allowedOrigins
 const setCorsHeaders = (req, res) => {
   const origin = req.headers.origin;
-  if (origin) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
@@ -62,7 +73,13 @@ export default function errorHandler(err, req, res, next) {
     error.statusCode = 401;
   }
 
-  res.status(error.statusCode || 500).json({
-    error: error.message || 'Internal Server Error'
+  const statusCode = error.statusCode || 500;
+  const isProduction = config.nodeEnv === 'production';
+  const responseMessage = (statusCode === 500 && isProduction)
+    ? 'Internal Server Error'
+    : (error.message || 'Internal Server Error');
+
+  res.status(statusCode).json({
+    error: responseMessage
   });
 }

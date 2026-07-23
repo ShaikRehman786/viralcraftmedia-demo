@@ -878,6 +878,29 @@ img { max-width: 100%; display: block; }
 
 .dialog-header h2 { font-size: 1rem; font-weight: 700; color: var(--gray-900); }
 
+/* Close Button Visibility Fix */
+.dialog-header .btn-ghost {
+  color: var(--gray-500) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--tr-fast);
+}
+
+.dialog-header .btn-ghost:hover {
+  color: var(--gray-900) !important;
+  background: var(--gray-100) !important;
+  transform: none !important;
+}
+
+.dialog-header .btn-ghost svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
 .dialog-body {
   padding: 20px 24px;
   display: flex;

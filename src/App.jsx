@@ -12,6 +12,7 @@ import { clientTestimonials } from './data/clientTestimonials.js';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
+const ClipEditingPage = React.lazy(() => import('./components/ClipEditingPage.jsx'));
 const PodcastEditingPage = React.lazy(() => import('./components/PodcastEditingPage.jsx'));
 const MarketingPage = React.lazy(() => import('./components/MarketingPage.jsx'));
 const WebDevelopmentPage = React.lazy(() => import('./components/WebDevelopmentPage.jsx'));
@@ -19,15 +20,11 @@ const RealEstatePage = React.lazy(() => import('./components/RealEstatePage.jsx'
 import {
   Clock3,
   BarChart3,
-  Activity,
   PenTool,
   Monitor,
   UploadCloud,
   ShieldCheck,
-  DownloadCloud,
-  Scissors,
-  TrendingUp,
-  Home
+  DownloadCloud
 } from 'lucide-react';
 
 function IconWrapper({ icon: Icon, size = 32, color = 'var(--accent)', className = '', ...props }) {
@@ -841,253 +838,170 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
           </div>
         </section>
 
-        {/* SERVICES */}
+                                {/* SERVICES */}
         <section className="section" id="services">
           <div className="container">
             <div className="sec-hdr center">
-              <span className="sec-label">Services</span>
-              <h2 className="sec-title">Handcrafted Video Formats For Viral Growth</h2>
-              <p className="sec-desc">From Reels to Shorts to TikTok — we engineer every frame for maximum retention and engagement.</p>
+              <span className="sec-label">Services & Solutions</span>
+              <h2 className="sec-title">Custom Creative Operations Built For Business Results</h2>
+              <p className="sec-desc">We build digital assets, platforms, and media funnels that convert attention into business assets. Every project is handcrafted, completely custom, and aligned with your conversion KPIs.</p>
             </div>
-            <div className="svc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '32px' }}>
+
+            {/* Redesigned Services Grid */}
+            <div className="redesigned-services-grid">
               
-              {/* Service 1: Clip Editing */}
-              <div className="svc-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', minHeight: '480px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 106, 0, 0.08)', borderRadius: '20px', overflow: 'hidden' }}>
+              {/* Card 1: Clip Editing */}
+              <div className="premium-service-card card-clip-editing">
                 <div>
-                  <div className="svc-card-glow"></div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderBottom: '1px solid rgba(255, 106, 0, 0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <IconWrapper icon={Scissors} size={24} color="var(--accent)" className="svc-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', background: 'rgba(255, 106, 0, 0.05)', borderRadius: '8px' }} />
-                      <span className="svc-label" style={{ fontSize: '1rem', fontWeight: 'bold', color: '#FFF' }}>Clip Editing</span>
-                    </div>
-                    <span className="svc-badge-live" style={{ background: 'rgba(255, 106, 0, 0.1)', color: 'var(--accent)', fontSize: '0.7rem', padding: '4px 10px', borderRadius: '100px', fontWeight: 'bold' }}>Editing & Hooks</span>
+                  <div className="premium-card-badge">SHORT-FORM</div>
+                  <div className="premium-card-header">
+                    <h3 className="premium-service-title">Viral Clip Engine</h3>
+                    <span className="premium-service-subtitle">Perfect For: Creators & Brands</span>
                   </div>
-
-                  <div style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: '700', padding: '16px 20px 0 20px' }}>
-                    For: Podcasters, Creators & Educators
-                  </div>
-
-                  <div className="svc-preview" style={{ padding: '16px 20px', minHeight: '110px' }}>
-                    <div style={{ width: '100%', background: '#121215', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#A1A1AA', marginBottom: '8px' }}>
-                        <span>Retention Performance</span>
-                        <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>92% Avg</span>
-                      </div>
-                      <svg viewBox="0 0 100 25" style={{ width: '100%', height: '35px', display: 'block' }}>
-                        <path d="M 0 5 Q 20 2, 40 12 T 80 8 T 100 6" fill="none" stroke="var(--accent)" strokeWidth="2.5" />
-                        <path d="M 0 5 Q 20 2, 40 12 T 80 8 T 100 6 L 100 25 L 0 25 Z" fill="rgba(255, 106, 0, 0.05)" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="svc-card-body" style={{ padding: '0 20px 20px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#A1A1AA', lineHeight: '1.65', margin: 0 }}>
-                      Turn long-form content into highly engaging short clips optimized for watch time, reach, and organic audience growth across Instagram Reels, YouTube Shorts, and TikTok.
-                    </p>
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', color: '#A1A1AA' }}>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: 'var(--accent)' }}>✓</span> Hook Strategy</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: 'var(--accent)' }}>✓</span> Pacing & Cuts</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: 'var(--accent)' }}>✓</span> Subtitle Overlays</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: 'var(--accent)' }}>✓</span> SFX & Audio Mix</li>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <p className="premium-one-liner-val">Transform long-form content into viral short-form videos.</p>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <div className="card-section-block">
+                    <ul className="deliverables-list">
+                      <li>✓ Higher Retention</li>
+                      <li>✓ 48-Hour Delivery SLA</li>
+                      <li>✓ Human Editor Quality Check</li>
                     </ul>
                   </div>
                 </div>
 
-                <div style={{ padding: '0 20px 20px 20px' }}>
-                  <a href="#pricing" onClick={(e) => { e.preventDefault(); scrollTo('#pricing'); }} className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', borderRadius: '10px' }}>
-                    Start Project
-                  </a>
-                </div>
-              </div>
-
-              {/* Service 2: Podcast Editing */}
-              <div className="svc-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', minHeight: '480px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 106, 0, 0.08)', borderRadius: '20px', overflow: 'hidden' }}>
-                <div>
-                  <div className="svc-card-glow"></div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderBottom: '1px solid rgba(255, 106, 0, 0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <IconWrapper icon={Activity} size={24} color="#3B82F6" className="svc-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px' }} />
-                      <span className="svc-label" style={{ fontSize: '1rem', fontWeight: 'bold', color: '#FFF' }}>Podcast Editing</span>
-                    </div>
-                    <span className="svc-badge-live" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6', fontSize: '0.7rem', padding: '4px 10px', borderRadius: '100px', fontWeight: 'bold' }}>Audio & Video</span>
-                  </div>
-
-                  <div style={{ fontSize: '0.8rem', color: '#3B82F6', fontWeight: '700', padding: '16px 20px 0 20px' }}>
-                    For: Show Hosts & Media Brands
-                  </div>
-
-                  <div className="svc-preview" style={{ padding: '16px 20px', minHeight: '110px' }}>
-                    <div style={{ width: '100%', background: '#121215', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#A1A1AA' }}>
-                        <span>Multi-Cam Mixing Channels</span>
-                        <span style={{ color: '#3B82F6' }}>-3dB Peak Mastered</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-                          <div style={{ width: '80%', height: '100%', background: 'linear-gradient(90deg, #3B82F6, #60A5FA)' }}></div>
-                        </div>
-                        <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-                          <div style={{ width: '65%', height: '100%', background: 'linear-gradient(90deg, #3B82F6, #60A5FA)' }}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="svc-card-body" style={{ padding: '0 20px 20px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#A1A1AA', lineHeight: '1.65', margin: 0 }}>
-                      Transform raw podcast recordings into polished, professional episodes. Multi-camera host/guest switching, background noise cleanup, and optimized master levels.
-                    </p>
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', color: '#A1A1AA' }}>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#3B82F6' }}>✓</span> Audio Mastering</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#3B82F6' }}>✓</span> Silence Removal</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#3B82F6' }}>✓</span> Multi-Cam Cuts</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#3B82F6' }}>✓</span> Video Packaging</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div style={{ padding: '0 20px 20px 20px' }}>
-                  <Link to="/services/podcast-editing" className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', borderRadius: '10px' }}>
-                    Start Project
+                <div className="premium-pricing-cta">
+                  <Link to="/services/clip-editing" className="btn-premium-cta">
+                    Customize Service &rarr;
                   </Link>
                 </div>
               </div>
 
-              {/* Service 3: Social Media Marketing */}
-              <div className="svc-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', minHeight: '480px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 106, 0, 0.08)', borderRadius: '20px', overflow: 'hidden' }}>
+              {/* Card 2: Podcast Editing */}
+              <div className="premium-service-card card-podcast-editing">
                 <div>
-                  <div className="svc-card-glow"></div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderBottom: '1px solid rgba(255, 106, 0, 0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <IconWrapper icon={TrendingUp} size={24} color="#10B981" className="svc-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', background: 'rgba(16, 185, 129, 0.05)', borderRadius: '8px' }} />
-                      <span className="svc-label" style={{ fontSize: '1rem', fontWeight: 'bold', color: '#FFF' }}>Social Marketing</span>
-                    </div>
-                    <span className="svc-badge-live" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981', fontSize: '0.7rem', padding: '4px 10px', borderRadius: '100px', fontWeight: 'bold' }}>Organic Growth</span>
+                  <div className="premium-card-badge">SHOW PRODUCTION</div>
+                  <div className="premium-card-header">
+                    <h3 className="premium-service-title">Podcast Masterclass</h3>
+                    <span className="premium-service-subtitle">Perfect For: Hosts & Brands</span>
                   </div>
-
-                  <div style={{ fontSize: '0.8rem', color: '#10B981', fontWeight: '700', padding: '16px 20px 0 20px' }}>
-                    For: Businesses & Scaling Brands
-                  </div>
-
-                  <div className="svc-preview" style={{ padding: '16px 20px', minHeight: '110px' }}>
-                    <div style={{ width: '100%', background: '#121215', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#A1A1AA', marginBottom: '8px' }}>
-                        <span>Strategy Campaign Index</span>
-                        <span style={{ color: '#10B981', fontWeight: 'bold' }}>+340% Reach</span>
-                      </div>
-                      <svg viewBox="0 0 100 25" style={{ width: '100%', height: '35px', display: 'block' }}>
-                        <path d="M 0 22 C 20 18, 40 4, 100 2" fill="none" stroke="#10B981" strokeWidth="2.5" />
-                        <path d="M 0 22 C 20 18, 40 4, 100 2 L 100 25 L 0 25 Z" fill="rgba(16, 185, 129, 0.05)" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="svc-card-body" style={{ padding: '0 20px 20px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#A1A1AA', lineHeight: '1.65', margin: 0 }}>
-                      Grow your social presence with expert strategy. Niche competitor analysis, posting calendars, hook script planning, and actionable performance report audits.
-                    </p>
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', color: '#A1A1AA' }}>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#10B981' }}>✓</span> Niche Audits</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#10B981' }}>✓</span> Script Writing</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#10B981' }}>✓</span> Posting Pacing</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#10B981' }}>✓</span> Analytics Audits</li>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <p className="premium-one-liner-val">Full-service multi-camera show editing and professional audio mastering.</p>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <div className="card-section-block">
+                    <ul className="deliverables-list">
+                      <li>✓ Multi-Camera Switches</li>
+                      <li>✓ Background Noise Removal</li>
+                      <li>✓ Broadcast Audio EQ Standards</li>
                     </ul>
                   </div>
                 </div>
 
-                <div style={{ padding: '0 20px 20px 20px' }}>
-                  <Link to="/services/social-media-marketing" className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', borderRadius: '10px' }}>
-                    Start Project
+                <div className="premium-pricing-cta">
+                  <Link to="/services/podcast-editing" className="btn-premium-cta">
+                    Customize Service &rarr;
                   </Link>
                 </div>
               </div>
 
-              {/* Service 4: Website Design & Development */}
-              <div className="svc-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', minHeight: '480px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 106, 0, 0.08)', borderRadius: '20px', overflow: 'hidden' }}>
+              {/* Card 3: Social Media Marketing */}
+              <div className="premium-service-card card-social-marketing">
                 <div>
-                  <div className="svc-card-glow"></div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderBottom: '1px solid rgba(255, 106, 0, 0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <IconWrapper icon={Monitor} size={24} color="#8B5CF6" className="svc-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', background: 'rgba(139, 92, 246, 0.05)', borderRadius: '8px' }} />
-                      <span className="svc-label" style={{ fontSize: '1rem', fontWeight: 'bold', color: '#FFF' }}>Web Development</span>
-                    </div>
-                    <span className="svc-badge-live" style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6', fontSize: '0.7rem', padding: '4px 10px', borderRadius: '100px', fontWeight: 'bold' }}>Web Apps</span>
+                  <div className="premium-card-badge">CONTENT STRATEGY</div>
+                  <div className="premium-card-header">
+                    <h3 className="premium-service-title">Organic Growth Suite</h3>
+                    <span className="premium-service-subtitle">Perfect For: SaaS & Startups</span>
                   </div>
-
-                  <div style={{ fontSize: '0.8rem', color: '#8B5CF6', fontWeight: '700', padding: '16px 20px 0 20px' }}>
-                    For: SaaS, Portfolios & E-Commerce
-                  </div>
-
-                  <div className="svc-preview" style={{ padding: '16px 20px', minHeight: '110px' }}>
-                    <div style={{ width: '100%', background: '#121215', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ color: '#8B5CF6' }}>const WebApp = () =&gt; &#123;</div>
-                      <div style={{ color: '#A1A1AA', paddingLeft: '16px' }}>return &lt;<span style={{ color: '#10B981' }}>FastSEO</span> crmReady /&gt;;</div>
-                      <div style={{ color: '#8B5CF6' }}>&#125;;</div>
-                    </div>
-                  </div>
-
-                  <div className="svc-card-body" style={{ padding: '0 20px 20px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#A1A1AA', lineHeight: '1.65', margin: 0 }}>
-                      Build high-performance, fast corporate websites, custom booking platforms, or full-scale web applications integrated with CRM databases and analytics dashboard portals.
-                    </p>
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', color: '#A1A1AA' }}>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#8B5CF6' }}>✓</span> Next.js & React</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#8B5CF6' }}>✓</span> CRM Integrations</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#8B5CF6' }}>✓</span> Stripe Payments</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#8B5CF6' }}>✓</span> Light Speed load</li>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <p className="premium-one-liner-val">Data-driven distribution frameworks engineered to scale web traffic.</p>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <div className="card-section-block">
+                    <ul className="deliverables-list">
+                      <li>✓ Niche Competitor Audits</li>
+                      <li>✓ Custom Hook Script Blueprints</li>
+                      <li>✓ Direct Inbound Conversion Funnels</li>
                     </ul>
                   </div>
                 </div>
 
-                <div style={{ padding: '0 20px 20px 20px' }}>
-                  <Link to="/services/web-design-development" className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', borderRadius: '10px' }}>
-                    Start Project
+                <div className="premium-pricing-cta">
+                  <Link to="/services/social-media-marketing" className="btn-premium-cta">
+                    Customize Service &rarr;
                   </Link>
                 </div>
               </div>
 
-              {/* Service 5: Real Estate Video Editing */}
-              <div className="svc-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', minHeight: '480px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 106, 0, 0.08)', borderRadius: '20px', overflow: 'hidden' }}>
+              {/* Card 4: Web Development */}
+              <div className="premium-service-card card-web-development">
                 <div>
-                  <div className="svc-card-glow"></div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderBottom: '1px solid rgba(255, 106, 0, 0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <IconWrapper icon={Home} size={24} color="#EF4444" className="svc-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '8px' }} />
-                      <span className="svc-label" style={{ fontSize: '1rem', fontWeight: 'bold', color: '#FFF' }}>Real Estate Video</span>
-                    </div>
-                    <span className="svc-badge-live" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', fontSize: '0.7rem', padding: '4px 10px', borderRadius: '100px', fontWeight: 'bold' }}>Properties</span>
+                  <div className="premium-card-badge">WEB DEVELOPMENT</div>
+                  <div className="premium-card-header">
+                    <h3 className="premium-service-title">Custom Web Solutions</h3>
+                    <span className="premium-service-subtitle">Perfect For: Businesses, Startups & Growing Brands</span>
                   </div>
-
-                  <div style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: '700', padding: '16px 20px 0 20px' }}>
-                    For: Realtors & Real Estate Brokers
-                  </div>
-
-                  <div className="svc-preview" style={{ padding: '16px 20px', minHeight: '110px' }}>
-                    <div style={{ width: '100%', background: '#121215', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#FFF' }}>VILLA SERENA</div>
-                        <div style={{ fontSize: '0.65rem', color: '#A1A1AA', marginTop: '2px' }}>Day-to-Sunset Sky Swap</div>
-                      </div>
-                      <span style={{ fontSize: '0.65rem', background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', padding: '3px 8px', borderRadius: '100px', fontWeight: 'bold' }}>₹5,000 START</span>
-                    </div>
-                  </div>
-
-                  <div className="svc-card-body" style={{ padding: '0 20px 20px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#A1A1AA', lineHeight: '1.65', margin: 0 }}>
-                      Cinema-grade listing walkthrough editing. Sunrise/sunset sky swaps, motion tracking stabilizer correction, color grading overlays, and real estate broker branding.
-                    </p>
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', color: '#A1A1AA' }}>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#EF4444' }}>✓</span> Sky Swap Color</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#EF4444' }}>✓</span> Pan Stabilization</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#EF4444' }}>✓</span> Agent Lower Third</li>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ color: '#EF4444' }}>✓</span> Color Correction</li>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <p className="premium-one-liner-val">We design and develop high-performance websites tailored to your business goals, combining modern design, fast performance, and scalable technology.</p>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <div className="card-section-block">
+                    <ul className="deliverables-list">
+                      <li>✓ Business Websites</li>
+                      <li>✓ Landing Pages</li>
+                      <li>✓ Custom Websites</li>
+                      <li>✓ CRM Development</li>
                     </ul>
                   </div>
                 </div>
 
-                <div style={{ padding: '0 20px 20px 20px' }}>
-                  <Link to="/services/real-estate-video-editing" className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', borderRadius: '10px' }}>
-                    Book Project
+                <div className="premium-pricing-cta">
+                  <Link to="/services/web-design-development" className="btn-premium-cta">
+                    Customize Service &rarr;
+                  </Link>
+                </div>
+              </div>
+
+              {/* Card 5: Real Estate Walkthroughs */}
+              <div className="premium-service-card card-real-estate">
+                <div>
+                  <div className="premium-card-badge">REAL ESTATE</div>
+                  <div className="premium-card-header">
+                    <h3 className="premium-service-title">Cinematic Walkthroughs</h3>
+                    <span className="premium-service-subtitle">Perfect For: Realtors & Brokers</span>
+                  </div>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <p className="premium-one-liner-val">Luxury real estate property walkthroughs and listing showpieces.</p>
+                  
+                  <div className="premium-card-divider"></div>
+                  
+                  <div className="card-section-block">
+                    <ul className="deliverables-list">
+                      <li>✓ Sunset Sky Swap Grading</li>
+                      <li>✓ Smooth Drone Pan Stabilization</li>
+                      <li>✓ Cinematic Real Estate Walkthroughs</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="premium-pricing-cta">
+                  <Link to="/services/real-estate-video-editing" className="btn-premium-cta">
+                    Customize Service &rarr;
                   </Link>
                 </div>
               </div>
@@ -1095,8 +1009,7 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
             </div>
           </div>
         </section>
-
-        {/* PRODUCTION STANDARDS */}
+{/* PRODUCTION STANDARDS */}
         <section className="section why" id="why">
           <div className="container">
             <div className="why-grid">
@@ -1403,7 +1316,11 @@ export default function App() {
         <Route path="/accept-invitation/:token" element={<AcceptInvitationPage />} />
         <Route path="/invite/:token" element={<AcceptInvitationPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-        <Route path="/services/clip-editing" element={<Navigate to="/#pricing" replace />} />
+        <Route path="/services/clip-editing" element={
+          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Clip Editing...</div>}>
+            <ClipEditingPage />
+          </React.Suspense>
+        } />
         <Route path="/services/podcast-editing" element={
           <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Podcast Editing...</div>}>
             <PodcastEditingPage />

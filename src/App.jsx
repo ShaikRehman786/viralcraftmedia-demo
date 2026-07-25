@@ -875,7 +875,7 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
                 </div>
 
                 <div className="premium-pricing-cta">
-                  <Link to="/services/clip-editing" className="btn-premium-cta">
+                  <Link to="/#pricing" className="btn-premium-cta">
                     Customize Service &rarr;
                   </Link>
                 </div>
@@ -1316,11 +1316,7 @@ export default function App() {
         <Route path="/accept-invitation/:token" element={<AcceptInvitationPage />} />
         <Route path="/invite/:token" element={<AcceptInvitationPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-        <Route path="/services/clip-editing" element={
-          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Clip Editing...</div>}>
-            <ClipEditingPage />
-          </React.Suspense>
-        } />
+        <Route path="/services/clip-editing" element={<Navigate to="/#pricing" replace />} />
         <Route path="/services/podcast-editing" element={
           <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Podcast Editing...</div>}>
             <PodcastEditingPage />

@@ -11,6 +11,12 @@ import teamLoggerRoutes from './teamLogger.js';
 import enquiryRoutes from './enquiries.js';
 import whatsappRoutes from './whatsapp.js';
 import pushRoutes from './push.js';
+import { 
+  employeeForgotPassword, 
+  employeeResetPassword, 
+  employeeValidateResetToken 
+} from '../controllers/authController.js';
+import { authLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -19,6 +25,12 @@ router.use('/', paymentRoutes);
 
 // Mount CRM routes
 router.use('/auth', authRoutes);
+
+// Employee routes
+router.post('/employee/forgot-password', authLimiter, employeeForgotPassword);
+router.get('/employee/reset-password/:token', employeeValidateResetToken);
+router.post('/employee/reset-password/:token', employeeResetPassword);
+
 router.use('/projects', projectRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/analytics', analyticsRoutes);

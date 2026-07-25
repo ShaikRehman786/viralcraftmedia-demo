@@ -79,7 +79,15 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
   const scrollRef = useRef(null);
   const searchTimeout = useRef(null);
 
+  const abortControllerRef = useRef(null);
+
   const fetchNotifications = useCallback(async (pageNum = 1, append = false) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       if (append) setLoadingMore(true);
       else setLoading(true);
@@ -90,7 +98,7 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
       if (priorityFilter) params.priority = priorityFilter;
       if (readFilter) params.read = readFilter;
 
-      const res = await axios.get('/api/notifications', { params });
+      const res = await axios.get('/api/notifications', { params, signal: controller.signal });
       const { data, unreadCount: unc, pagination } = res.data;
 
       if (append) {
@@ -103,12 +111,25 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
       setHasMore(pagination.hasMore);
       setPage(pageNum);
     } catch (err) {
+      if (axios.isCancel(err)) {
+        return;
+      }
       // silent
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [search, typeFilter, priorityFilter, readFilter]);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -320,7 +341,7 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
       </div>
 
       <div className="notif-center-body" ref={scrollRef}>
-        {loading ? (
+        {loading && notifications.length === 0 ? (
           <div className="notif-center-loading">
             <Loader2 size={32} className="spinner" />
             <p>Loading notifications...</p>

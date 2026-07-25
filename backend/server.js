@@ -45,8 +45,10 @@ const startServer = async () => {
       }
     });
 
-    // Initialize WhatsApp Web automation service
-    await whatsappService.init(io);
+    // Initialize WhatsApp Web automation service (non-blocking)
+    whatsappService.init(io).catch((err) => {
+      console.error('[WA-AUTOMATION] WhatsApp initial startup failed (non-fatal):', err.message);
+    });
 
     // Track active connection sockets grouped by User ID
     const activeClients = new Map();

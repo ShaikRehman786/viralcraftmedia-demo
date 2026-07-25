@@ -78,7 +78,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await axios.post('/api/auth/forgot-password', { email });
+      const res = await axios.post('/api/employee/forgot-password', { email });
       if (res.data.success) {
         setMessage('Reset instructions sent to your email.');
         setTimeout(() => {

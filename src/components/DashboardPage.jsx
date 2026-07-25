@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../App.jsx';
 import { sendEmailJS } from '../services/emailjs.js';
 import { Clock, X } from 'lucide-react';
 import { 
@@ -34,8 +36,25 @@ const SOCKET_URL = import.meta.env.VITE_API_URL;
 const getSocketUrl = () => SOCKET_URL;
 
 export default function DashboardPage() {
-  const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const { user, setUser } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getTabFromPath = (pathname) => {
+    const parts = pathname.split('/').filter(Boolean);
+    return parts[1] || 'overview';
+  };
+
+  const activeTab = getTabFromPath(location.pathname);
+  const setActiveTab = useCallback((tabId) => {
+    const parts = location.pathname.split('/').filter(Boolean);
+    const basePath = parts[0] || 'dashboard';
+    if (tabId === 'overview') {
+      navigate(`/${basePath}`, { replace: false });
+    } else {
+      navigate(`/${basePath}/${tabId}`, { replace: false });
+    }
+  }, [navigate, location.pathname]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toasts, addToast, removeToast } = useToast();
   const [projects, setProjects] = useState([]);
@@ -149,32 +168,27 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, [showCalendarModal]);
 
-  // Authenticate user & pull initial metadata
+  // Initialize category filter if employee
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await axios.get('/api/auth/me');
-        setUser(res.data.user);
-      } catch (err) {
-        window.location.href = '/login';
-      }
-    };
-    fetchUser();
-  }, []);
+    if (user && user.role === 'EMPLOYEE' && user.department) {
+      setSelectedCategoryFilter(user.department);
+    }
+  }, [user]);
 
-  // Fetch contextual dashboard data based on role
   useEffect(() => {
     if (!user) return;
+
+    const controller = new AbortController();
 
     const loadData = async () => {
       try {
         // Load Notifications
-        const notifRes = await axios.get('/api/notifications');
+        const notifRes = await axios.get('/api/notifications', { signal: controller.signal });
         setNotifications(notifRes.data.data);
         setUnreadCount(notifRes.data.unreadCount);
 
         // Load Projects
-        const projRes = await axios.get('/api/projects');
+        const projRes = await axios.get('/api/projects', { signal: controller.signal });
         const rawProjects = projRes.data.data;
         // Employee Data Security: Strip order details but keep client name for display
         if (user.role === 'EMPLOYEE') {
@@ -211,7 +225,7 @@ export default function DashboardPage() {
         }
 
         // Load Tasks
-        const taskRes = await axios.get('/api/tasks');
+        const taskRes = await axios.get('/api/tasks', { signal: controller.signal });
         const rawTasks = taskRes.data.data;
         // Employee Data Security: Strip sensitive fields for employees
         if (user.role === 'EMPLOYEE') {
@@ -235,35 +249,40 @@ export default function DashboardPage() {
         // Role-specific lookups
         if (user.role === 'SUPER_ADMIN' || user.role === 'MANAGER') {
           // Load Analytics
-          const analRes = await axios.get('/api/analytics/dashboard');
+          const analRes = await axios.get('/api/analytics/dashboard', { signal: controller.signal });
           setAnalytics(analRes.data.stats);
 
           // Load Staff list
-          const staffRes = await axios.get('/api/auth/staff');
+          const staffRes = await axios.get('/api/auth/staff', { signal: controller.signal });
           setStaff(staffRes.data.data);
 
           // Load Calendar
-          const calRes = await axios.get('/api/calendar');
+          const calRes = await axios.get('/api/calendar', { signal: controller.signal });
           setCalendarEvents(calRes.data.data);
         }
 
         if (user.role === 'SUPER_ADMIN') {
-        // Load audit logs
-        const logRes = await axios.get('/api/logs?limit=1000');
-        setLogs(logRes.data.data);
+          // Load audit logs
+          const logRes = await axios.get('/api/logs?limit=1000', { signal: controller.signal });
+          setLogs(logRes.data.data);
 
           // Load TeamLogger metrics
-          const actRes = await axios.get('/api/teamlogger/activity');
+          const actRes = await axios.get('/api/teamlogger/activity', { signal: controller.signal });
           setTeamActivity(actRes.data.data);
 
           // Load TeamLogger screenshots
-          const scRes = await axios.get('/api/teamlogger/screenshots');
+          const scRes = await axios.get('/api/teamlogger/screenshots', { signal: controller.signal });
           setTeamScreenshots(scRes.data.data);
         }
       } catch (err) {
+        if (axios.isCancel(err)) {
+          return;
+        }
         // dashboard load error handled silently
       } finally {
-        setDataLoaded(true);
+        if (!controller.signal.aborted) {
+          setDataLoaded(true);
+        }
       }
     };
 
@@ -339,6 +358,7 @@ export default function DashboardPage() {
     }
     
     return () => {
+      controller.abort();
       socket.disconnect();
     };
   }, [user]);
@@ -364,6 +384,36 @@ export default function DashboardPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // Authorization check (redirect if trying to access unauthorized tab)
+  useEffect(() => {
+    if (!user) return;
+
+    const ROLE_ACCESS = {
+      overview: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
+      projects: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
+      calendar: ['SUPER_ADMIN', 'MANAGER'],
+      staff: ['SUPER_ADMIN'],
+      logs: ['SUPER_ADMIN'],
+      enquiries: ['SUPER_ADMIN', 'MANAGER'],
+      whatsapp: ['SUPER_ADMIN', 'MANAGER'],
+      payments: ['CLIENT', 'SUPER_ADMIN'],
+      'notification-center': ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
+    };
+
+    const canAccessTab = (tabId, role) => {
+      const allowed = ROLE_ACCESS[tabId];
+      if (!allowed) return false;
+      return allowed.includes(role);
+    };
+
+    const tab = getTabFromPath(location.pathname);
+    if (!canAccessTab(tab, user.role)) {
+      const parts = location.pathname.split('/').filter(Boolean);
+      const basePath = parts[0] || 'dashboard';
+      navigate(`/${basePath}`, { replace: true });
+    }
+  }, [user, location.pathname, navigate]);
 
   const handleLogout = async () => {
     try {
@@ -1001,8 +1051,9 @@ export default function DashboardPage() {
             </div>
           )}
           <div className="app-content">
-            {activeTab === 'overview' && <OverviewPage user={user} analytics={analytics} projects={projects} tasks={tasks} notifications={notifications} staff={staff} teamActivity={teamActivity} formatTimeAgo={formatTimeAgo} loading={!dataLoaded} />}
-
+            {(activeTab === 'overview' || !activeTab) && (
+              <OverviewPage user={user} analytics={analytics} projects={projects} tasks={tasks} notifications={notifications} staff={staff} teamActivity={teamActivity} formatTimeAgo={formatTimeAgo} loading={!dataLoaded} />
+            )}
             {activeTab === 'projects' && (
               <ProjectsPage
                 user={user}
@@ -1065,7 +1116,6 @@ export default function DashboardPage() {
                 formatTimeAgo={formatTimeAgo}
               />
             )}
-
             {activeTab === 'calendar' && (
               <CalendarTab
                 events={calendarEvents}
@@ -1096,7 +1146,6 @@ export default function DashboardPage() {
                 }}
               />
             )}
-
             {activeTab === 'staff' && (
               <StaffPage
                 user={user}
@@ -1132,11 +1181,9 @@ export default function DashboardPage() {
                 formatTimeAgo={formatTimeAgo}
               />
             )}
-
             {activeTab === 'logs' && (
               <LogsPage user={user} logs={logs} staff={staff} />
             )}
-
             {activeTab === 'enquiries' && (
               <EnquiriesPage
                 enquiries={enquiries}
@@ -1160,13 +1207,12 @@ export default function DashboardPage() {
                 addToast={addToast}
               />
             )}
-
-            {activeTab === 'whatsapp' && <WhatsAppPage />}
-
+            {activeTab === 'whatsapp' && (
+              <WhatsAppPage />
+            )}
             {activeTab === 'payments' && (
               <PaymentsPage user={user} projects={projects} triggerDownload={triggerDownload} />
             )}
-
             {activeTab === 'notification-center' && (
               <NotificationCenterPage user={user} formatTimeAgo={formatTimeAgo} />
             )}
@@ -1180,7 +1226,7 @@ export default function DashboardPage() {
           <div className="dialog" onClick={e => e.stopPropagation()}>
             <div className="dialog-header">
               <h2>{calEventId ? 'Edit Event' : 'New Event'}</h2>
-              <button className="btn btn-ghost btn-icon" onClick={() => setShowCalendarModal(false)}>
+              <button className="btn btn-ghost btn-icon calendar-close-btn" onClick={() => setShowCalendarModal(false)}>
                 <X size={18} />
               </button>
             </div>

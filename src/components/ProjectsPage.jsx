@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Search,
   Download,
@@ -104,6 +104,15 @@ export default function ProjectsPage({
 }) {
   const [acceptingId, setAcceptingId] = useState(null);
   const [localAccepted, setLocalAccepted] = useState({});
+
+  const activeTabs = useMemo(() => {
+    if (user?.role === 'EMPLOYEE' && user?.department) {
+      return [user.department];
+    }
+    return CATEGORY_TABS;
+  }, [user, user?.department]);
+
+
 
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER';
   const isEmployee = user?.role === 'EMPLOYEE';
@@ -392,7 +401,7 @@ export default function ProjectsPage({
       <div className="mobile-only">
         <div className="mobile-filters">
           <div className="tabs mobile-tabs">
-            {CATEGORY_TABS.map(tab => (
+            {activeTabs.map(tab => (
               <button
                 key={tab}
                 className={`tab ${selectedCategoryFilter === tab ? 'active' : ''}`}
@@ -532,7 +541,7 @@ export default function ProjectsPage({
       <div className="desktop-only">
         <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
           <div className="tabs">
-            {CATEGORY_TABS.map(tab => (
+            {activeTabs.map(tab => (
               <button
                 key={tab}
                 className={`tab ${selectedCategoryFilter === tab ? 'active' : ''}`}

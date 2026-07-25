@@ -25,13 +25,7 @@ const socketDispatcher = (userId, event, data) => {
 let connectionStatus = 'DISCONNECTED';
 let qrCodeData = '';
 let isInitializing = false;
-
-// Handle raw unhandled rejections inside chromium processes once at module level
-process.on('unhandledRejection', (reason, p) => {
-  if (reason && reason.message && reason.message.includes('Navigating frame was detached')) {
-    console.warn('[WA-AUTOMATION] Recovered from detached chromium browser frame initialization warning.');
-  }
-});
+let initializationPromise = null;
 
 // Health monitoring metrics
 let lastHeartbeat = null;
@@ -780,64 +774,62 @@ const whatsappService = {
 
   init: async (socketIo) => {
     if (isInitializing) {
-      console.log('[WA-AUTOMATION] WhatsApp initialization already in progress. Skipping duplicate call.');
+      console.log('[WA-AUTOMATION] WhatsApp initialization already in progress. Waiting for existing initialization...');
+      if (initializationPromise) {
+        return initializationPromise;
+      }
       return;
     }
     isInitializing = true;
-    try {
-      io = socketIo;
-      console.log('[WA-AUTOMATION] Initializing WhatsApp client...');
+    io = socketIo;
+    initializationPromise = (async () => {
+      try {
+        console.log('[WA-AUTOMATION] Initializing WhatsApp client...');
 
-      // Load caches on startup
-      await refreshCache();
-      // Periodically refresh cache (every 5 minutes)
-      if (!whatsappService.cacheInterval) {
-        whatsappService.cacheInterval = setInterval(refreshCache, 5 * 60 * 1000);
-      }
-
-      // 1. Production-grade duplicate client instance check & cleanup
-      if (client) {
-        console.log('[WA-AUTOMATION] Cleaning up existing WhatsApp client instance to prevent duplicate handlers and memory leaks...');
-        try {
-          client.removeAllListeners();
-          await client.destroy().catch(() => {});
-        } catch (err) {
-          console.warn('[WA-AUTOMATION] Old client cleanup warning:', err.message);
+        await refreshCache();
+        if (!whatsappService.cacheInterval) {
+          whatsappService.cacheInterval = setInterval(refreshCache, 5 * 60 * 1000);
         }
-        client = null;
-        whatsappService.client = null;
-      }
 
-      // 2. Production background health monitoring heartbeat
-      if (!heartbeatInterval) {
-        heartbeatInterval = setInterval(async () => {
-          // Active connection check
-          if (client && connectionStatus === 'CONNECTED') {
-            try {
-              const state = await client.getState().catch(() => null);
-              if (state) {
-                lastHeartbeat = new Date();
-              } else {
-                console.warn('[WA-AUTOMATION] Heartbeat: Client state returned null. Reconnecting...');
+        if (client) {
+          console.log('[WA-AUTOMATION] Cleaning up existing WhatsApp client instance to prevent duplicate handlers and memory leaks...');
+          try {
+            client.removeAllListeners();
+            await client.destroy().catch(() => {});
+          } catch (err) {
+            console.warn('[WA-AUTOMATION] Old client cleanup warning:', err.message);
+          }
+          client = null;
+          whatsappService.client = null;
+        }
+
+        if (!heartbeatInterval) {
+          heartbeatInterval = setInterval(async () => {
+            if (client && connectionStatus === 'CONNECTED') {
+              try {
+                const state = await client.getState().catch(() => null);
+                if (state) {
+                  lastHeartbeat = new Date();
+                } else {
+                  console.warn('[WA-AUTOMATION] Heartbeat: Client state returned null. Reconnecting...');
+                  reconnectCount++;
+                  await whatsappService.reconnect();
+                }
+              } catch (err) {
+                console.error('[WA-AUTOMATION] Heartbeat check failed:', err.message);
                 reconnectCount++;
                 await whatsappService.reconnect();
               }
-            } catch (err) {
-              console.error('[WA-AUTOMATION] Heartbeat check failed:', err.message);
+            }
+            
+            if (connectionStatus === 'DISCONNECTED' && lastQrGeneratedAt && (Date.now() - lastQrGeneratedAt > 3 * 60 * 1000)) {
+              console.log('[WA-AUTOMATION] Heartbeat: QR code has expired (3 minutes timeout). Re-initializing client to generate new QR...');
+              lastQrGeneratedAt = null;
               reconnectCount++;
               await whatsappService.reconnect();
             }
-          }
-          
-          // QR code expiration fallback (3 minutes timeout)
-          if (connectionStatus === 'DISCONNECTED' && lastQrGeneratedAt && (Date.now() - lastQrGeneratedAt > 3 * 60 * 1000)) {
-            console.log('[WA-AUTOMATION] Heartbeat: QR code has expired (3 minutes timeout). Re-initializing client to generate new QR...');
-            lastQrGeneratedAt = null;
-            reconnectCount++;
-            await whatsappService.reconnect();
-          }
-        }, 45 * 1000);
-      }
+          }, 45 * 1000);
+        }
 
         let sessionRecord = await WhatsAppSession.findOne();
         if (!sessionRecord) {
@@ -866,7 +858,6 @@ const whatsappService = {
               '--disable-default-apps',
               '--disable-features=site-per-process',
               '--disable-web-security',
-              '--single-process',
               '--disable-features=IsolateOrigins',
               '--disable-site-isolation-trials',
               '--disable-renderer-backgrounding',
@@ -879,242 +870,254 @@ const whatsappService = {
 
         whatsappService.client = client;
 
-      client.on('qr', async (qr) => {
-        connectionStatus = 'DISCONNECTED';
-        lastQrGeneratedAt = Date.now();
-        qrGeneratedCount++;
-        sessionRestored = false;
+        client.on('qr', async (qr) => {
+          connectionStatus = 'DISCONNECTED';
+          lastQrGeneratedAt = Date.now();
+          qrGeneratedCount++;
+          sessionRestored = false;
 
-        try {
-          const qrDataUrl = await qrcode.toDataURL(qr);
-          qrCodeData = qrDataUrl;
-          
-          sessionRecord.connected = false;
-          sessionRecord.qrCode = qrDataUrl;
-          await sessionRecord.save();
+          try {
+            const qrDataUrl = await qrcode.toDataURL(qr);
+            qrCodeData = qrDataUrl;
+            
+            sessionRecord.connected = false;
+            sessionRecord.qrCode = qrDataUrl;
+            await sessionRecord.save();
 
-          if (io) {
-            io.emit('whatsapp_qr', { qrCode: qrDataUrl });
-            io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED' });
-          }
-        } catch (err) {
-          console.error('QR code generation failed:', err);
-        }
-      });
-
-      client.on('ready', async () => {
-        connectionStatus = 'CONNECTED';
-        qrCodeData = '';
-        lastHeartbeat = new Date();
-        sessionRestored = true;
-        
-        try {
-          sessionRecord.connected = true;
-          sessionRecord.qrCode = '';
-          sessionRecord.phoneNumber = client.info.wid.user;
-          sessionRecord.pushName = client.info.pushname || '';
-          sessionRecord.lastConnectedAt = new Date();
-          await sessionRecord.save();
-
-          if (io) {
-            io.emit('whatsapp_status', { 
-              connected: true, 
-              statusText: 'CONNECTED',
-              phoneNumber: client.info.wid.user,
-              pushName: client.info.pushname,
-              lastConnectedAt: sessionRecord.lastConnectedAt
-            });
-          }
-        } catch (err) {
-          console.error('Ready callback DB update failed:', err);
-        }
-        console.log('\n[CONNECTED]\nBusiness Account Connected');
-      });
-
-      client.on('authenticated', async () => {
-        console.log('WhatsApp authenticated successfully.');
-        console.log('\n[SESSION]\nLocalAuth Restored');
-        sessionRestored = true;
-      });
-
-      client.on('auth_failure', async (msg) => {
-        connectionStatus = 'DISCONNECTED';
-        sessionRestored = false;
-        console.error('WhatsApp authentication failure:', msg);
-        try {
-          sessionRecord.connected = false;
-          sessionRecord.qrCode = '';
-          await sessionRecord.save();
-
-          if (io) {
-            io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED', error: msg });
-          }
-
-          // Wipe invalid credentials to force fresh QR setup
-          await client.destroy().catch(() => {});
-          await clearSessionDir();
-          await whatsappService.init(io);
-        } catch (err) {
-          console.error('Auth failure handler failed:', err.message);
-        }
-      });
-
-      client.on('disconnected', async (reason) => {
-        connectionStatus = 'DISCONNECTED';
-        sessionRestored = false;
-        console.log('WhatsApp client was disconnected:', reason);
-        try {
-          sessionRecord.connected = false;
-          sessionRecord.qrCode = '';
-          await sessionRecord.save();
-
-          if (io) {
-            io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED' });
-          }
-
-          // Clear credentials folder and trigger fresh QR code generation
-          await client.destroy().catch(() => {});
-          await clearSessionDir();
-          await whatsappService.init(io);
-        } catch (err) {
-          console.error('Disconnect callback DB update failed:', err);
-        }
-      });
-
-      client.on('message_create', async (msg) => {
-        try {
-          if (!client || !client.info || !client.info.wid) return;
-
-          // 1. Filter out Groups, Broadcasts, and Status updates instantly
-          if (
-            msg.from.endsWith('@g.us') || 
-            msg.to.endsWith('@g.us') || 
-            msg.from.endsWith('@broadcast') || 
-            msg.to.endsWith('@broadcast') || 
-            msg.from === 'status@broadcast' || 
-            msg.to === 'status@broadcast' ||
-            msg.isStatus || 
-            msg.broadcast
-          ) {
-            return;
-          }
-
-          console.log('[WHATSAPP] Message received');
-
-          const clientPhone = client.info.wid.user;
-          const senderRaw = msg.from;
-          const senderPhone = senderRaw.split('@')[0];
-          const recipientRaw = msg.to;
-          const recipientPhone = recipientRaw.split('@')[0];
-          const messageBody = msg.body ? msg.body.trim() : '';
-
-          if (!messageBody) return;
-
-          // 2. Validate sender using our cached numbers
-          const cleanSender = formatCleanDigits(senderPhone);
-          const cleanClient = formatCleanDigits(clientPhone);
-
-          // Skip spam instantly if in negative cache
-          if (cache.ignoredPhones.has(cleanSender)) {
-            return;
-          }
-
-          let isAdmin = (cleanSender === cache.adminPhone || cleanSender === cleanClient);
-          let isEmployee = cache.employeePhones.has(cleanSender);
-          let matchedUser = null;
-
-          // If it is the Admin, load the SUPER_ADMIN user
-          if (isAdmin) {
-            matchedUser = await User.findOne({ role: 'SUPER_ADMIN', status: 'active' });
-            if (matchedUser) {
-              const cleanDbPhone = formatCleanDigits(matchedUser.phone);
-              if (cleanDbPhone !== cleanSender) {
-                matchedUser.phone = senderPhone;
-                await matchedUser.save();
-                console.log(`[CRM] [CACHE] Synced Admin phone in database: ${senderPhone}`);
-              }
-              cache.adminPhone = cleanSender;
+            if (io) {
+              io.emit('whatsapp_qr', { qrCode: qrDataUrl });
+              io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED' });
             }
+          } catch (err) {
+            console.error('QR code generation failed:', err);
           }
+        });
 
-          // Perform DB lookup if not in positive cache
-          if (!isAdmin && !isEmployee) {
-            const userObj = await User.findOne({
-              status: { $regex: /^active$/i },
-              $or: [
-                { phone: senderPhone },
-                { phone: new RegExp(senderPhone.replace(/\D/g, '') + '$') }
-              ]
-            });
+        client.on('ready', async () => {
+          connectionStatus = 'CONNECTED';
+          qrCodeData = '';
+          lastHeartbeat = new Date();
+          sessionRestored = true;
+          
+          try {
+            sessionRecord.connected = true;
+            sessionRecord.qrCode = '';
+            sessionRecord.phoneNumber = client.info.wid.user;
+            sessionRecord.pushName = client.info.pushname || '';
+            sessionRecord.lastConnectedAt = new Date();
+            await sessionRecord.save();
 
-            if (userObj) {
-              const cleanDbPhone = formatCleanDigits(userObj.phone);
-              matchedUser = userObj;
+            if (io) {
+              io.emit('whatsapp_status', { 
+                connected: true, 
+                statusText: 'CONNECTED',
+                phoneNumber: client.info.wid.user,
+                pushName: client.info.pushname,
+                lastConnectedAt: sessionRecord.lastConnectedAt
+              });
+            }
+          } catch (err) {
+            console.error('Ready callback DB update failed:', err);
+          }
+          console.log('\n[CONNECTED]\nBusiness Account Connected');
+        });
 
-              if (userObj.role === 'SUPER_ADMIN') {
-                cache.adminPhone = cleanDbPhone;
-                isAdmin = true;
-              } else if (userObj.role === 'EMPLOYEE') {
-                cache.employeePhones.add(cleanDbPhone);
-                isEmployee = true;
-              }
-            } else {
-              // Ignore spam completely, store in negative cache to avoid future queries
-              cache.ignoredPhones.add(cleanSender);
+        client.on('authenticated', async () => {
+          console.log('WhatsApp authenticated successfully.');
+          console.log('\n[SESSION]\nLocalAuth Restored');
+          sessionRestored = true;
+        });
+
+        client.on('auth_failure', async (msg) => {
+          connectionStatus = 'DISCONNECTED';
+          sessionRestored = false;
+          console.error('WhatsApp authentication failure:', msg);
+          try {
+            sessionRecord.connected = false;
+            sessionRecord.qrCode = '';
+            await sessionRecord.save();
+
+            if (io) {
+              io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED', error: msg });
+            }
+
+            const currentClient = client;
+            if (currentClient) {
+              currentClient.removeAllListeners();
+              await currentClient.destroy().catch(() => {});
+            }
+            await clearSessionDir();
+            await whatsappService.init(io);
+          } catch (err) {
+            console.error('Auth failure handler failed:', err.message);
+          }
+        });
+
+        client.on('disconnected', async (reason) => {
+          connectionStatus = 'DISCONNECTED';
+          sessionRestored = false;
+          console.log('WhatsApp client was disconnected:', reason);
+          try {
+            sessionRecord.connected = false;
+            sessionRecord.qrCode = '';
+            await sessionRecord.save();
+
+            if (io) {
+              io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED' });
+            }
+
+            const currentClient = client;
+            if (currentClient) {
+              currentClient.removeAllListeners();
+              await currentClient.destroy().catch(() => {});
+            }
+            await clearSessionDir();
+            await whatsappService.init(io);
+          } catch (err) {
+            console.error('Disconnect callback DB update failed:', err);
+          }
+        });
+
+        client.on('message_create', async (msg) => {
+          try {
+            if (!client || !client.info || !client.info.wid) return;
+
+            if (
+              msg.from.endsWith('@g.us') || 
+              msg.to.endsWith('@g.us') || 
+              msg.from.endsWith('@broadcast') || 
+              msg.to.endsWith('@broadcast') || 
+              msg.from === 'status@broadcast' || 
+              msg.to === 'status@broadcast' ||
+              msg.isStatus || 
+              msg.broadcast
+            ) {
               return;
             }
-          }
 
-          // If we didn't fetch matchedUser but isEmployee is cached, load it from DB
-          if (!matchedUser && isEmployee) {
-            matchedUser = await User.findOne({
-              role: 'EMPLOYEE',
-              status: { $regex: /^active$/i },
-              $or: [
-                { phone: senderPhone },
-                { phone: new RegExp(senderPhone.replace(/\D/g, '') + '$') }
-              ]
+            console.log('[WHATSAPP] Message received');
+
+            const clientPhone = client.info.wid.user;
+            const senderRaw = msg.from;
+            const senderPhone = senderRaw.split('@')[0];
+            const recipientRaw = msg.to;
+            const recipientPhone = recipientRaw.split('@')[0];
+            const messageBody = msg.body ? msg.body.trim() : '';
+
+            if (!messageBody) return;
+
+            const cleanSender = formatCleanDigits(senderPhone);
+            const cleanClient = formatCleanDigits(clientPhone);
+
+            if (cache.ignoredPhones.has(cleanSender)) {
+              return;
+            }
+
+            let isAdmin = (cleanSender === cache.adminPhone || cleanSender === cleanClient);
+            let isEmployee = cache.employeePhones.has(cleanSender);
+            let matchedUser = null;
+
+            if (isAdmin) {
+              matchedUser = await User.findOne({ role: 'SUPER_ADMIN', status: 'active' });
+              if (matchedUser) {
+                const cleanDbPhone = formatCleanDigits(matchedUser.phone);
+                if (cleanDbPhone !== cleanSender) {
+                  matchedUser.phone = senderPhone;
+                  await matchedUser.save();
+                  console.log(`[CRM] [CACHE] Synced Admin phone in database: ${senderPhone}`);
+                }
+                cache.adminPhone = cleanSender;
+              }
+            }
+
+            if (!isAdmin && !isEmployee) {
+              const userObj = await User.findOne({
+                status: { $regex: /^active$/i },
+                $or: [
+                  { phone: senderPhone },
+                  { phone: new RegExp(senderPhone.replace(/\D/g, '') + '$') }
+                ]
+              });
+
+              if (userObj) {
+                const cleanDbPhone = formatCleanDigits(userObj.phone);
+                matchedUser = userObj;
+
+                if (userObj.role === 'SUPER_ADMIN') {
+                  cache.adminPhone = cleanDbPhone;
+                  isAdmin = true;
+                } else if (userObj.role === 'EMPLOYEE') {
+                  cache.employeePhones.add(cleanDbPhone);
+                  isEmployee = true;
+                }
+              } else {
+                cache.ignoredPhones.add(cleanSender);
+                return;
+              }
+            }
+
+            if (!matchedUser && isEmployee) {
+              matchedUser = await User.findOne({
+                role: 'EMPLOYEE',
+                status: { $regex: /^active$/i },
+                $or: [
+                  { phone: senderPhone },
+                  { phone: new RegExp(senderPhone.replace(/\D/g, '') + '$') }
+                ]
+              });
+            }
+
+            if (!matchedUser) {
+              return;
+            }
+
+            const isFromSelf = (senderPhone && clientPhone && recipientPhone && senderPhone === clientPhone && recipientPhone === clientPhone) || (msg.fromMe && recipientPhone && recipientPhone === clientPhone);
+
+            const savedMsg = new WhatsAppMessage({
+              from: senderPhone,
+              to: recipientPhone,
+              body: messageBody,
+              type: msg.fromMe ? 'out' : 'in',
+              timestamp: new Date()
             });
+            await savedMsg.save();
+
+            if (io) {
+              io.emit('whatsapp_new_message', savedMsg);
+            }
+
+            if (isFromSelf || matchedUser.role === 'SUPER_ADMIN') {
+              await handleAdminCommand(matchedUser, messageBody, msg, senderPhone);
+            } else if (matchedUser.role === 'EMPLOYEE') {
+              await handleEmployeeCommand(matchedUser, messageBody, msg, senderPhone);
+            }
+          } catch (err) {
+            console.error('Error handling whatsapp message:', err.message);
           }
+        });
 
-          if (!matchedUser) {
-            return;
-          }
-
-          const isFromSelf = (senderPhone && clientPhone && recipientPhone && senderPhone === clientPhone && recipientPhone === clientPhone) || (msg.fromMe && recipientPhone && recipientPhone === clientPhone);
-
-          // 3. Authenticated CRM Message -> Proceed to Log & Process
-          const savedMsg = new WhatsAppMessage({
-            from: senderPhone,
-            to: recipientPhone,
-            body: messageBody,
-            type: msg.fromMe ? 'out' : 'in',
-            timestamp: new Date()
-          });
-          await savedMsg.save();
-
+        try {
+          await client.initialize();
+          console.log('[WA-AUTOMATION] WhatsApp client initialized successfully.');
+        } catch (initErr) {
+          console.error('[WA-AUTOMATION] WhatsApp Web client initialization crash:', initErr.message);
+          connectionStatus = 'DISCONNECTED';
+          qrCodeData = '';
           if (io) {
-            io.emit('whatsapp_new_message', savedMsg);
+            io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED', error: initErr.message });
           }
-
-          if (isFromSelf || matchedUser.role === 'SUPER_ADMIN') {
-            await handleAdminCommand(matchedUser, messageBody, msg, senderPhone);
-          } else if (matchedUser.role === 'EMPLOYEE') {
-            await handleEmployeeCommand(matchedUser, messageBody, msg, senderPhone);
-          }
-        } catch (err) {
-          console.error('Error handling whatsapp message:', err.message);
+          throw initErr;
         }
-      });
+      } catch (err) {
+        console.error('WhatsApp Service init failed:', err.message);
+        throw err;
+      } finally {
+        isInitializing = false;
+        initializationPromise = null;
+      }
+    })();
 
-      client.initialize().catch(err => {
-        console.error('WhatsApp Web client initialization crash:', err.message);
-      });
-    } catch (err) {
-      console.error('WhatsApp Service init failed:', err.message);
-    } finally {
-      isInitializing = false;
-    }
+    return initializationPromise;
   },
 
   getConnectionStatus: () => {
@@ -1174,9 +1177,12 @@ const whatsappService = {
         io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED' });
       }
 
-      // Completely destroy, wipe session directory, and reinitialize to auto-generate a fresh QR
       console.log('[WA-AUTOMATION] Logging out and destroying client...');
-      await client.destroy().catch(() => {});
+      const oldClient = client;
+      client = null;
+      whatsappService.client = null;
+      oldClient.removeAllListeners();
+      await oldClient.destroy().catch(() => {});
       await clearSessionDir();
       await whatsappService.init(io);
       console.log('[WA-AUTOMATION] Client destroyed and session wiped.');
@@ -1189,14 +1195,15 @@ const whatsappService = {
     try {
       connectionStatus = 'DISCONNECTED';
       if (client) {
-        try {
-          client.removeAllListeners();
-          await client.destroy().catch(() => {});
-        } catch (e) {
-          // Ignore destroy errors if client is already dead
-        }
+        const oldClient = client;
         client = null;
         whatsappService.client = null;
+        try {
+          oldClient.removeAllListeners();
+          await oldClient.destroy().catch(() => {});
+        } catch (e) {
+          console.warn('[WA-AUTOMATION] Client destroy during reconnect failed:', e.message);
+        }
       }
       if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
@@ -1211,14 +1218,15 @@ const whatsappService = {
   generateQR: async () => {
     try {
       if (client) {
-        try {
-          client.removeAllListeners();
-          await client.destroy().catch(() => {});
-        } catch (e) {
-          // Ignore destroy errors
-        }
+        const oldClient = client;
         client = null;
         whatsappService.client = null;
+        try {
+          oldClient.removeAllListeners();
+          await oldClient.destroy().catch(() => {});
+        } catch (e) {
+          console.warn('[WA-AUTOMATION] Client destroy during generateQR failed:', e.message);
+        }
       }
       lastQrGeneratedAt = null;
       connectionStatus = 'DISCONNECTED';
@@ -1227,7 +1235,7 @@ const whatsappService = {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
       }
-      await clearSessionDir(); // Wipe credentials to force fresh QR immediately!
+      await clearSessionDir();
       await whatsappService.init(io);
       return { success: true, message: 'QR generation triggered' };
     } catch (err) {

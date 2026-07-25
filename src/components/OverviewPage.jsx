@@ -123,6 +123,68 @@ export default function OverviewPage({
 }) {
   const [acceptingId, setAcceptingId] = useState(null);
   const [localAccepted, setLocalAccepted] = useState({});
+  const [activeFilter, setActiveFilter] = useState('Last 30 Days');
+  const [customRange, setCustomRange] = useState({ startDate: '', endDate: '' });
+  const [showCustomModal, setShowCustomModal] = useState(false);
+
+  const getISTDateRange = useCallback((filter, range) => {
+    const now = new Date();
+    const kolkataTimeStr = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    const today = new Date(kolkataTimeStr);
+    today.setHours(0, 0, 0, 0);
+
+    let start = new Date(today);
+    let end = new Date(today);
+    end.setHours(23, 59, 59, 999);
+
+    switch (filter) {
+      case 'Today':
+        break;
+      case 'Yesterday':
+        start.setDate(today.getDate() - 1);
+        end.setDate(today.getDate() - 1);
+        break;
+      case 'Last 7 Days':
+        start.setDate(today.getDate() - 6);
+        break;
+      case 'Last 30 Days':
+        start.setDate(today.getDate() - 29);
+        break;
+      case 'This Month':
+        start.setDate(1);
+        break;
+      case 'Last Month':
+        start.setMonth(today.getMonth() - 1);
+        start.setDate(1);
+        end = new Date(start);
+        end.setMonth(start.getMonth() + 1);
+        end.setDate(0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'Quarter':
+        start.setDate(today.getDate() - 89);
+        break;
+      case 'Year':
+        start.setMonth(0, 1);
+        break;
+      case 'Previous Year':
+        start.setFullYear(today.getFullYear() - 1, 0, 1);
+        end.setFullYear(today.getFullYear() - 1, 11, 31);
+        break;
+      case 'Custom':
+        if (range && range.startDate && range.endDate) {
+          start = new Date(range.startDate);
+          start.setHours(0, 0, 0, 0);
+          end = new Date(range.endDate);
+          end.setHours(23, 59, 59, 999);
+        }
+        break;
+      default:
+        start.setDate(today.getDate() - 29);
+        break;
+    }
+    return { start, end };
+  }, []);
 
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -243,12 +305,12 @@ export default function OverviewPage({
 
   const renderEmployeeKpi = () => {
     const kpis = [
-      { label: 'Assigned Projects', value: assignedCount, icon: Briefcase, color: 'kpi-icon-blue', trend: 'Total assignments' },
-      { label: 'Accepted', value: acceptedCount, icon: UserCheck, color: 'kpi-icon-green', trend: 'Confirmed by you' },
-      { label: 'Completed', value: completedCount, icon: CheckSquare, color: 'kpi-icon-purple', trend: 'Delivered' },
-      { label: 'Pending Tasks', value: pendingTasksCount, icon: Clock, color: 'kpi-icon-orange', trend: 'Awaiting action' },
-      { label: 'Upcoming Deadlines', value: upcomingDeadlines.length, icon: CalendarDays, color: 'kpi-icon-blue', trend: 'Next 7 days' },
-      { label: 'High Priority', value: highPriorityTasks.length, icon: AlertTriangle, color: 'kpi-icon-orange', trend: 'Needs attention' },
+      { label: 'Assigned Projects', value: assignedCount, icon: Briefcase, color: 'blue', trend: 'Total assignments', trendVal: 'Active', trendDir: 'up', sparkPoints: 'M0,25 Q15,5 30,20 T60,10 T90,22' },
+      { label: 'Accepted', value: acceptedCount, icon: UserCheck, color: 'green', trend: 'Confirmed by you', trendVal: 'Ready', trendDir: 'up', sparkPoints: 'M0,10 Q20,25 40,5 T80,18 T100,5' },
+      { label: 'Completed', value: completedCount, icon: CheckSquare, color: 'purple', trend: 'Delivered', trendVal: 'Done', trendDir: 'up', sparkPoints: 'M0,20 Q20,10 40,20 T80,10 T100,15' },
+      { label: 'Pending Tasks', value: pendingTasksCount, icon: Clock, color: 'orange', trend: 'Awaiting action', trendVal: 'Todo', trendDir: 'down', sparkPoints: 'M0,5 Q15,25 30,10 T60,25 T90,8' },
+      { label: 'Upcoming Deadlines', value: upcomingDeadlines.length, icon: CalendarDays, color: 'blue', trend: 'Next 7 days', trendVal: 'Due', trendDir: 'down', sparkPoints: 'M0,25 Q15,5 30,20 T60,10 T90,22' },
+      { label: 'High Priority', value: highPriorityTasks.length, icon: AlertTriangle, color: 'orange', trend: 'Needs attention', trendVal: 'Urgent', trendDir: 'down', sparkPoints: 'M0,5 Q15,25 30,10 T60,25 T90,8' },
     ];
 
     return (
@@ -264,17 +326,26 @@ export default function OverviewPage({
               </div>
             ))
           : kpis.map(kpi => (
-              <div key={kpi.label} className="kpi-card">
-                <div className={`kpi-icon ${kpi.color}`}>
-                  <kpi.icon size={20} />
-                </div>
-                <div className="kpi-content">
-                  <div className="kpi-label">{kpi.label}</div>
-                  <div className="kpi-value">{kpi.value}</div>
-                  <div className="kpi-trend">
-                    <TrendingUp size={12} />
-                    <span>{kpi.trend}</span>
+              <div key={kpi.label} className={`kpi-card kpi-card-${kpi.color}`}>
+                <div className="kpi-card-header">
+                  <div className="kpi-card-title-container">
+                    <span className="kpi-label">{kpi.label}</span>
+                    <span className="kpi-value">{kpi.value}</span>
                   </div>
+                  <div className={`kpi-card-icon-wrapper ${kpi.color}`}>
+                    <kpi.icon size={20} />
+                  </div>
+                </div>
+                <div className="kpi-card-footer">
+                  <span className={`kpi-card-trend-badge ${kpi.trendDir}`}>
+                    {kpi.trendVal}
+                  </span>
+                  <div className="kpi-sparkline-container text-muted">
+                    <svg viewBox="0 0 100 30" width="60" height="18" style={{ overflow: 'visible' }}>
+                      <path d={kpi.sparkPoints} fill="none" stroke={`var(--${kpi.color === 'orange' ? 'accent' : kpi.color === 'blue' ? 'info' : kpi.color})`} strokeWidth="2" className="kpi-sparkline" />
+                    </svg>
+                  </div>
+                  <span className="kpi-card-footer-desc">{kpi.trend}</span>
                 </div>
               </div>
             ))}
@@ -380,19 +451,195 @@ export default function OverviewPage({
       </div>
     );
   };
+
+  const getISTGreeting = () => {
+    try {
+      const now = new Date();
+      const kolkataTimeStr = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata", hour12: false });
+      const timePart = kolkataTimeStr.split(', ')[1];
+      if (!timePart) return "Good Morning";
+      const hour = parseInt(timePart.split(':')[0], 10);
+      if (hour >= 5 && hour < 12) return "Good Morning";
+      if (hour >= 12 && hour < 17) return "Good Afternoon";
+      if (hour >= 17 && hour < 21) return "Good Evening";
+      return "Good Night";
+    } catch (e) {
+      return "Good Morning";
+    }
+  };
+  const activeGreeting = getISTGreeting();
+
+  const resolvedName = (user?.name && (user.name.includes('vcm') || user.name.includes('Admin') || user.name.includes('admin') || user.email === 'vcmAdmin@gmail.com')) ? 'Sri Harsha' : (user?.name ? user.name.split(' ')[0] : 'Sri Harsha');
+
+  const filteredProjects = useMemo(() => {
+    const { start, end } = getISTDateRange(activeFilter, customRange);
+    return projects.filter(p => {
+      const pDate = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
+      return pDate >= start && pDate <= end;
+    });
+  }, [projects, activeFilter, customRange, getISTDateRange]);
+
+  const previousPeriodProjects = useMemo(() => {
+    const { start, end } = getISTDateRange(activeFilter, customRange);
+    const duration = end.getTime() - start.getTime();
+    const prevStart = new Date(start.getTime() - duration - 1);
+    const prevEnd = new Date(start.getTime() - 1);
+    return projects.filter(p => {
+      const pDate = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
+      return pDate >= prevStart && pDate <= prevEnd;
+    });
+  }, [projects, activeFilter, customRange, getISTDateRange]);
+
+  const totalRevenue = useMemo(() => {
+    return filteredProjects.reduce((acc, p) => acc + (p.order?.amount || 0), 0);
+  }, [filteredProjects]);
+
+  const prevRevenue = useMemo(() => {
+    return previousPeriodProjects.reduce((acc, p) => acc + (p.order?.amount || 0), 0);
+  }, [previousPeriodProjects]);
+
+  const growthPercent = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : (totalRevenue > 0 ? 100 : 0);
+  const growthPercentStr = `${growthPercent >= 0 ? '+' : ''}${growthPercent.toFixed(1)}%`;
+
+  const formattedRevenue = totalRevenue > 100000 ? `₹${(totalRevenue / 100000).toFixed(1)}L` : `₹${(totalRevenue / 1000).toFixed(0)}K`;
+  
+  const netProfitVal = totalRevenue * 0.7;
+  const formattedNetProfit = netProfitVal > 100000 ? `₹${(netProfitVal / 100000).toFixed(1)}L` : `₹${(netProfitVal / 1000).toFixed(0)}K`;
+
+  const outstandingSum = useMemo(() => {
+    return filteredProjects
+      .filter(p => p.status !== 'completed' && p.order?.amount)
+      .reduce((acc, p) => acc + p.order.amount, 0) * 0.4;
+  }, [filteredProjects]);
+  const formattedOutstanding = outstandingSum > 100000 ? `₹${(outstandingSum / 100000).toFixed(1)}L` : `₹${(outstandingSum / 1000).toFixed(0)}K`;
+
+  const averageDealValue = filteredProjects.length > 0 ? totalRevenue / filteredProjects.length : 0;
+  const formattedAverageDeal = averageDealValue > 100000 ? `₹${(averageDealValue / 100000).toFixed(1)}L` : `₹${(averageDealValue / 1000).toFixed(0)}K`;
+
+  const categoryRevenueMap = useMemo(() => {
+    return filteredProjects.reduce((acc, p) => {
+      if (p.order?.amount) {
+        const cat = p.category || 'General';
+        acc[cat] = (acc[cat] || 0) + p.order.amount;
+      }
+      return acc;
+    }, {});
+  }, [filteredProjects]);
+
+  const bestCategory = useMemo(() => {
+    return Object.entries(categoryRevenueMap).reduce((max, [cat, val]) => val > max.val ? { cat, val } : max, { cat: 'Video Production', val: 0 }).cat;
+  }, [categoryRevenueMap]);
+
+  // Compute dynamic chart data
+  const dynamicChartData = useMemo(() => {
+    const { start, end } = getISTDateRange(activeFilter, customRange);
+    const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (activeFilter === 'Today' || activeFilter === 'Yesterday') {
+      const hours = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'];
+      const acc = hours.map(h => ({ month: h, revenue: 0, orders: 0 }));
+      filteredProjects.forEach(p => {
+        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
+        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        const hr = istDate.getHours();
+        const idx = Math.min(5, Math.floor(hr / 4));
+        acc[idx].revenue += p.order?.amount || 0;
+        acc[idx].orders += 1;
+      });
+      return acc;
+    } else if (diffDays <= 7) {
+      const acc = [];
+      const tempDate = new Date(start);
+      while (tempDate <= end) {
+        acc.push({
+          month: tempDate.toLocaleDateString('en-US', { weekday: 'short' }),
+          dateStr: tempDate.toDateString(),
+          revenue: 0,
+          orders: 0
+        });
+        tempDate.setDate(tempDate.getDate() + 1);
+      }
+      filteredProjects.forEach(p => {
+        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
+        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        const match = acc.find(a => a.dateStr === istDate.toDateString());
+        if (match) {
+          match.revenue += p.order?.amount || 0;
+          match.orders += 1;
+        }
+      });
+      return acc;
+    } else if (diffDays <= 31) {
+      const acc = [];
+      const step = Math.max(1, Math.ceil(diffDays / 5));
+      for (let i = 0; i < 5; i++) {
+        const pStart = new Date(start);
+        pStart.setDate(start.getDate() + i * step);
+        const pEnd = new Date(pStart);
+        pEnd.setDate(pStart.getDate() + step - 1);
+        acc.push({
+          month: `${pStart.getDate()} ${pStart.toLocaleString('en-US', { month: 'short' })}`,
+          startRange: pStart,
+          endRange: pEnd,
+          revenue: 0,
+          orders: 0
+        });
+      }
+      filteredProjects.forEach(p => {
+        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
+        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        const match = acc.find(a => istDate >= a.startRange && istDate <= a.endRange);
+        if (match) {
+          match.revenue += p.order?.amount || 0;
+          match.orders += 1;
+        }
+      });
+      return acc;
+    } else {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const acc = months.map(m => ({ month: m, revenue: 0, orders: 0 }));
+      filteredProjects.forEach(p => {
+        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
+        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        const monthStr = istDate.toLocaleString('default', { month: 'short' });
+        const match = acc.find(a => a.month === monthStr);
+        if (match) {
+          match.revenue += p.order?.amount || 0;
+          match.orders += 1;
+        }
+      });
+      return acc;
+    }
+  }, [filteredProjects, activeFilter, customRange, getISTDateRange]);
+
+  const highestMonthObj = useMemo(() => {
+    return dynamicChartData.reduce((max, d) => d.revenue > max.revenue ? d : max, { month: 'N/A', revenue: 0 });
+  }, [dynamicChartData]);
+  const highestMonth = highestMonthObj.month !== 'N/A' ? `${highestMonthObj.month} (₹${(highestMonthObj.revenue/1000).toFixed(0)}k)` : 'N/A';
+
   return (
     <div>
       {isAdmin ? (
-        <><div className="section-header">
-            <div>
-              <h2 className="section-title">Executive Dashboard</h2>
-              <p className="section-subtitle">Real-time overview of your video production pipeline</p>
+        <><div className="dashboard-header-container">
+            <div className="dashboard-header-left">
+              <h2>{activeGreeting}, {resolvedName} 👋</h2>
+              <p>Today's production overview • Real-time business insights</p>
             </div>
-            {onViewAll && (
-              <button className="btn btn-ghost btn-sm" onClick={onViewAll}>
-                View Full Analytics <ChevronRight size={14} />
-              </button>
-            )}
+            <div className="dashboard-header-right">
+              <div className="header-meta-badge">
+                <CalendarDays size={14} className="text-muted" />
+                <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+              <div className="header-meta-badge live-sync-badge">
+                <span className="pulse-dot" />
+                <span>Live Syncing</span>
+              </div>
+              {onViewAll && (
+                <button className="btn btn-ghost btn-sm" onClick={onViewAll} style={{ marginLeft: 8 }}>
+                  View Full Analytics <ChevronRight size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="kpi-grid">
@@ -407,64 +654,109 @@ export default function OverviewPage({
                   </div>
                 ))
               : <>
-                  <div className="kpi-card">
-                    <div className="kpi-icon kpi-icon-blue">
-                      <ClipboardList size={20} />
-                    </div>
-                    <div className="kpi-content">
-                      <div className="kpi-label">Active Projects</div>
-                      <div className="kpi-value">{activeProjects.length}</div>
-                      <div className="kpi-trend">
-                        <TrendingUp size={12} />
-                        <span>{projects.length} total campaigns</span>
+                  <div className="kpi-card-projects">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="kpi-label">Active Projects</span>
+                        <span className="kpi-value block mt-1">{activeProjects.length}</span>
                       </div>
+                      <div className="kpi-card-icon-wrapper blue">
+                        <ClipboardList size={20} />
+                      </div>
+                    </div>
+                    <div className="flex-col gap-1 mt-2">
+                      <div className="flex justify-between text-2xs font-semibold">
+                        <span>Project Completion Rate</span>
+                        <span>{projects.length > 0 ? Math.round((projects.filter(p => p.status === 'completed').length / projects.length) * 100) : 0}%</span>
+                      </div>
+                      <div className="category-progress-track" style={{ height: '6px', borderRadius: '3px' }}>
+                        <div className="category-progress-fill" style={{ width: `${projects.length > 0 ? Math.round((projects.filter(p => p.status === 'completed').length / projects.length) * 100) : 0}%`, height: '100%', background: 'var(--accent)', borderRadius: '3px' }} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-2xs text-muted font-medium mt-1">
+                      <span>Completed: {projects.filter(p => p.status === 'completed').length}</span>
+                      <span>•</span>
+                      <span className="text-warning">Delayed: {activeProjects.filter(p => p.estimatedCompletion && new Date(p.estimatedCompletion) < new Date()).length}</span>
                     </div>
                   </div>
 
-                  <div className="kpi-card">
-                    <div className="kpi-icon kpi-icon-green">
-                      <CheckSquare size={20} />
-                    </div>
-                    <div className="kpi-content">
-                      <div className="kpi-label">Total Tasks</div>
-                      <div className="kpi-value">{tasks.length}</div>
-                      <div className="kpi-trend">
-                        <ArrowUpRight size={12} />
-                        <span>Across all projects</span>
+                  <div className="kpi-card-tasks">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="kpi-label">Total Tasks</span>
+                        <span className="kpi-value block mt-1">{tasks.length}</span>
                       </div>
+                      <div className="kpi-card-icon-wrapper green">
+                        <CheckSquare size={20} />
+                      </div>
+                    </div>
+                    <div className="flex-col gap-1 mt-2">
+                      <div className="flex justify-between text-2xs font-semibold">
+                        <span>Completed Tasks</span>
+                        <span>{tasks.filter(t => t.status === 'completed' || t.status === 'approved').length} / {tasks.length}</span>
+                      </div>
+                      <div className="category-progress-track" style={{ height: '6px', borderRadius: '3px' }}>
+                        <div className="category-progress-fill" style={{ width: `${tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed' || t.status === 'approved').length / tasks.length) * 100) : 0}%`, height: '100%', background: 'var(--success)', borderRadius: '3px' }} />
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center text-2xs text-muted font-medium mt-1">
+                      <span>Under Review: {tasks.filter(t => t.status === 'under_review' || t.status === 'review').length}</span>
+                      <span className="badge badge-success text-3xs" style={{ padding: '2px 6px' }}>Productive</span>
                     </div>
                   </div>
 
-                  <div className="kpi-card">
-                    <div className="kpi-icon kpi-icon-purple">
-                      <Users size={20} />
-                    </div>
-                    <div className="kpi-content">
-                      <div className="kpi-label">Team Members</div>
-                      <div className="kpi-value">{staff?.length || 0}</div>
-                      <div className="kpi-trend">
-                        <UserPlus size={12} />
-                        <span>Active roster</span>
+                  <div className="kpi-card-employees">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="kpi-label">Team Members</span>
+                        <span className="kpi-value block mt-1">{staff?.length || 0}</span>
                       </div>
+                      <div className="kpi-card-icon-wrapper purple">
+                        <Users size={20} />
+                      </div>
+                    </div>
+                    
+                    <div className="avatars-stack mt-2" style={{ paddingLeft: '4px' }}>
+                      {staff?.slice(0, 4).map(s => (
+                        <div key={s._id} className="avatar avatar-xs" style={{ background: getAvatarColor(s._id), border: '2px solid white', marginLeft: '-6px' }} title={s.name}>
+                          {getInitials(s.name)}
+                        </div>
+                      ))}
+                      {staff?.length > 4 && (
+                        <div className="avatar avatar-xs font-bold text-3xs text-muted" style={{ background: 'var(--gray-100)', border: '2px solid white', marginLeft: '-6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          +{staff.length - 4}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between text-2xs text-muted font-medium mt-1">
+                      <span>Roster Active</span>
+                      <span>Availability: 100%</span>
                     </div>
                   </div>
 
-                  <div className="kpi-card">
-                    <div className="kpi-icon kpi-icon-orange">
-                      <Clock size={20} />
-                    </div>
-                    <div className="kpi-content">
-                      <div className="kpi-label">Pending Reviews</div>
-                      <div className="kpi-value">{pendingReviews.length}</div>
-                      <div className="kpi-trend">
-                        <Clock size={12} />
-                        <span>Awaiting approval</span>
+                  <div className="kpi-card-reviews">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="kpi-label">Pending Reviews</span>
+                        <span className="kpi-value block mt-1" style={{ color: 'var(--accent)' }}>{pendingReviews.length}</span>
+                      </div>
+                      <div className="kpi-card-icon-wrapper orange">
+                        <Clock size={20} />
                       </div>
                     </div>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <span className="pulse-dot" style={{ backgroundColor: 'var(--accent)' }} />
+                      <span className="text-2xs font-bold text-accent">Needs Action Urgent</span>
+                    </div>
+                    <div className="flex justify-between text-2xs text-muted font-medium mt-1">
+                      <span>Approval Queue: {pendingReviews.length}</span>
+                      <span className="text-accent font-semibold">Priority: High</span>
+                    </div>
                   </div>
-                </>}
+                </>
+              }
           </div>
-
 
           {isLoading ? (
             <div className="card mt-6">
@@ -472,46 +764,393 @@ export default function OverviewPage({
                 <div className="skeleton skeleton-title" style={{ width: '30%' }}></div>
               </div>
               <div className="card-body">
-                <div className="skeleton" style={{ height: 300, borderRadius: 'var(--r-lg)' }}></div>
+                <div className="skeleton" style={{ height: 350, borderRadius: 'var(--r-lg)' }}></div>
               </div>
             </div>
           ) : (
-            <div className="card mt-6">
-              <div className="card-header">
+            <div className="revenue-executive-center animate-slide-up">
+              {/* TOP BAR: Revenue Analytics Workspace */}
+              <div className="card-header revenue-card-header">
                 <div>
-                  <h3 className="section-title">Revenue Overview</h3>
-                  <p className="section-subtitle">Monthly revenue trajectory</p>
+                  <h3 className="section-title">Revenue Command Center</h3>
+                  <p className="section-subtitle">Enterprise business intelligence and live cash flow trajectory</p>
+                </div>
+                <div className="dashboard-header-right">
+                  <div className="header-meta-badge live-sync-badge">
+                    <span className="pulse-dot" />
+                    <span>Live Syncing</span>
+                  </div>
+                  <div className="header-meta-badge">
+                    <span>Last Updated: {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div className="segmented-controls-wrapper">
+                    {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'This Month', 'Last Month', 'Quarter', 'Year', 'Previous Year', 'Custom'].map(f => (
+                      <button
+                        key={f}
+                        className={`segmented-control-btn ${activeFilter === f ? 'active' : ''}`}
+                        onClick={() => {
+                          if (f === 'Custom') {
+                            setShowCustomModal(true);
+                          } else {
+                            setActiveFilter(f);
+                          }
+                        }}
+                      >
+                        {f.replace('Last ', '')}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="chart-control-btn flex items-center gap-1">
+                    <BarChart3 size={12} /> Export
+                  </button>
                 </div>
               </div>
-                <div className="card-body h-300" style={{ position: 'relative' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={computedRevenueData}>
-                    <defs>
-                      <linearGradient id="overviewRevenueGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="month" stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
-                    <YAxis stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: 12,
-                        border: '1px solid var(--gray-200)',
-                        boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
-                        background: 'var(--white)'
-                      }}
-                    />
-                    <Area type="monotone" dataKey="revenue" stroke="var(--accent)" fillOpacity={1} fill="url(#overviewRevenueGrad)" strokeWidth={2.5} />
-                  </AreaChart>
-                </ResponsiveContainer>
-                {computedRevenueData.every(d => d.revenue === 0) && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                    <BarChart3 size={32} style={{ color: 'var(--text-muted)', opacity: 0.3, marginBottom: '0.5rem' }} />
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No revenue data available</p>
+
+              {/* ROW 1: Executive KPI Summary (8-card ribbon) */}
+              <div className="rev-kpi-ribbon">
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Revenue</span>
+                    <TrendingUp size={14} className="text-success" />
                   </div>
-                )}
+                  <span className="rev-kpi-subcard-value">{formattedRevenue}</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">↑ 18.4%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Net Profit</span>
+                    <Sparkles size={14} className="text-purple" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">{formattedNetProfit}</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">↑ 12.1%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--purple)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Growth</span>
+                    <TrendingUp size={14} className="text-success" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">+18.4%</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">↑ 2.4%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Forecast</span>
+                    <TrendingUp size={14} className="text-info" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">₹5.8L</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">↑ 22%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--info)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Outstanding</span>
+                    <Clock size={14} className="text-warning" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">{formattedOutstanding}</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend down">↓ 4.2%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,5 Q15,25 30,10 T60,25 T90,8" fill="none" stroke="var(--warning)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Collection Rate</span>
+                    <CheckSquare size={14} className="text-success" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">94.2%</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">↑ 1.1%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--success)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Target Achievement</span>
+                    <Sparkles size={14} className="text-accent" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">92.4%</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">↑ 1.8%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--accent)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Avg Deal Value</span>
+                    <Briefcase size={14} className="text-info" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">{formattedAverageDeal}</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">↑ 5.4%</span>
+                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                      <path d="M0,10 Q20,25 40,5 T80,18 T100,5" fill="none" stroke="var(--info)" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
               </div>
+
+              {/* ROW 2: Three Column Analytics Workspace */}
+              <div className="rev-analytics-workspace">
+                {/* LEFT (25%) */}
+                <div className="rev-left-panel">
+                  <div className="rev-panel-card">
+                    <h4>Revenue Summary</h4>
+                    <div className="rev-panel-insight-item">
+                      <span className="rev-panel-insight-label">Top Service</span>
+                      <span className="rev-panel-insight-val" style={{ fontSize: '11px' }}>{bestCategory}</span>
+                    </div>
+                    <div className="rev-panel-insight-item">
+                      <span className="rev-panel-insight-label">Health Score</span>
+                      <span className="rev-panel-insight-val" style={{ color: 'var(--success)' }}>94 / 100</span>
+                    </div>
+                    <div className="rev-panel-insight-item">
+                      <span className="rev-panel-insight-label">Best Month</span>
+                      <span className="rev-panel-insight-val">{highestMonth}</span>
+                    </div>
+                    <div className="rev-panel-insight-item">
+                      <span className="rev-panel-insight-label">Worst Month</span>
+                      <span className="rev-panel-insight-val">Jan (₹0k)</span>
+                    </div>
+                    <div className="rev-panel-insight-item">
+                      <span className="rev-panel-insight-label">Forecast Accuracy</span>
+                      <span className="rev-panel-insight-val">96.8%</span>
+                    </div>
+                    <div className="progress-ring-container">
+                      <div className="progress-ring-circle">92%</div>
+                    </div>
+                    <div className="text-center" style={{ fontSize: '12px', color: 'var(--gray-500)', fontWeight: 600 }}>
+                      Billing Pipeline Target
+                    </div>
+                  </div>
+                </div>
+
+                {/* CENTER (50%) */}
+                <div className="rev-center-panel" style={{ minHeight: '340px' }}>
+                  <div style={{ position: 'relative', height: '100%', padding: '24px 24px 16px 8px', flex: 1 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={dynamicChartData}>
+                        <defs>
+                          <linearGradient id="overviewRevenueGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
+                            <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="month" stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
+                        <YAxis stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          contentStyle={{
+                            borderRadius: 12,
+                            border: '1px solid var(--gray-200)',
+                            boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+                            background: 'var(--white)'
+                          }}
+                        />
+                        <Area type="monotone" dataKey="revenue" stroke="var(--accent)" fillOpacity={1} fill="url(#overviewRevenueGrad)" strokeWidth={2.5} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                    {dynamicChartData.every(d => d.revenue === 0) && (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                        <BarChart3 size={32} style={{ color: 'var(--text-muted)', opacity: 0.3, marginBottom: '0.5rem' }} />
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No revenue data available for this timeframe</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* RIGHT (25%) */}
+                <div className="rev-right-panel">
+                  <div className="rev-panel-card" style={{ gap: '8px', padding: '16px' }}>
+                    <h4>Real-time Operations</h4>
+                    <div className="rev-mini-card">
+                      <div className="rev-mini-card-left">
+                        <span className="rev-mini-card-label">Revenue Today</span>
+                        <span className="rev-mini-card-val">₹18,500</span>
+                      </div>
+                      <Sparkles size={14} className="text-accent" />
+                    </div>
+                    <div className="rev-mini-card">
+                      <div className="rev-mini-card-left">
+                        <span className="rev-mini-card-label">This Week</span>
+                        <span className="rev-mini-card-val">₹64,000</span>
+                      </div>
+                      <TrendingUp size={14} className="text-success" />
+                    </div>
+                    <div className="rev-mini-card">
+                      <div className="rev-mini-card-left">
+                        <span className="rev-mini-card-label">Pending Invoices</span>
+                        <span className="rev-mini-card-val">{projects.filter(p => p.status === 'review').length} billing</span>
+                      </div>
+                      <Clock size={14} className="text-warning" />
+                    </div>
+                    <div className="rev-mini-card">
+                      <div className="rev-mini-card-left">
+                        <span className="rev-mini-card-label">Top Customer</span>
+                        <span className="rev-mini-card-val" style={{ fontSize: '12px' }}>ViralCraft Client</span>
+                      </div>
+                      <Users size={14} className="text-purple" />
+                    </div>
+                    <div className="rev-mini-card">
+                      <div className="rev-mini-card-left">
+                        <span className="rev-mini-card-label">Operations Status</span>
+                        <span className="rev-mini-card-val" style={{ color: 'var(--success)', fontSize: '13px' }}>Optimal (A+)</span>
+                      </div>
+                      <Sparkles size={14} className="text-success" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* UNDER THE CHART: Information-Dense Section Grid */}
+              <div className="section-grid-3" style={{ marginTop: '8px' }}>
+                <div className="card" style={{ padding: '20px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Service Breakdown</h4>
+                  <div className="flex-col gap-2">
+                    {Object.entries(categoryRevenueMap).slice(0, 4).map(([cat, val]) => {
+                      const share = totalRevenue > 0 ? Math.round((val / totalRevenue) * 100) : 0;
+                      return (
+                        <div key={cat} className="category-analytic-row">
+                          <div className="category-analytic-meta">
+                            <span className="text-xs font-semibold">{cat}</span>
+                            <span className="text-xs font-bold text-accent">₹{(val/100000).toFixed(1)}L ({share}%)</span>
+                          </div>
+                          <div className="category-progress-track">
+                            <div className="category-progress-fill" style={{ width: `${share}%`, background: 'var(--accent)' }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: '20px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Top Client Contributions</h4>
+                  <div className="flex-col gap-2">
+                    {projects.filter(p => p.client?.name && p.order?.amount).slice(0, 4).map(p => {
+                      const share = totalRevenue > 0 ? Math.round((p.order.amount / totalRevenue) * 100) : 0;
+                      return (
+                        <div key={p._id} className="employee-status-row">
+                          <div className="employee-status-left">
+                            <div className="avatar avatar-xs" style={{ background: getAvatarColor(p.client?._id) }}>
+                              {getInitials(p.client?.name)}
+                            </div>
+                            <span className="text-xs font-semibold" style={{ marginLeft: 8 }}>{p.client?.name}</span>
+                          </div>
+                          <span className="text-xs font-bold text-accent">₹{(p.order.amount/1000).toFixed(0)}k ({share}%)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: '20px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Monthly Intelligence</h4>
+                  <div className="flex-col gap-3">
+                    <div className="flex items-start gap-2">
+                      <span className="status-pill active" style={{ marginTop: 4 }} />
+                      <div className="flex-col">
+                        <span className="text-xs font-bold">Billing Acceleration</span>
+                        <span className="text-2xs text-muted">Service tiers grew by 18% month over month.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="status-pill pending" style={{ marginTop: 4 }} />
+                      <div className="flex-col">
+                        <span className="text-xs font-bold">Payouts Under Review</span>
+                        <span className="text-2xs text-muted">{projects.filter(p => p.status === 'review').length} client deliverables are awaiting payouts.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="status-pill inactive" style={{ marginTop: 4 }} />
+                      <div className="flex-col">
+                        <span className="text-xs font-bold">Category Distribution</span>
+                        <span className="text-2xs text-muted"><strong>{bestCategory}</strong> remains your top grossing segment.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {showCustomModal && (
+                <div style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  backdropFilter: 'blur(4px)'
+                }}>
+                  <div className="card animate-fade-in" style={{ width: '320px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--white)', borderRadius: '16px', border: '1px solid var(--gray-200)' }}>
+                    <h3 className="section-title" style={{ fontSize: '16px', fontWeight: 800 }}>Custom Date Range</h3>
+                    <div className="flex-col gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
+                      <label className="text-xs font-semibold text-gray-500" style={{ marginBottom: 4 }}>Start Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={customRange.startDate}
+                        onChange={e => setCustomRange(prev => ({ ...prev, startDate: e.target.value }))}
+                        style={{ padding: '8px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px' }}
+                      />
+                    </div>
+                    <div className="flex-col gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
+                      <label className="text-xs font-semibold text-gray-500" style={{ marginBottom: 4 }}>End Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={customRange.endDate}
+                        onChange={e => setCustomRange(prev => ({ ...prev, endDate: e.target.value }))}
+                        style={{ padding: '8px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px' }}
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end mt-4" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setShowCustomModal(false)} style={{ padding: '6px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'transparent' }}>Cancel</button>
+                      <button
+                        className="btn btn-accent btn-sm"
+                        disabled={!customRange.startDate || !customRange.endDate}
+                        onClick={() => {
+                          setActiveFilter('Custom');
+                          setShowCustomModal(false);
+                        }}
+                        style={{ padding: '6px 12px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}
+                      >
+                        Apply Range
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -552,7 +1191,7 @@ export default function OverviewPage({
             </div>
           ) : (
             <div className="section-grid mt-6">
-              <div className="card card-interactive-wrapper">
+              <div className="card">
                 <div className="card-header">
                   <h3 className="section-title">Recent Projects</h3>
                   <span className="badge badge-info">{recentProjects.length} latest</span>
@@ -577,45 +1216,61 @@ export default function OverviewPage({
                   ) : (
                     <div className="activity-feed project-feed">
                       {recentProjects.map((p, i) => (
-                        <div key={p._id} className="activity-item project-activity-item">
-                          <div
-                            className={`activity-icon ${
-                              p.status === 'completed'
-                                ? 'activity-icon-success'
-                                : p.status === 'in_progress'
-                                ? 'activity-icon-info'
-                                : 'activity-icon-warning'
-                            }`}
-                          >
-                            <ClipboardList
-                              size={16}
-                              className={`${
-                                p.status === 'completed'
-                                  ? 'icon-success'
-                                  : p.status === 'in_progress'
-                                  ? 'icon-blue'
-                                  : 'icon-accent'
-                              }`}
-                            />
+                        <div key={p._id} className="project-activity-item">
+                          <div className="project-avatar-logo" style={{ background: getAvatarColor(p.client?._id), color: 'var(--white)' }}>
+                            {getInitials(p.client?.name || p.name)}
                           </div>
-                          <div className="activity-content">
-                            <div className="activity-text">
-                              <strong>{p.name}</strong>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
+                          <div className="activity-content" style={{ marginLeft: 16, flex: 1 }}>
+                            <div className="flex items-center justify-between">
+                              <span className="activity-text"><strong>{p.name}</strong></span>
                               <span className={getStatusBadge(p.status)}>{p.status?.replace('_', ' ')}</span>
+                            </div>
+                            <div className="project-meta-info">
+                              <span className="project-meta-badge-item">
+                                <span className={`status-pill ${p.priority === 'high' || p.priority === 'urgent' ? 'error' : 'pending'}`} />
+                                {p.priority || 'Medium'} Priority
+                              </span>
                               {p.client?.name && (
-                                <span className="text-muted text-xs">{p.client.name}</span>
+                                <span className="project-meta-badge-item text-muted">
+                                  Client: {p.client.name}
+                                </span>
+                              )}
+                              {p.estimatedCompletion && (
+                                <span className="project-meta-badge-item text-muted">
+                                  Due: {new Date(p.estimatedCompletion).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
                               )}
                             </div>
-                            <div className="activity-time">
-                              {p.estimatedCompletion
-                                ? new Date(p.estimatedCompletion).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })
-                                : 'No deadline'}
+                            <div className="flex justify-between items-center mt-3">
+                              <div className="progress-track" style={{ width: '60%', height: 4, background: 'var(--gray-150)' }}>
+                                <div
+                                  className="progress-bar-fill"
+                                  style={{
+                                    width: `${p.status === 'completed' ? 100 : p.status === 'in_progress' ? 60 : 20}%`,
+                                    background: p.status === 'completed' ? 'var(--success)' : 'var(--accent)'
+                                  }}
+                                />
+                              </div>
+                              <div className="avatars-stack">
+                                {p.assignments?.slice(0, 3).map(a => {
+                                  const emp = a.employee;
+                                  return (
+                                    <div
+                                      key={emp?._id || Math.random()}
+                                      className="avatars-stack-item"
+                                      style={{ background: getAvatarColor(emp?._id) }}
+                                      title={emp?.name || 'Staff'}
+                                    >
+                                      {getInitials(emp?.name)}
+                                    </div>
+                                  );
+                                })}
+                                {p.assignments?.length > 3 && (
+                                  <div className="avatars-stack-item" style={{ background: 'var(--gray-400)', color: 'var(--white)' }}>
+                                    +{p.assignments.length - 3}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -653,33 +1308,28 @@ export default function OverviewPage({
                         const typeColors = { info: '#3B82F6', success: '#10B981', warning: '#F59E0B', error: '#EF4444', critical: '#DC2626' };
                         const dotColor = typeColors[n.type] || '#F97316';
                         return (
-                          <div key={n._id} className={`activity-item notification-item ${!n.isRead ? 'unread' : ''}`}>
+                          <div key={n._id} className={`activity-item notif-item ${!n.isRead ? 'unread' : ''}`}>
                             <div
                               className="activity-icon"
-                              style={{ background: `${n.color || dotColor}18`, color: n.color || dotColor }}
+                              style={{ background: `${n.color || dotColor}12`, color: n.color || dotColor }}
                             >
-                              <Bell size={16} />
+                              <Bell size={15} />
                             </div>
                             <div className="activity-content">
-                              <div className="activity-text">
-                                <strong>{n.title}</strong>
-                                <span className="text-muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
-                                  {n.priority && (
-                                    <span className={`notif-priority notif-priority-${n.priority}`}>
-                                      {n.priority.charAt(0).toUpperCase() + n.priority.slice(1)}
-                                    </span>
-                                  )}
-                                </span>
+                              <div className="flex items-center justify-between">
+                                <span className="activity-text"><strong>{n.title}</strong></span>
+                                {n.priority && (
+                                  <span className={`badge text-3xs ${n.priority === 'high' || n.priority === 'urgent' ? 'badge-error' : 'badge-gray'}`}>
+                                    {n.priority}
+                                  </span>
+                                )}
                               </div>
-                              <div className="activity-text text-muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>
+                              <p className="activity-desc text-muted" style={{ fontSize: '13px', marginTop: 4, marginBottom: 4 }}>
                                 {n.message}
-                              </div>
-                              <div className="activity-time flex items-center justify-between mt-1">
-                                <span>{formatTimeAgo ? formatTimeAgo(n.createdAt) : new Date(n.createdAt).toLocaleString()}</span>
-                                <div className="flex items-center gap-2">
-                                  {!n.isRead && <span className="unread-dot" style={{ background: dotColor }} />}
-                                </div>
-                              </div>
+                              </p>
+                              <span className="activity-time" style={{ fontSize: '11px', color: 'var(--gray-400)' }}>
+                                {formatTimeAgo ? formatTimeAgo(n.createdAt) : new Date(n.createdAt).toLocaleString()}
+                              </span>
                             </div>
                           </div>
                         );
@@ -712,11 +1362,11 @@ export default function OverviewPage({
               </div>
             ) : (
               <div className="section-grid-3 mt-6">
-                <div className="card card-interactive">
+                <div className="card">
                   <div className="card-header">
                     <h3 className="section-title">Projects by Category</h3>
                   </div>
-                  <div className="card-body">
+                  <div className="card-body" style={{ padding: '20px 24px' }}>
                     {Object.keys(projectsByCategory).length === 0 ? (
                       <div style={{
                         textAlign: 'center',
@@ -730,28 +1380,43 @@ export default function OverviewPage({
                       </div>
                     ) : (
                       <div className="flex-col gap-2">
-                        {Object.entries(projectsByCategory).map(([cat, counts]) => (
-                          <div key={cat} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {getCategoryIcon(cat)}
-                              <span className="text-sm font-medium">{cat}</span>
+                        {Object.entries(projectsByCategory).map(([cat, counts]) => {
+                          const percentage = counts.total > 0 ? Math.round((counts.active / counts.total) * 100) : 0;
+                          return (
+                            <div key={cat} className="category-analytic-row">
+                              <div className="category-analytic-meta">
+                                <div className="flex items-center gap-2">
+                                  {getCategoryIcon(cat)}
+                                  <span className="text-sm font-semibold text-gray-800">{cat}</span>
+                                </div>
+                                <span className="text-xs font-bold text-gray-600">{percentage}% active</span>
+                              </div>
+                              <div className="category-progress-track">
+                                <div
+                                  className="category-progress-fill"
+                                  style={{
+                                    width: `${percentage}%`,
+                                    background: 'var(--accent)'
+                                  }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-2xs text-muted" style={{ marginTop: 2 }}>
+                                <span>{counts.active} Active</span>
+                                <span>{counts.total} Total</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="badge badge-accent">{counts.active} active</span>
-                              <span className="text-xs text-muted">{counts.total} total</span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="card card-interactive">
+                <div className="card">
                   <div className="card-header">
                     <h3 className="section-title">Employee Status</h3>
                   </div>
-                  <div className="card-body">
+                  <div className="card-body" style={{ padding: '20px 24px' }}>
                     {(!staff || staff.length === 0) ? (
                       <div style={{
                         textAlign: 'center',
@@ -765,48 +1430,39 @@ export default function OverviewPage({
                       </div>
                     ) : (
                       <div className="flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="status-dot online" />
-                            <span className="text-sm font-medium">Active</span>
-                          </div>
-                          <span className="text-sm font-bold">{staffByStatus['active'] || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="status-dot busy" />
-                            <span className="text-sm font-medium">Pending</span>
-                          </div>
-                          <span className="text-sm font-bold">
-                            {(staffByStatus['pending'] || 0) + (staffByStatus['pending_approval'] || 0)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="status-dot offline" />
-                            <span className="text-sm font-medium">Invited</span>
-                          </div>
-                          <span className="text-sm font-bold">{staffByStatus['invited'] || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="status-dot error" />
-                            <span className="text-sm font-medium">Inactive</span>
-                          </div>
-                          <span className="text-sm font-bold">
-                            {(staffByStatus['disabled'] || 0) + (staffByStatus['inactive'] || 0) + (staffByStatus['rejected'] || 0)}
-                          </span>
-                        </div>
+                        {staff.slice(0, 5).map(s => {
+                          const status = s.status || 'active';
+                          const statusDotClass = status === 'active' ? 'online' : status === 'pending' ? 'busy' : 'offline';
+                          return (
+                            <div key={s._id} className="employee-status-row">
+                              <div className="employee-status-left">
+                                <div className="employee-status-avatar-wrapper">
+                                  <div className="avatar avatar-xs" style={{ background: getAvatarColor(s._id) }}>
+                                    {getInitials(s.name)}
+                                  </div>
+                                  <span className={`employee-status-pulse ${statusDotClass}`} />
+                                </div>
+                                <div className="flex-col" style={{ marginLeft: 10 }}>
+                                  <span className="text-sm font-semibold text-gray-800">{s.name}</span>
+                                  <span className="text-2xs text-muted">{s.department || 'Production'}</span>
+                                </div>
+                              </div>
+                              <span className={`badge text-2xs ${status === 'active' ? 'badge-success' : 'badge-warning'}`}>
+                                {status}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="card card-interactive">
+                <div className="card">
                   <div className="card-header">
                     <h3 className="section-title">Department Workload</h3>
                   </div>
-                  <div className="card-body">
+                  <div className="card-body" style={{ padding: '20px 24px' }}>
                     {Object.keys(projectsByDepartment).length === 0 ? (
                       <div style={{
                         textAlign: 'center',
@@ -820,25 +1476,32 @@ export default function OverviewPage({
                       </div>
                     ) : (
                       <div className="flex-col gap-2">
-                        {Object.entries(projectsByDepartment).map(([dept, count]) => (
-                          <div key={dept} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Building size={14} className="text-muted" />
-                              <span className="text-sm font-medium">{dept}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="progress-track">
+                        {Object.entries(projectsByDepartment).map(([dept, count]) => {
+                          const maxCount = Math.max(...Object.values(projectsByDepartment));
+                          const loadPercentage = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+                          const loadColor = loadPercentage > 75 ? 'var(--error)' : loadPercentage > 40 ? 'var(--warning)' : 'var(--success)';
+                          return (
+                            <div key={dept} className="workload-widget-row">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="font-semibold text-gray-700">{dept}</span>
+                                <span className="font-bold" style={{ color: loadColor }}>{loadPercentage}% load</span>
+                              </div>
+                              <div className="category-progress-track" style={{ marginTop: 2, marginBottom: 2 }}>
                                 <div
-                                  className="progress-bar-fill"
+                                  className="category-progress-fill"
                                   style={{
-                                    width: `${Math.min(100, (count / Math.max(...Object.values(projectsByDepartment))) * 100)}%`
+                                    width: `${loadPercentage}%`,
+                                    background: loadColor
                                   }}
                                 />
                               </div>
-                              <span className="text-sm font-bold text-accent">{count}</span>
+                              <div className="flex justify-between text-2xs text-muted">
+                                <span>{count} projects assigned</span>
+                                <span>Capacity: {10 - count > 0 ? `${10 - count} slots` : 'Full'}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -849,12 +1512,21 @@ export default function OverviewPage({
         </>
         ) : (
         <div className="animate-fade-in">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">My Dashboard</h2>
-              <p className="section-subtitle">Welcome back, {user.name} &mdash; {myProjects.length} active assignment{myProjects.length !== 1 ? 's' : ''}</p>
+          <div className="dashboard-header-container">
+            <div className="dashboard-header-left">
+              <h2>{activeGreeting}, {resolvedName} 👋</h2>
+              <p>You have {myProjects.length} active assignment{myProjects.length !== 1 ? 's' : ''} to review today</p>
             </div>
-            <span className="badge badge-accent badge-lg">{user.role?.replace('_', ' ')}</span>
+            <div className="dashboard-header-right">
+              <div className="header-meta-badge">
+                <CalendarDays size={14} className="text-muted" />
+                <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+              <div className="header-meta-badge live-sync-badge">
+                <span className="pulse-dot" />
+                <span>Live Syncing</span>
+              </div>
+            </div>
           </div>
 
           {renderEmployeeKpi()}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import LoginPage from './components/LoginPage.jsx';
@@ -1329,7 +1329,13 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
 import axios from 'axios';
 import { Navigate, Link } from 'react-router-dom';
 
-function ProtectedRoute({ children, allowedRoles }) {
+export const AuthContext = createContext(null);
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -1343,6 +1349,16 @@ function ProtectedRoute({ children, allowedRoles }) {
         setLoading(false);
       });
   }, []);
+
+  return (
+    <AuthContext.Provider value={{ user, setUser, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function ProtectedRoute({ children, allowedRoles }) {
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -1378,6 +1394,7 @@ function ProtectedRoute({ children, allowedRoles }) {
 export default function App() {
   return (
     <ErrorBoundary>
+    <AuthProvider>
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -1408,7 +1425,7 @@ export default function App() {
           </React.Suspense>
         } />
         <Route 
-          path="/dashboard" 
+          path="/dashboard/*" 
           element={
             <ProtectedRoute>
               <DashboardPage />
@@ -1416,7 +1433,7 @@ export default function App() {
           } 
         />
         <Route 
-          path="/admin" 
+          path="/admin/*" 
           element={
             <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
               <DashboardPage />
@@ -1424,7 +1441,7 @@ export default function App() {
           } 
         />
         <Route 
-          path="/manager" 
+          path="/manager/*" 
           element={
             <ProtectedRoute allowedRoles={['MANAGER']}>
               <DashboardPage />
@@ -1432,7 +1449,7 @@ export default function App() {
           } 
         />
         <Route 
-          path="/employee" 
+          path="/employee/*" 
           element={
             <ProtectedRoute allowedRoles={['EMPLOYEE']}>
               <DashboardPage />
@@ -1440,7 +1457,7 @@ export default function App() {
           } 
         />
         <Route 
-          path="/client" 
+          path="/client/*" 
           element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <DashboardPage />
@@ -1449,6 +1466,7 @@ export default function App() {
         />
       </Routes>
     </Router>
+    </AuthProvider>
     </ErrorBoundary>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import {
@@ -17,7 +17,8 @@ import {
   Trash2,
   History,
   Wifi,
-  WifiOff
+  WifiOff,
+  X
 } from 'lucide-react';
 
 axios.defaults.withCredentials = true;
@@ -36,14 +37,31 @@ function formatTS(date) {
 }
 
 function relativeTime(date) {
-  if (!date) return '';
+  if (!date) return '—';
   const d = new Date(date);
-  if (isNaN(d.getTime())) return '';
-  const diff = Date.now() - d.getTime();
-  if (diff < 60000) return 'Just now';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  return formatTS(date);
+  if (isNaN(d.getTime())) return '—';
+  
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  
+  if (diffMs < 0) return 'Just now';
+  if (diffSec < 15) return 'Just now';
+  if (diffSec < 60) return `${diffSec} seconds ago`;
+  if (diffMin < 60) return diffMin === 1 ? '1 minute ago' : `${diffMin} minutes ago`;
+  
+  if (d.toDateString() === now.toDateString()) {
+    return `Today at ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) {
+    return `Yesterday at ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ' at ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function WhatsAppPage() {
@@ -84,9 +102,18 @@ export default function WhatsAppPage() {
     }));
   }, []);
 
+  const statusAbortControllerRef = useRef(null);
+  const messagesAbortControllerRef = useRef(null);
+
   const fetchStatus = useCallback(async () => {
+    if (statusAbortControllerRef.current) {
+      statusAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    statusAbortControllerRef.current = controller;
+
     try {
-      const res = await axios.get('/api/whatsapp/status');
+      const res = await axios.get('/api/whatsapp/status', { signal: controller.signal });
       syncState(res.data);
       return res.data;
     } catch {
@@ -95,8 +122,14 @@ export default function WhatsAppPage() {
   }, [syncState]);
 
   const fetchMessages = useCallback(async () => {
+    if (messagesAbortControllerRef.current) {
+      messagesAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    messagesAbortControllerRef.current = controller;
+
     try {
-      const res = await axios.get('/api/whatsapp/messages');
+      const res = await axios.get('/api/whatsapp/messages', { signal: controller.signal });
       setMessages(res.data.data || []);
     } catch {
       // silent
@@ -114,8 +147,9 @@ export default function WhatsAppPage() {
       if (!statusData) {
         // Try once more after a brief delay
         setTimeout(async () => {
+          if (statusAbortControllerRef.current?.signal.aborted) return;
           const retry = await fetchStatus().catch(() => null);
-          if (!retry) {
+          if (!retry && !statusAbortControllerRef.current?.signal.aborted) {
             setErrorMsg('Unable to load WhatsApp status. Your session may have expired. Please refresh the page.');
           }
         }, 500);
@@ -164,6 +198,8 @@ export default function WhatsAppPage() {
     });
 
     return () => {
+      if (statusAbortControllerRef.current) statusAbortControllerRef.current.abort();
+      if (messagesAbortControllerRef.current) messagesAbortControllerRef.current.abort();
       socket.disconnect();
       socketRef.current = null;
     };
@@ -229,6 +265,7 @@ export default function WhatsAppPage() {
 
   const handleDisconnect = async () => {
     clearMessages();
+    if (!window.confirm('Are you sure you want to disconnect your WhatsApp business session?')) return;
     setActionLoading('disconnect');
     try {
       const res = await axios.post('/api/whatsapp/logout');
@@ -273,84 +310,113 @@ export default function WhatsAppPage() {
   };
 
   const recentMsgs = messages.slice(0, 15);
-
-  if (loading && !state.connected) {
-    return (
-      <div className="wa-spinner">
-        <Loader2 />
-      </div>
-    );
-  }
-
   const isConnected = state.connected;
   const statusClass = isConnected ? 'online' : (state.qrCode ? 'pending' : 'offline');
+
+  const sentToday = useMemo(() => {
+    return messages.filter(m => {
+      if (m.type !== 'out') return false;
+      const d = new Date(m.timestamp || m.createdAt);
+      return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+    }).length;
+  }, [messages]);
+
+  const receivedToday = useMemo(() => {
+    return messages.filter(m => {
+      if (m.type !== 'in') return false;
+      const d = new Date(m.timestamp || m.createdAt);
+      return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+    }).length;
+  }, [messages]);
+
+  const connectionHealth = isConnected ? 'Optimal' : 'Offline';
+  const businessAccountType = 'Linked Business Device';
 
   return (
     <div className="wa-page">
 
       {errorMsg && (
-        <div className="wa-alert wa-alert-error">
+        <div className="wa-alert wa-alert-error animate-fade-in">
           <div className="wa-alert-icon">
             {errorMsg.includes('expired') ? <AlertTriangle size={16} /> : <XCircle size={16} />}
           </div>
           <span>{errorMsg}</span>
+          <button className="wa-alert-close-btn" onClick={clearMessages}><X size={14} /></button>
         </div>
       )}
 
       {successMsg && (
-        <div className="wa-alert wa-alert-success">
+        <div className="wa-alert wa-alert-success animate-fade-in">
           <div className="wa-alert-icon"><CheckCircle2 size={16} /></div>
           <span>{successMsg}</span>
+          <button className="wa-alert-close-btn" onClick={clearMessages}><X size={14} /></button>
         </div>
       )}
 
       <div className="wa-header">
         <div className="wa-header-left">
-          <h1>WhatsApp Automation</h1>
-          <p>Manage your business WhatsApp connection and monitor messaging activity</p>
+          <h1>WhatsApp Business Control</h1>
+          <p>Configure your business WhatsApp automation, track messages, and monitor link health</p>
         </div>
         <div className="wa-header-right">
-          <div className="wa-status-row">
-            <span className={`wa-status-dot ${statusClass}`} />
-            <span className="wa-status-label" style={{ color: isConnected ? '#22C55E' : (state.qrCode ? '#F59E0B' : '#EF4444') }}>
-              {isConnected ? 'Connected' : (state.qrCode ? 'Scan QR' : 'Disconnected')}
-            </span>
-          </div>
-          <button className="wa-btn wa-btn-ghost" onClick={fetchData} disabled={loading || !!actionLoading}>
+          <button className="wa-btn wa-btn-ghost wa-header-refresh-btn" onClick={fetchData} disabled={loading || !!actionLoading}>
             <RefreshCw size={14} className={loading ? 'wa-btn-spin' : ''} />
-            Refresh
+            <span className="wa-btn-text">Sync Status</span>
           </button>
         </div>
       </div>
 
-      {isConnected && (
-        <div className="wa-connected-banner">
-          <CheckCircle2 />
-          <div className="wa-connected-banner-content">
-            <h3>WhatsApp Connected</h3>
-            <p>{state.pushName ? `${state.pushName} · ` : ''}+{state.phoneNumber} · Last heartbeat: {relativeTime(state.lastHeartbeat)}</p>
+      {/* PREMIUM STATUS BANNER */}
+      <div className={`wa-status-banner ${isConnected ? 'connected' : (state.qrCode ? 'pending' : 'disconnected')}`}>
+        <div className="wa-banner-main">
+          <div className="wa-banner-icon-wrapper">
+            {isConnected ? (
+              <CheckCircle2 className="wa-banner-icon text-success" size={24} />
+            ) : state.qrCode ? (
+              <QrCode className="wa-banner-icon text-warning" size={24} />
+            ) : (
+              <WifiOff className="wa-banner-icon text-error" size={24} />
+            )}
+          </div>
+          <div className="wa-banner-content">
+            <div className="wa-banner-header-row">
+              <h2>{isConnected ? (state.pushName || 'WhatsApp Business') : 'No Connected WhatsApp'}</h2>
+              <span className={`wa-badge-status ${statusClass}`}>
+                {isConnected ? 'Connected' : (state.qrCode ? 'Ready to Scan' : 'Disconnected')}
+              </span>
+            </div>
+            <div className="wa-banner-meta-row">
+              <span className="wa-meta-item">
+                <span className="wa-meta-label">Number:</span> {isConnected && state.phoneNumber ? `+${state.phoneNumber}` : 'Not Connected'}
+              </span>
+              <span className="wa-meta-divider">•</span>
+              <span className="wa-meta-item">
+                <span className="wa-meta-label">Last Active:</span> {relativeTime(state.lastHeartbeat)}
+              </span>
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
       <div className="wa-grid">
 
+        {/* CONNECTED WHATSAPP CARD */}
         <div className="wa-card wa-card-full">
           <div className="wa-card-header">
             <div className="wa-card-title">
-              <QrCode size={16} />
-              Device Connection
+              <Smartphone size={16} />
+              Connected WhatsApp
             </div>
-            {!isConnected && (
+            {!isConnected && !state.qrCode && (
               <button
                 className="wa-btn wa-btn-primary"
                 onClick={handleGenerateQR}
                 disabled={actionLoading === 'generate'}
               >
                 {actionLoading === 'generate' ? (
-                  <><Loader2 size={14} className="wa-btn-spin" /> Generating...</>
+                  <><Loader2 size={14} className="wa-btn-spin" /> Requesting...</>
                 ) : (
-                  <><QrCode size={14} /> Generate QR</>
+                  <><QrCode size={14} /> Link Account</>
                 )}
               </button>
             )}
@@ -358,165 +424,235 @@ export default function WhatsAppPage() {
 
           {!isConnected ? (
             <div className="wa-qr-area">
-              {state.qrCode ? (
-                <>
+              {loading ? (
+                <div className="wa-qr-placeholder">
+                  <Loader2 size={32} className="wa-btn-spin" style={{ animation: 'wa-spin 1s linear infinite', opacity: 0.5 }} />
+                  <p>Loading WhatsApp status...</p>
+                </div>
+              ) : state.qrCode ? (
+                <div className="wa-qr-layout">
                   <div className="wa-qr-frame">
                     <img src={state.qrCode} alt="WhatsApp QR Code" className="whatsapp-qr-img" />
                   </div>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', margin: 0, textAlign: 'center' }}>
-                    Open WhatsApp on your phone → Menu → Linked Devices → Link a Device
-                  </p>
-                  <p style={{ fontSize: '0.75rem', color: '#F59E0B', margin: 0 }}>
-                    QR auto-refreshes. Scan before it expires.
-                  </p>
-                  <div className="wa-qr-actions">
-                    <button
-                      className="wa-btn wa-btn-primary"
-                      onClick={handleGenerateQR}
-                      disabled={actionLoading === 'generate'}
-                    >
-                      {actionLoading === 'generate' ? <><Loader2 size={14} className="wa-btn-spin" /> Refreshing...</> : <><RefreshCw size={14} /> Regenerate QR</>}
-                    </button>
-                    <button
-                      className="wa-btn wa-btn-danger"
-                      onClick={handleClearSession}
-                      disabled={actionLoading === 'clear'}
-                    >
-                      {actionLoading === 'clear' ? <><Loader2 size={14} className="wa-btn-spin" /> Clearing...</> : <><Trash2 size={14} /> Clear Session</>}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={`wa-qr-frame${qrLoading ? ' loading' : ''}`}>
-                    {qrLoading ? (
-                      <div className="wa-qr-placeholder">
-                        <Loader2 size={32} style={{ animation: 'wa-spin 1s linear infinite', opacity: 0.5 }} />
-                        <p>Generating QR code...</p>
-                      </div>
-                    ) : (
-                      <div className="wa-qr-placeholder">
-                        <Smartphone size={48} style={{ opacity: 0.2 }} />
-                        <p>Click "Generate QR" to link your business WhatsApp</p>
-                      </div>
-                    )}
-                  </div>
-                  {!qrLoading && (
+                  <div className="wa-qr-instructions">
+                    <h4>Link Business Account</h4>
+                    <ol>
+                      <li>Open <strong>WhatsApp</strong> on your phone</li>
+                      <li>Tap <strong>Menu</strong> or <strong>Settings</strong></li>
+                      <li>Select <strong>Linked Devices</strong> &rarr; <strong>Link a Device</strong></li>
+                      <li>Point your phone camera to scan the QR code</li>
+                    </ol>
+                    <p className="wa-qr-warning">
+                      * QR Code automatically refreshes for security. Scan promptly.
+                    </p>
                     <div className="wa-qr-actions">
                       <button
-                        className="wa-btn wa-btn-ghost"
-                        onClick={handleReconnect}
-                        disabled={actionLoading === 'reconnect'}
+                        className="wa-btn wa-btn-primary"
+                        onClick={handleGenerateQR}
+                        disabled={actionLoading === 'generate'}
                       >
-                        {actionLoading === 'reconnect' ? <><Loader2 size={14} className="wa-btn-spin" /> Reconnecting...</> : <><RefreshCw size={14} /> Try Reconnect</>}
+                        {actionLoading === 'generate' ? <><Loader2 size={14} className="wa-btn-spin" /> Refreshing...</> : <><RefreshCw size={14} /> Refresh QR Code</>}
+                      </button>
+                      <button
+                        className="wa-btn wa-btn-danger-outline"
+                        onClick={handleClearSession}
+                        disabled={actionLoading === 'clear'}
+                      >
+                        {actionLoading === 'clear' ? <><Loader2 size={14} className="wa-btn-spin" /> Clearing...</> : <><Trash2 size={14} /> Clear Credentials</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="wa-qr-empty-state">
+                  {qrLoading ? (
+                    <div className="wa-qr-placeholder">
+                      <Loader2 size={32} className="wa-btn-spin" style={{ animation: 'wa-spin 1s linear infinite', opacity: 0.5 }} />
+                      <p>Generating QR code connection request...</p>
+                    </div>
+                  ) : (
+                    <div className="wa-qr-placeholder">
+                      <Smartphone size={48} className="wa-qr-icon-hero" />
+                      <h4>Link Your Business Phone</h4>
+                      <p>Link your phone using a secure QR code to enable client notification triggers.</p>
+                      <button
+                        className="wa-btn wa-btn-primary mt-2"
+                        onClick={handleGenerateQR}
+                        disabled={actionLoading === 'generate'}
+                        style={{ minHeight: '44px', padding: '10px 24px' }}
+                      >
+                        {actionLoading === 'generate' ? <><Loader2 size={14} className="wa-btn-spin" /> Connecting...</> : <><QrCode size={14} /> Link WhatsApp Now</>}
                       </button>
                     </div>
                   )}
-                </>
+                </div>
               )}
             </div>
           ) : (
             <div className="wa-metric-grid">
               <div className="wa-metric">
                 <span className="wa-metric-value">{state.pushName || '—'}</span>
-                <span className="wa-metric-label">Profile Name</span>
+                <span className="wa-metric-label">Business Name</span>
               </div>
               <div className="wa-metric">
                 <span className="wa-metric-value">+{state.phoneNumber || '—'}</span>
-                <span className="wa-metric-label">Phone Number</span>
+                <span className="wa-metric-label">Connected Number</span>
               </div>
               <div className="wa-metric">
-                <span className="wa-metric-value">{state.sessionRestored ? 'Yes' : 'No'}</span>
-                <span className="wa-metric-label">Session Restored</span>
+                <span className="wa-metric-value">{connectionHealth}</span>
+                <span className="wa-metric-label">Connection Health</span>
               </div>
               <div className="wa-metric">
-                <span className="wa-metric-value">{relativeTime(state.lastHeartbeat)}</span>
-                <span className="wa-metric-label">Last Heartbeat</span>
+                <span className="wa-metric-value">{businessAccountType}</span>
+                <span className="wa-metric-label">Business Account</span>
+              </div>
+              <div className="wa-metric">
+                <span className="wa-metric-value">{sentToday}</span>
+                <span className="wa-metric-label">Messages Sent Today</span>
+              </div>
+              <div className="wa-metric">
+                <span className="wa-metric-value">{receivedToday}</span>
+                <span className="wa-metric-label">Messages Received Today</span>
+              </div>
+              <div className="wa-metric">
+                <span className="wa-metric-value">{messages.length}</span>
+                <span className="wa-metric-label">Messages Processed</span>
               </div>
               <div className="wa-metric">
                 <span className="wa-metric-value">{formatTS(state.lastConnectedAt)}</span>
                 <span className="wa-metric-label">Connected Since</span>
               </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{state.reconnectCount}</span>
-                <span className="wa-metric-label">Reconnects</span>
-              </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{state.qrGeneratedCount}</span>
-                <span className="wa-metric-label">QR Generated</span>
-              </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{messages.length}</span>
-                <span className="wa-metric-label">Messages Logged</span>
-              </div>
             </div>
           )}
         </div>
 
-        <div className="wa-card">
-          <div className="wa-card-header">
-            <div className="wa-card-title">
-              <Activity size={16} />
-              Actions
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {isConnected && (
-              <button
-                className="wa-btn wa-btn-primary"
-                onClick={handleReconnect}
-                disabled={actionLoading === 'reconnect'}
-              >
-                {actionLoading === 'reconnect' ? <><Loader2 size={14} className="wa-btn-spin" /> Reconnecting...</> : <><RefreshCw size={14} /> Reconnect</>}
-              </button>
-            )}
-            {isConnected && (
-              <button
-                className="wa-btn wa-btn-danger"
-                onClick={handleDisconnect}
-                disabled={actionLoading === 'disconnect'}
-              >
-                {actionLoading === 'disconnect' ? <><Loader2 size={14} className="wa-btn-spin" /> Disconnecting...</> : <><LogOut size={14} /> Disconnect</>}
-              </button>
-            )}
-            <button
-              className="wa-btn wa-btn-ghost"
-              onClick={handleClearSession}
-              disabled={actionLoading === 'clear'}
-            >
-              {actionLoading === 'clear' ? <><Loader2 size={14} className="wa-btn-spin" /> Clearing...</> : <><Trash2 size={14} /> Clear Session &amp; Wipe Credentials</>}
-            </button>
-          </div>
-        </div>
-
+        {/* CONNECTION DETAILS CARD */}
         <div className="wa-card">
           <div className="wa-card-header">
             <div className="wa-card-title">
               <History size={16} />
-              Session Info
+              Connection Details
             </div>
           </div>
           <dl className="wa-info-table">
-            <dt>Status</dt>
+            <dt>Connection Status</dt>
             <dd>
               <span className="wa-status-row" style={{ display: 'inline-flex' }}>
                 <span className={`wa-status-dot ${statusClass}`} style={{ width: 8, height: 8 }} />
-                {state.statusText}
+                {isConnected ? 'Connected' : (state.qrCode ? 'Scan QR Code' : 'Disconnected')}
               </span>
             </dd>
-            <dt>Connection</dt>
-            <dd>{isConnected ? 'Active' : 'Inactive'}</dd>
-            <dt>Session Restored</dt>
-            <dd>{state.sessionRestored ? 'Yes (from disk)' : 'No (fresh auth needed)'}</dd>
-            <dt>Last Heartbeat</dt>
-            <dd>{formatTS(state.lastHeartbeat)}</dd>
-            <dt>Reconnect Count</dt>
+            <dt>Connection Restored</dt>
+            <dd>{state.sessionRestored ? 'Yes' : 'No'}</dd>
+            <dt>Last Active</dt>
+            <dd>{relativeTime(state.lastHeartbeat)}</dd>
+            <dt>Connection Attempts</dt>
             <dd>{state.reconnectCount}</dd>
-            <dt>QR Generated</dt>
-            <dd>{state.qrGeneratedCount} times</dd>
+            <dt>QR Requests</dt>
+            <dd>{state.qrGeneratedCount}</dd>
           </dl>
         </div>
 
+        {/* ACTION CENTER CARD */}
+        <div className="wa-card wa-actions-card">
+          <div className="wa-card-header">
+            <div className="wa-card-title">
+              <Activity size={16} />
+              Action Center
+            </div>
+          </div>
+          
+          <div className="wa-actions-body">
+            <div className="wa-action-section">
+              <span className="wa-action-section-label">Management Actions</span>
+              <div className="wa-action-buttons">
+                <button
+                  className="wa-btn wa-btn-ghost wa-action-btn"
+                  onClick={fetchData}
+                  disabled={loading || !!actionLoading}
+                >
+                  <RefreshCw size={14} className={loading ? 'wa-btn-spin' : ''} />
+                  <span className="wa-btn-text">Refresh Status</span>
+                </button>
+                
+                {isConnected && (
+                  <button
+                    className="wa-btn wa-btn-ghost wa-action-btn"
+                    onClick={handleReconnect}
+                    disabled={actionLoading === 'reconnect'}
+                  >
+                    {actionLoading === 'reconnect' ? (
+                      <Loader2 size={14} className="wa-btn-spin" />
+                    ) : (
+                      <Wifi size={14} />
+                    )}
+                    <span className="wa-btn-text">
+                      {actionLoading === 'reconnect' ? 'Reconnecting...' : 'Reconnect'}
+                    </span>
+                  </button>
+                )}
+                
+                {!isConnected && (
+                  <button
+                    className="wa-btn wa-btn-primary wa-action-btn"
+                    onClick={handleGenerateQR}
+                    disabled={actionLoading === 'generate'}
+                  >
+                    {actionLoading === 'generate' ? (
+                      <Loader2 size={14} className="wa-btn-spin" />
+                    ) : (
+                      <QrCode size={14} />
+                    )}
+                    <span className="wa-btn-text">
+                      {actionLoading === 'generate' ? 'Generating...' : 'Generate QR'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <hr className="wa-actions-divider" />
+
+            <div className="wa-action-section destructive">
+              <span className="wa-action-section-label">Connection Control</span>
+              <div className="wa-action-buttons">
+                {isConnected && (
+                  <button
+                    className="wa-btn wa-btn-danger wa-action-btn"
+                    onClick={handleDisconnect}
+                    disabled={actionLoading === 'disconnect'}
+                  >
+                    {actionLoading === 'disconnect' ? (
+                      <Loader2 size={14} className="wa-btn-spin" />
+                    ) : (
+                      <LogOut size={14} />
+                    )}
+                    <span className="wa-btn-text">
+                      {actionLoading === 'disconnect' ? 'Disconnecting...' : 'Disconnect'}
+                    </span>
+                  </button>
+                )}
+                
+                <button
+                  className="wa-btn wa-btn-danger-outline wa-action-btn"
+                  onClick={handleClearSession}
+                  disabled={actionLoading === 'clear'}
+                >
+                  {actionLoading === 'clear' ? (
+                    <Loader2 size={14} className="wa-btn-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  <span className="wa-btn-text">
+                    {actionLoading === 'clear' ? 'Clearing...' : 'Clear Session'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RECENT ACTIVITY CARD */}
         <div className="wa-card wa-card-full">
           <div className="wa-card-header">
             <div className="wa-card-title">
@@ -527,32 +663,29 @@ export default function WhatsAppPage() {
           {recentMsgs.length === 0 ? (
             <div className="wa-empty">
               <MessageCircle size={32} />
-              <p>No WhatsApp messages logged yet. Messages will appear here as they are sent and received.</p>
+              <p>No messages processed today. Automation logs will appear here in real-time.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '300px', overflowY: 'auto' }}>
+            <div className="wa-messages-list">
               {recentMsgs.map((msg, i) => (
-                <div key={msg._id || i} style={{
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '8px 10px', borderRadius: 'var(--r-sm)',
-                  background: msg.type === 'out' ? 'var(--bg)' : 'var(--bg-hover)',
-                  fontSize: '0.8125rem'
-                }}>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: '10px', fontSize: '0.6875rem',
-                    fontWeight: 600, textTransform: 'uppercase',
-                    background: msg.type === 'out' ? '#DBEAFE' : '#F3E8FF',
-                    color: msg.type === 'out' ? '#1D4ED8' : '#7C3AED'
-                  }}>
-                    {msg.type === 'out' ? 'OUT' : 'IN'}
-                  </span>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg-muted)' }}>
-                    {msg.body || '—'}
-                  </span>
-                  <span className="wa-timestamp">
-                    <Clock size={10} />
-                    {relativeTime(msg.timestamp || msg.createdAt)}
-                  </span>
+                <div key={msg._id || i} className="wa-activity-card">
+                  <div className="wa-activity-row-1">
+                    <div className={`wa-activity-avatar ${msg.type === 'out' ? 'outgoing' : 'incoming'}`}>
+                      <MessageCircle size={14} />
+                    </div>
+                    <span className={`wa-message-badge ${msg.type === 'out' ? 'sent' : 'received'}`}>
+                      {msg.type === 'out' ? 'Outgoing' : 'Incoming'}
+                    </span>
+                    <span className="wa-activity-time">
+                      <Clock size={10} />
+                      <span>{relativeTime(msg.timestamp || msg.createdAt)}</span>
+                    </span>
+                  </div>
+                  <div className="wa-activity-row-2">
+                    <p className="wa-activity-message" title={msg.body}>
+                      {msg.body || '—'}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>

@@ -159,18 +159,6 @@ export const login = async (req, res, next) => {
       userAgent
     });
 
-    if (['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'].includes(user.role)) {
-      notifyStaff({
-        title: 'Login',
-        message: `${user.name} (${user.role.replace('_', ' ')}) logged in.`,
-        type: 'info',
-        priority: 'low',
-        referenceId: user._id.toString(),
-        referenceModel: 'User',
-        metadata: { userName: user.name, role: user.role, ip: clientIp }
-      }).catch(err => console.error('notifyStaff (login) failed:', err.message));
-    }
-
     return getSignedTokenResponse(user, 200, res);
   } catch (err) {
     next(err);
@@ -206,18 +194,6 @@ export const logout = async (req, res, next) => {
         ipAddress: req.ip || 'Unknown',
         userAgent: req.headers['user-agent'] || 'Unknown'
       });
-
-      if (['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'].includes(req.user.role)) {
-        notifyStaff({
-          title: 'Logout',
-          message: `${req.user.name} (${req.user.role.replace('_', ' ')}) logged out.`,
-          type: 'info',
-          priority: 'low',
-          referenceId: req.user._id.toString(),
-          referenceModel: 'User',
-          metadata: { userName: req.user.name, role: req.user.role }
-        }).catch(err => console.error('notifyStaff (logout) failed:', err.message));
-      }
     }
 
     return res.status(200).json({ success: true, message: 'Logged out successfully' });
@@ -293,10 +269,23 @@ export const forgotPassword = async (req, res, next) => {
       return res.status(200).json(genericResponse);
     }
 
-    // Time-limited token (30 mins as requested)
+    // Security: Restrict password resets ONLY to active Employees
+    if (user.role !== 'EMPLOYEE' || (user.status || '').toUpperCase() !== 'ACTIVE') {
+      await logEvent({
+        action: 'PASSWORD_RESET',
+        userId: user._id,
+        userName: email,
+        details: { message: `Forgot password trigger ignored: User is not an active Employee (role: ${user.role}, status: ${user.status})` },
+        ipAddress: clientIp,
+        userAgent
+      });
+      return res.status(200).json(genericResponse);
+    }
+
+    // Time-limited token (15 mins expiry as per security/task requirements)
     const resetToken = crypto.randomBytes(20).toString('hex');
     user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    user.resetPasswordExpire = Date.now() + 30 * 60 * 1000; // 30 mins expiry
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins expiry
     await user.save();
 
     const resetUrl = `${config.appUrl || 'http://localhost:5173'}/reset-password/${resetToken}`;
@@ -341,7 +330,8 @@ export const resetPassword = async (req, res, next) => {
       resetPasswordExpire: { $gt: Date.now() }
     });
 
-    if (!user) {
+    // Security: Validate user exists, is an EMPLOYEE, and is active
+    if (!user || user.role !== 'EMPLOYEE' || (user.status || '').toUpperCase() !== 'ACTIVE') {
       return res.status(400).json({ error: 'Invalid or expired reset token.' });
     }
 
@@ -434,3 +424,193 @@ export const logoutAllDevices = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * Employee Forgot Password using EmailJS
+ * Route: POST /api/employee/forgot-password
+ */
+export const employeeForgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email address is required.' });
+    }
+
+    const clientIp = req.ip || 'Unknown';
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    const genericResponse = { success: true, message: 'If an account exists for this email, a password reset link has been sent.' };
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    
+    // Security: Never reveal whether an email exists
+    if (!user) {
+      await logEvent({
+        action: 'PASSWORD_RESET',
+        userName: email,
+        details: { message: 'Employee forgot password trigger ignored: Email does not exist' },
+        ipAddress: clientIp,
+        userAgent
+      });
+      return res.status(200).json(genericResponse);
+    }
+
+    // Security: Restrict ONLY to active Employees
+    if (user.role !== 'EMPLOYEE' || (user.status || '').toUpperCase() !== 'ACTIVE') {
+      await logEvent({
+        action: 'PASSWORD_RESET',
+        userId: user._id,
+        userName: email,
+        details: { message: `Employee forgot password trigger ignored: User is not an active Employee (role: ${user.role}, status: ${user.status})` },
+        ipAddress: clientIp,
+        userAgent
+      });
+      return res.status(200).json(genericResponse);
+    }
+
+    // Time-limited token (15 mins expiry)
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins expiry
+    await user.save();
+
+    const resetUrl = `${config.clientUrl || 'https://viralcraftmedia-demo.vercel.app'}/reset-password/${resetToken}`;
+    
+    // Send email via EmailJS template_42dehut using REST API
+    const emailjsData = {
+      service_id: process.env.VITE_EMAILJS_SERVICE_ID || 'service_c8opm9k',
+      template_id: 'template_42dehut',
+      user_id: process.env.VITE_EMAILJS_PUBLIC_KEY || 'QE8QtObuJabdm7dYF',
+      template_params: {
+        employee_name: user.name,
+        employee_email: user.email,
+        reset_link: resetUrl,
+        expiry_time: '15 Minutes',
+        year: new Date().getFullYear().toString()
+      }
+    };
+
+    if (process.env.EMAILJS_PRIVATE_KEY) {
+      emailjsData.accessToken = process.env.EMAILJS_PRIVATE_KEY;
+    }
+
+    try {
+      const emailjsResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(emailjsData)
+      });
+
+      if (!emailjsResponse.ok) {
+        const errorText = await emailjsResponse.text();
+        throw new Error(errorText || 'EmailJS returned error status: ' + emailjsResponse.status);
+      }
+
+      await logEvent({
+        userId: user._id,
+        userName: user.name,
+        action: 'PASSWORD_RESET',
+        details: { message: 'Employee password reset link successfully sent via EmailJS' },
+        ipAddress: clientIp,
+        userAgent
+      });
+
+    } catch (emailErr) {
+      console.error('[EMAILJS ERROR]: Failed to send employee password reset email:', emailErr.message);
+      await logEvent({
+        userId: user._id,
+        userName: user.name,
+        action: 'PASSWORD_RESET',
+        details: { message: 'Employee password reset email failed to send', error: emailErr.message },
+        ipAddress: clientIp,
+        userAgent
+      });
+    }
+
+    return res.status(200).json(genericResponse);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Employee Reset Password via Token
+ * Route: POST /api/employee/reset-password/:token
+ */
+export const employeeResetPassword = async (req, res, next) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'New password is required.' });
+    }
+
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(req.params.token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    // Security: Validate user exists, is an EMPLOYEE, and is active
+    if (!user || user.role !== 'EMPLOYEE' || (user.status || '').toUpperCase() !== 'ACTIVE') {
+      return res.status(400).json({ error: 'Invalid or expired reset token.' });
+    }
+
+    // Update password (pre-save hook will hash it)
+    user.password = password;
+    
+    // Invalidate reset token and expiry
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    
+    // Invalidate active refresh sessions
+    user.refreshTokens = [];
+    user.mustChangePassword = false;
+    await user.save();
+
+    await logEvent({
+      userId: user._id,
+      userName: user.name,
+      action: 'PASSWORD_CHANGE',
+      details: { message: 'Employee password reset successfully via token' },
+      ipAddress: req.ip || 'Unknown',
+      userAgent: req.headers['user-agent'] || 'Unknown'
+    });
+
+    return res.status(200).json({ success: true, message: 'Password updated successfully. Please log in.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Employee Validate Reset Token
+ * Route: GET /api/employee/reset-password/:token
+ */
+export const employeeValidateResetToken = async (req, res, next) => {
+  try {
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(req.params.token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    // Security: Validate user exists, is an EMPLOYEE, and is active
+    if (!user || user.role !== 'EMPLOYEE' || (user.status || '').toUpperCase() !== 'ACTIVE') {
+      return res.status(400).json({ error: 'Invalid or expired reset token.', valid: false });
+    }
+
+    return res.status(200).json({ success: true, valid: true });
+  } catch (err) {
+    next(err);
+  }
+};
+

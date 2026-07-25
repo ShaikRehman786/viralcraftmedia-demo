@@ -134,7 +134,7 @@ export const sendPasswordResetEmail = async (clientName, email, resetLink) => {
       <h3 style="color: #FF6A00;">Password Reset Request</h3>
       <p>Hello ${clientName},</p>
       <p>You requested a password reset for your ViralCraft Media account.</p>
-      <p>Please click the button below to configure a new password. This link is valid for 30 minutes.</p>
+      <p>Please click the button below to configure a new password. This link is valid for 15 minutes.</p>
       <p><a href="${resetLink}" style="display: inline-block; padding: 10px 20px; background: #FF6A00; color: #FFF; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a></p>
       <p>If you did not make this request, you can safely ignore this email.</p>
     </div>

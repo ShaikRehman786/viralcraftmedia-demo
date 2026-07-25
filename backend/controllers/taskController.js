@@ -31,7 +31,7 @@ export const getProjects = async (req, res, next) => {
         .populate('suggestedEmployee', 'name email role status')
         .sort({ createdAt: -1 });
     } else if (req.user.role === 'EMPLOYEE') {
-      projects = await Project.find({ employees: req.user._id })
+      projects = await Project.find({ category: req.user.department || 'N/A', employees: req.user._id })
         .populate('order')
         .populate('client')
         .populate('manager', 'name email')
@@ -458,6 +458,11 @@ export const getProjectChat = async (req, res, next) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
+    // Verify department matches if employee
+    if (req.user.role === 'EMPLOYEE' && project.category !== req.user.department) {
+      return res.status(403).json({ error: 'You do not have access to this project chat.' });
+    }
+
     // Verify user has access to this project's chat
     const isAdmin = req.user.role === 'SUPER_ADMIN';
     const isManager = req.user.role === 'MANAGER' && project.manager?.toString() === req.user._id.toString();
@@ -489,6 +494,11 @@ export const postProjectChat = async (req, res, next) => {
     const project = await Project.findById(req.params.id);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Verify department matches if employee
+    if (req.user.role === 'EMPLOYEE' && project.category !== req.user.department) {
+      return res.status(403).json({ error: 'You do not have access to this project chat.' });
     }
 
     // Verify user has access to this project's chat
@@ -833,6 +843,11 @@ export const acceptProjectAssignment = async (req, res, next) => {
     // Verify user has access to accept this project assignment
     if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
       return res.status(403).json({ error: 'Only authorized employees can accept project assignments.' });
+    }
+
+    // Verify department matches if employee
+    if (user.role === 'EMPLOYEE' && project.category !== user.department) {
+      return res.status(403).json({ error: 'You are not authorized to accept this project assignment.' });
     }
 
     const isSuggested = project.suggestedEmployee?.toString() === user._id.toString();

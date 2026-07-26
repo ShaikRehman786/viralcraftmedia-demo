@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Scissors, Activity, TrendingUp, Monitor, Home, BarChart3, Target, Users, Calendar, Zap, Layers, Shield, UploadCloud, DownloadCloud, CheckCircle2, Clock } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { BarChart3, Target, Users, Zap, Shield, TrendingUp, Calendar, Layers } from 'lucide-react';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
-import AnimatedCounter from './shared/AnimatedCounter.jsx';
+import WhatWeOffer from './shared/WhatWeOffer.jsx';
 import { clientTestimonials } from '../data/clientTestimonials.js';
 
 function IconWrapper({ icon: Icon, size = 32, color = 'var(--accent)', className = '', ...props }) {
@@ -124,105 +123,131 @@ export default function MarketingPage() {
   return (
     <div className="service-page-wrap marketing-page">
       <Navbar />
-
       <main style={{ paddingTop: '80px' }}>
-        {/* 1. TEXT-FOCUSED CENTRED HERO */}
-        <section className="service-hero-centered">
-          <div className="service-hero-centered-content">
-            <div className="service-hero-badge">
-              <span className="service-hero-badge-dot"></span>
-              Premium Digital Services
+        {/* 1. EDITORIAL HERO — Left-aligned */}
+        <section className="sp-hero">
+          <div className="sp-hero-inner">
+            <div className="sp-hero-left">
+              <div className="sp-hero-eyebrow">Growth Strategy</div>
+              <h1>Social Media Marketing &amp; Growth</h1>
+              <p>We build organic brand channels, configure script blueprints, and map social engagement hooks to convert audiences into direct web leads.</p>
+              <div className="sp-hero-actions">
+                <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+                  Request Growth Blueprint
+                </a>
+                <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>View Deliverables</a>
+              </div>
             </div>
-            <h1 className="service-hero-title">
-              Social Media Marketing & Growth
-            </h1>
-            <p className="service-hero-desc">
-              We build organic brand channels, configure script blueprints, and map social engagement hooks to convert audiences into direct web leads.
-            </p>
-            <div className="service-hero-highlights">
-              <span className="service-hero-highlight-item">✓ Competitor Audits</span>
-              <span className="service-hero-highlight-item">✓ Script Blueprinting</span>
-              <span className="service-hero-highlight-item">✓ Direct-Inbound DM Funnels</span>
-              <span className="service-hero-highlight-item">✓ UTM Link Tracking</span>
-              <span className="service-hero-highlight-item">✓ Performance Analytics</span>
-              <span className="service-hero-highlight-item">✓ Scalable Operations</span>
-            </div>
-            <div className="service-hero-actions">
-              <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                Request Growth Blueprint
-              </a>
-              <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
-                View Deliverables
-              </a>
+            <div className="sp-hero-right">
+              <div className="sp-hero-stat-row">
+                <div className="sp-hero-stat-card">
+                  <span className="stat-val">3x</span>
+                  <span className="stat-label">Avg. Growth Rate</span>
+                </div>
+                <div className="sp-hero-stat-card">
+                  <span className="stat-val">30d</span>
+                  <span className="stat-label">Strategy Cycle</span>
+                </div>
+              </div>
+              <div className="sp-hero-feature-list">
+                {['Competitor Audits', 'Script Blueprinting', 'DM Funnels', 'Performance Analytics'].map(f => (
+                  <div key={f} className="sp-hero-feature">
+                    <span className="check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg></span>
+                    {f}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* 2. ENQUIRY FORM - IMMEDIATELY AFTER HERO */}
-        <section className="premium-form-section" id="configure">
-          <div className="container">
-            <div className="premium-form-wrapper">
-              <h3 className="premium-form-title">Request Growth Blueprint</h3>
+        {/* 2. ENQUIRY FORM — Split layout */}
+        <section className="sp-enquiry" id="configure">
+          <div className="sp-enquiry-inner">
+            <div className="sp-enquiry-left">
+              <div className="sp-section-tag">Get Started</div>
+              <h2>Request Your Growth Blueprint</h2>
+              <p>Tell us about your brand and target audience. Our strategist will connect on WhatsApp within 24 hours with a custom plan.</p>
+              <div className="sp-enquiry-trust">
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg></span>
+                  Data-Driven Approach
+                </div>
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg></span>
+                  24-Hour Response Time
+                </div>
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg></span>
+                  Scalable Operations
+                </div>
+              </div>
+            </div>
+            <div className="sp-enquiry-form-card">
+              <h3>Request Growth Blueprint</h3>
 
               {status === 'error' && <div className="alert alert-error" style={{ marginBottom: 20 }}><div className="alert-ic">!</div><div><h4>Submission Failed</h4><p>Please check inputs and try again.</p></div></div>}
               {status === 'query_sent' && <div className="alert alert-ok" style={{ marginBottom: 20 }}><div className="alert-ic alert-ic-ok">✓</div><div><h4>Request Registered</h4><p>Our strategist will connect on WhatsApp within 24 hours.</p></div></div>}
 
               {status !== 'query_sent' && (
                 <form onSubmit={handleSubmit} noValidate>
-                  <div className="premium-form-group">
-                    <label>Client Name *</label>
-                    <input
-                      type="text"
-                      className={`premium-form-input ${errors.name ? 'err' : ''}`}
-                      placeholder="Your name"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                    />
-                    {errors.name && <span className="premium-form-error">{errors.name}</span>}
-                  </div>
-
-                  <div className="premium-form-group">
-                    <label>WhatsApp Number *</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <span className="premium-form-input" style={{ width: 'auto', background: '#F3F4F6', color: '#4B5563', padding: '12px' }}>+91</span>
+                  <div className="sp-form-row">
+                    <div className="sp-form-group">
+                      <label>Client Name *</label>
                       <input
                         type="text"
-                        className={`premium-form-input ${errors.phone ? 'err' : ''}`}
-                        placeholder="9876543210"
-                        value={phone}
-                        onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className={`sp-form-input ${errors.name ? 'err' : ''}`}
+                        placeholder="Your name"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                      />
+                      {errors.name && <span className="sp-form-error">{errors.name}</span>}
+                    </div>
+                    <div className="sp-form-group">
+                      <label>WhatsApp Number *</label>
+                      <div className="sp-phone-group">
+                        <span className="sp-phone-prefix">+91</span>
+                        <input
+                          type="text"
+                          className={`sp-form-input ${errors.phone ? 'err' : ''}`}
+                          placeholder="9876543210"
+                          value={phone}
+                          onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        />
+                      </div>
+                      {errors.phone && <span className="sp-form-error">{errors.phone}</span>}
+                    </div>
+                  </div>
+
+                  <div className="sp-form-row">
+                    <div className="sp-form-group">
+                      <label>Email Address</label>
+                      <input
+                        type="email"
+                        className="sp-form-input"
+                        placeholder="you@domain.com"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
                       />
                     </div>
-                    {errors.phone && <span className="premium-form-error">{errors.phone}</span>}
+                    <div className="sp-form-group">
+                      <label>Monthly Target Budget (INR)</label>
+                      <input
+                        type="number"
+                        className="sp-form-input"
+                        placeholder="e.g. 25000"
+                        value={budget}
+                        onChange={e => setBudget(e.target.value)}
+                      />
+                    </div>
                   </div>
 
-                  <div className="premium-form-group">
-                    <label>Email Address</label>
-                    <input
-                      type="email"
-                      className="premium-form-input"
-                      placeholder="you@domain.com"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="premium-form-group">
-                    <label>Monthly Target Budget (INR)</label>
-                    <input
-                      type="number"
-                      className="premium-form-input"
-                      placeholder="e.g. 25000"
-                      value={budget}
-                      onChange={e => setBudget(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="premium-form-group">
+                  <div className="sp-form-group">
                     <label>Strategy Requirements & Brand Links</label>
                     <textarea
                       rows="3"
-                      className="premium-form-input"
+                      className="sp-form-input"
                       style={{ resize: 'none' }}
                       placeholder="Explain target channels, current content challenges, or competitor references..."
                       value={instructions}
@@ -232,8 +257,7 @@ export default function MarketingPage() {
 
                   <button
                     type="submit"
-                    className="btn-nav-cta"
-                    style={{ width: '100%', justifyContent: 'center', border: 'none', minHeight: 48, cursor: 'pointer' }}
+                    className="sp-form-submit"
                     disabled={status === 'loading'}
                   >
                     {status === 'loading' ? 'Requesting...' : 'Submit'}
@@ -244,173 +268,124 @@ export default function MarketingPage() {
           </div>
         </section>
 
-        {/* 3. WHAT WE OFFER */}
-        <section className="premium-benefits-section" id="services">
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Deliverables Suite</span>
-              <h2 className="sec-title">What We Offer</h2>
+        {/* 3. WHAT WE OFFER — Process Rail */}
+        <WhatWeOffer
+          sectionTag="Deliverables Suite"
+          heading="What We Offer"
+          description="Data-driven social strategies that convert attention into measurable results."
+          items={[
+            { index: '01', icon: BarChart3, title: 'Competitor Audits', description: "We study what's working in your niche right now, then build a strategy that out-executes everyone else — not copies them.", color: '#FF6A00' },
+            { index: '02', icon: Target, title: 'Content Scripts', description: 'One idea becomes a hook, a story, and a call to action that actually gets replies. Your brand voice stays consistent without sounding like a corporate robot.', color: '#8B5CF6' },
+            { index: '03', icon: Users, title: 'Lead Funnel Sync', description: 'Every comment and DM feeds a trackable pipeline. We connect what you post to who raises their hand to buy — no more guessing.', color: '#10B981' }
+          ]}
+        />
+
+        {/* 4. WHY CHOOSE US — Stat Ledger */}
+        <section className="sp-why">
+          <div className="sp-why-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Why Choose Us</div>
+              <h2>Growth Standards</h2>
+              <p>We don't just post content — we engineer growth systems.</p>
             </div>
-            <div className="premium-benefits-grid">
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(16, 185, 129, 0.05)' }}>
-                  <IconWrapper icon={BarChart3} size={22} color="#10B981" />
+            <div className="sp-why-ledger">
+              {[
+                { tag: 'Accountability', title: 'Dedicated Account Manager', desc: 'Your 1-on-1 link to coordinates and strategy updates checkpoints throughout the engagement.' },
+                { tag: 'Results', title: 'Conversion Focused', desc: 'Social hooks formatted strictly to drive lead queries and inbound inquiries that convert.' },
+                { tag: 'Security', title: 'Secure Analytics', desc: 'Safe UTM tracking setup and secure data sync protocols protecting your brand data.' },
+                { tag: 'Scale', title: 'Scalable Strategy', desc: 'Flexible strategy templates configured to match evolving social algorithms and platform changes.' }
+              ].map((item, i) => (
+                <div key={item.tag} className="sp-why-ledger-item">
+                  <div className="sp-why-ledger-tag">{item.tag}</div>
+                  <h3>{item.title}</h3>
+                  <p>{item.desc}</p>
                 </div>
-                <h3 className="premium-benefit-title">Competitor Audits</h3>
-                <p className="premium-benefit-desc">Reverse-engineering target content styles, verbal hooks parameters, and posting patterns from leaders.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
-                  <IconWrapper icon={Target} size={22} color="#3B82F6" />
-                </div>
-                <h3 className="premium-benefit-title">Content Scripts</h3>
-                <p className="premium-benefit-desc">Comprehensive storyboards mapping script hooks, dialog lines, and active conversion layouts.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(139, 92, 246, 0.05)' }}>
-                  <IconWrapper icon={Users} size={22} color="#8B5CF6" />
-                </div>
-                <h3 className="premium-benefit-title">Lead Funnel Sync</h3>
-                <p className="premium-benefit-desc">Connecting automatic DM triggers, custom UTM paths, and tracking queries directly to dashboards.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 4. WHY CHOOSE THIS SERVICE */}
-        <section className="premium-benefits-section" style={{ background: '#FAFAFB', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Why Choose Us</span>
-              <h2 className="sec-title">Growth Standards</h2>
-            </div>
-            <div className="premium-benefits-grid">
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Users} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Dedicated Account Manager</h3>
-                <p className="premium-benefit-desc">Your 1-on-1 link to coordinates and strategy updates checkpoints.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Target} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Conversion Focused</h3>
-                <p className="premium-benefit-desc">Social hooks formatted strictly to drive lead queries and inquiries.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Shield} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Secure Analytics</h3>
-                <p className="premium-benefit-desc">Safe UTM tracking setup and secure data sync protocols.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Zap} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Scalable Strategy</h3>
-                <p className="premium-benefit-desc">Flexible strategy templates configured to match evolving social algorithms.</p>
-              </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 5. OUR PROCESS */}
-        <section className="premium-process-section" style={{ background: '#FFFFFF' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Our Workflow</span>
-              <h2 className="sec-title">Organic Development Pipeline</h2>
+        {/* 5. WORKFLOW — Premium Cards */}
+        <section className="sp-workflow" id="workflow">
+          <div className="sp-workflow-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Our Workflow</div>
+              <h2>Organic Development Pipeline</h2>
+              <p>A systematic approach to building your organic social presence from audit to scale.</p>
             </div>
-            <div className="premium-process-grid">
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">01</div>
-                <h3 className="premium-process-step-title">Niche Auditing</h3>
-                <p className="premium-process-step-desc">Extracting hook patterns and formatting formats from performing accounts.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">02</div>
-                <h3 className="premium-process-step-title">Blueprinting</h3>
-                <p className="premium-process-step-desc">Mapping hooks, visual directions, scripting structures, and calls-to-action.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">03</div>
-                <h3 className="premium-process-step-title">CRM Integrations</h3>
-                <p className="premium-process-step-desc">Connecting link tracking, comments webhooks, and routing pipelines.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">04</div>
-                <h3 className="premium-process-step-title">Performance Run</h3>
-                <p className="premium-process-step-desc">Monitoring click-through parameters and direct inbox conversion leads.</p>
-              </div>
+            <div className="sp-wf-grid">
+              {[
+                { num: '01', icon: BarChart3, title: 'Niche Auditing', desc: 'Extracting hook patterns and formatting formats from performing accounts.', color: 'var(--accent)' },
+                { num: '02', icon: Target, title: 'Blueprinting', desc: 'Mapping hooks, visual directions, scripting structures, and calls-to-action.', color: '#F59E0B' },
+                { num: '03', icon: TrendingUp, title: 'Performance Run', desc: 'Monitoring click-through parameters and direct inbox conversion leads.', color: '#10B981' }
+              ].map((s, i) => (
+                <div key={s.num} className="sp-wf-card" style={{ '--stagger': i }}>
+                  <div className="sp-wf-step-badge">Step {s.num}</div>
+                  <div className="sp-wf-icon-wrap">
+                    <IconWrapper icon={s.icon} size={48} color={s.color} />
+                  </div>
+                  <h3>{s.title}</h3>
+                  <p>{s.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 6. TESTIMONIALS */}
-        <section className="section clients" id="clients" style={{ background: '#FAF9F6' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Testimonials</span>
-              <h2 className="sec-title">What Brands Say</h2>
+        {/* 6. TESTIMONIALS — Homepage Marquee */}
+        <section className="sp-testimonials" id="clients">
+          <div className="sp-testimonials-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Testimonials</div>
+              <h2>What Brands Say</h2>
+              <p>Trusted by brands and agencies who value data-driven growth strategies.</p>
             </div>
             <div className="cl-marquee">
               <div className="cl-track">
-                {[
-                  ...clients.map(c => ({ ...c, uniqueId: 'm1-' + c.handle })),
-                  ...clients.map(c => ({ ...c, uniqueId: 'm2-' + c.handle })),
-                  ...clients.map(c => ({ ...c, uniqueId: 'm3-' + c.handle }))
-                ].map((c) => (
-                  <div key={c.uniqueId} className="cl-card">
-                    <div className="cl-top">
-                      <div className="cl-av">{c.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
-                      <div className="cl-meta">
-                        <div className="cl-name">{c.name}</div>
-                        <div className="cl-handle">{c.handle}</div>
+                {[1, 2, 3].flatMap((copy) =>
+                  clients.slice(0, 3).map((c) => (
+                    <div key={c.handle + copy} className="cl-card">
+                      <div className="cl-top">
+                        <div className="cl-av">{c.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
+                        <div className="cl-meta">
+                          <div className="cl-name">{c.name}</div>
+                          <div className="cl-handle">{c.handle}</div>
+                        </div>
+                        <svg className="cl-badge" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--accent)" /></svg>
                       </div>
-                      <svg className="cl-badge" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--accent)" /></svg>
+                      <div className="cl-stars">
+                        {[1, 2, 3, 4, 5].map(s => <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>)}
+                      </div>
+                      <div className="cl-stats">
+                        <span className="cl-stat">{c.followers} Followers</span>
+                        <span className="cl-stat-div"></span>
+                        <span className="cl-stat">{c.industry}</span>
+                      </div>
+                      <p className="cl-review">"{c.review}"</p>
                     </div>
-                    <div className="cl-stars">
-                      {[1, 2, 3, 4, 5].map(s => <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>)}
-                    </div>
-                    <div className="cl-stats">
-                      <span className="cl-stat">{c.followers} Followers</span>
-                      <span className="cl-stat-div"></span>
-                      <span className="cl-stat">{c.industry}</span>
-                    </div>
-                    <p className="cl-review">"{c.review}"</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
         </section>
 
-        {/* 7. FAQ */}
-        <section className="section faq-section" id="faq" style={{ background: '#FFFFFF' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">FAQ</span>
-              <h2 className="sec-title">Frequently Asked Questions</h2>
+        {/* 7. FAQ — Left-aligned, Minimal */}
+        <section className="sp-faq" id="faq">
+          <div className="sp-faq-inner">
+            <div className="sp-faq-left">
+              <div className="sp-section-tag">FAQ</div>
+              <h2>Frequently Asked Questions</h2>
+              <p>Common questions about our social media marketing services.</p>
             </div>
-            <div className="faq-list">
+            <div className="sp-faq-rows">
               {faqs.map((f, i) => (
-                <div key={f.q} className={`faq-item ${activeFaq === i ? 'active' : ''}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)}>
-                  <div className="faq-question">
+                <div key={f.q} className={`sp-faq-row ${activeFaq === i ? 'active' : ''}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)}>
+                  <div className="sp-faq-question">
                     <span>{f.q}</span>
-                    <svg className="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    <svg className="sp-faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
-                  <div className="faq-answer">
+                  <div className="sp-faq-answer">
                     <p>{f.a}</p>
                   </div>
                 </div>
@@ -419,13 +394,16 @@ export default function MarketingPage() {
           </div>
         </section>
 
-        {/* 8. FINAL CTA */}
-        <section style={{ padding: '80px 24px', background: '#FAFAFB', textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-          <div className="container" style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '16px', color: '#111827' }}>Let's Scale Your Organic Growth</h2>
-            <p style={{ color: '#4B5563', fontSize: '1rem', marginBottom: '32px' }}>Request a social growth blueprint and capture targeted feed audiences today.</p>
-            <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+        {/* 8. FINAL CTA — Full-width Banner */}
+        <section className="sp-cta">
+          <div className="sp-cta-inner">
+            <div>
+              <h2>Let's Scale Your Organic Growth</h2>
+              <p>Request a social growth blueprint and capture targeted feed audiences today.</p>
+            </div>
+            <a href="#configure" className="btn">
               Request Growth Blueprint
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
             </a>
           </div>
         </section>

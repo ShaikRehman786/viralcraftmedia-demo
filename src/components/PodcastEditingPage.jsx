@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Scissors, Activity, TrendingUp, Monitor, Home, Mic, Headphones, Zap, Target, Layers, Shield, UploadCloud, DownloadCloud, CheckCircle2, Clock, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Mic, Headphones, Zap, Shield, Clock, Users, Target, UploadCloud, DownloadCloud, Layers } from 'lucide-react';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
-import AnimatedCounter from './shared/AnimatedCounter.jsx';
+import WhatWeOffer from './shared/WhatWeOffer.jsx';
 import { clientTestimonials } from '../data/clientTestimonials.js';
 
 function IconWrapper({ icon: Icon, size = 32, color = 'var(--accent)', className = '', ...props }) {
@@ -125,106 +124,131 @@ export default function PodcastEditingPage() {
   return (
     <div className="service-page-wrap podcast-page">
       <Navbar />
-
       <main style={{ paddingTop: '80px' }}>
-        {/* 1. TEXT-FOCUSED CENTRED HERO */}
-        <section className="service-hero-centered">
-          <div className="service-hero-centered-content">
-            <div className="service-hero-badge">
-              <span className="service-hero-badge-dot"></span>
-              Premium Studio Operations
+        {/* 1. EDITORIAL HERO — Left-aligned */}
+        <section className="sp-hero">
+          <div className="sp-hero-inner">
+            <div className="sp-hero-left">
+              <div className="sp-hero-eyebrow">Podcast Production</div>
+              <h1>Professional Podcast<br />Masterclass Production</h1>
+              <p>We edit room echoes, balance audio gains, sync multi-camera feeds, and create vertical reels to help you grow your show.</p>
+              <div className="sp-hero-actions">
+                <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+                  Start Podcast Project
+                </a>
+                <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>View Deliverables</a>
+              </div>
             </div>
-            <h1 className="service-hero-title">
-              Professional Podcast Masterclass Production
-            </h1>
-            <p className="service-hero-desc">
-              We edit room echoes, balance audio gains, sync multi-camera feeds, and create vertical reels to help you grow your show and reach audiences with confidence.
-            </p>
-            <div className="service-hero-highlights">
-              <span className="service-hero-highlight-item">✓ Audio Mastering</span>
-              <span className="service-hero-highlight-item">✓ Multi-Cam Cuts</span>
-              <span className="service-hero-highlight-item">✓ Background Noise Fix</span>
-              <span className="service-hero-highlight-item">✓ Social Clips Extraction</span>
-              <span className="service-hero-highlight-item">✓ Show Notes Sync</span>
-              <span className="service-hero-highlight-item">✓ 3-4 Day Fast Delivery</span>
-            </div>
-            <div className="service-hero-actions">
-              <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                Start Podcast Project
-              </a>
-              <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
-                View Deliverables
-              </a>
+            <div className="sp-hero-right">
+              <div className="sp-hero-stat-row">
+                <div className="sp-hero-stat-card">
+                  <span className="stat-val">3–4d</span>
+                  <span className="stat-label">Fast Delivery</span>
+                </div>
+                <div className="sp-hero-stat-card">
+                  <span className="stat-val">5+</span>
+                  <span className="stat-label">Clips Per Episode</span>
+                </div>
+              </div>
+              <div className="sp-hero-feature-list">
+                {['Audio Mastering', 'Multi-Cam Cuts', 'Background Noise Fix', 'Social Clips Extraction'].map(f => (
+                  <div key={f} className="sp-hero-feature">
+                    <span className="check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg></span>
+                    {f}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* 2. ENQUIRY FORM - IMMEDIATELY AFTER HERO */}
-        <section className="premium-form-section" id="configure">
-          <div className="container">
-            <div className="premium-form-wrapper">
-              <h3 className="premium-form-title">Start Podcast Project</h3>
+        {/* 2. ENQUIRY FORM — Split layout */}
+        <section className="sp-enquiry" id="configure">
+          <div className="sp-enquiry-inner">
+            <div className="sp-enquiry-left">
+              <div className="sp-section-tag">Get Started</div>
+              <h2>Launch Your Podcast Project</h2>
+              <p>Share your raw recordings and editing notes. A production lead will connect on WhatsApp within 24 hours to discuss scope.</p>
+              <div className="sp-enquiry-trust">
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg></span>
+                  Secure & Confidential
+                </div>
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg></span>
+                  24-Hour Response Time
+                </div>
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg></span>
+                  50+ Podcasts Produced
+                </div>
+              </div>
+            </div>
+            <div className="sp-enquiry-form-card">
+              <h3>Start Podcast Project</h3>
 
               {status === 'error' && <div className="alert alert-error" style={{ marginBottom: 20 }}><div className="alert-ic">!</div><div><h4>Submission Failed</h4><p>Please check inputs and try again.</p></div></div>}
               {status === 'query_sent' && <div className="alert alert-ok" style={{ marginBottom: 20 }}><div className="alert-ic alert-ic-ok">✓</div><div><h4>Request Registered</h4><p>A production lead will connect on WhatsApp within 24 hours.</p></div></div>}
 
               {status !== 'query_sent' && (
                 <form onSubmit={handleSubmit} noValidate>
-                  <div className="premium-form-group">
-                    <label>Show Host Name *</label>
-                    <input
-                      type="text"
-                      className={`premium-form-input ${errors.name ? 'err' : ''}`}
-                      placeholder="Your name"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                    />
-                    {errors.name && <span className="premium-form-error">{errors.name}</span>}
-                  </div>
-
-                  <div className="premium-form-group">
-                    <label>WhatsApp Number *</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <span className="premium-form-input" style={{ width: 'auto', background: '#F3F4F6', color: '#4B5563', padding: '12px' }}>+91</span>
+                  <div className="sp-form-row">
+                    <div className="sp-form-group">
+                      <label>Show Host Name *</label>
                       <input
                         type="text"
-                        className={`premium-form-input ${errors.phone ? 'err' : ''}`}
-                        placeholder="9876543210"
-                        value={phone}
-                        onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className={`sp-form-input ${errors.name ? 'err' : ''}`}
+                        placeholder="Your name"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
                       />
+                      {errors.name && <span className="sp-form-error">{errors.name}</span>}
                     </div>
-                    {errors.phone && <span className="premium-form-error">{errors.phone}</span>}
+                    <div className="sp-form-group">
+                      <label>WhatsApp Number *</label>
+                      <div className="sp-phone-group">
+                        <span className="sp-phone-prefix">+91</span>
+                        <input
+                          type="text"
+                          className={`sp-form-input ${errors.phone ? 'err' : ''}`}
+                          placeholder="9876543210"
+                          value={phone}
+                          onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        />
+                      </div>
+                      {errors.phone && <span className="sp-form-error">{errors.phone}</span>}
+                    </div>
                   </div>
 
-                  <div className="premium-form-group">
+                  <div className="sp-form-group">
                     <label>Email Address</label>
                     <input
                       type="email"
-                      className="premium-form-input"
+                      className="sp-form-input"
                       placeholder="you@domain.com"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                     />
                   </div>
 
-                  <div className="premium-form-group">
+                  <div className="sp-form-group">
                     <label>Raw Recording Folder Link *</label>
                     <input
                       type="url"
-                      className={`premium-form-input ${errors.link ? 'err' : ''}`}
+                      className={`sp-form-input ${errors.link ? 'err' : ''}`}
                       placeholder="Google Drive, WeTransfer, or Dropbox link"
                       value={link}
                       onChange={e => setLink(e.target.value)}
                     />
-                    {errors.link && <span className="premium-form-error">{errors.link}</span>}
+                    {errors.link && <span className="sp-form-error">{errors.link}</span>}
                   </div>
 
-                  <div className="premium-form-group">
+                  <div className="sp-form-group">
                     <label>Show Notes & Special Instructions</label>
                     <textarea
                       rows="3"
-                      className="premium-form-input"
+                      className="sp-form-input"
                       style={{ resize: 'none' }}
                       placeholder="Number of guest/host camera feeds, special transitions, audio cleaning instructions..."
                       value={instructions}
@@ -234,8 +258,7 @@ export default function PodcastEditingPage() {
 
                   <button
                     type="submit"
-                    className="btn-nav-cta"
-                    style={{ width: '100%', justifyContent: 'center', border: 'none', minHeight: 48, cursor: 'pointer' }}
+                    className="sp-form-submit"
                     disabled={status === 'loading'}
                   >
                     {status === 'loading' ? 'Configuring...' : 'Start Podcast Project'}
@@ -246,173 +269,124 @@ export default function PodcastEditingPage() {
           </div>
         </section>
 
-        {/* 3. WHAT WE OFFER */}
-        <section className="premium-benefits-section" id="services">
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Production Deliverables</span>
-              <h2 className="sec-title">What We Offer</h2>
+        {/* 3. WHAT WE OFFER — Process Rail */}
+        <WhatWeOffer
+          sectionTag="Production Deliverables"
+          heading="What We Offer"
+          description="End-to-end podcast production from raw recording to publish-ready episodes."
+          items={[
+            { index: '01', icon: Mic, title: 'Multi-Camera Cuts', description: "Your listeners forget they're watching a podcast. Camera cuts arrive when the conversation demands them — no dead air, no awkward pauses.", color: '#FF6A00' },
+            { index: '02', icon: Headphones, title: 'Studio Audio EQ', description: 'Every voice comes through clean. Room echo disappears, plosives get tamed, and your audience stops adjusting volume between segments.', color: '#3B82F6' },
+            { index: '03', icon: Zap, title: 'Social Clip Engine', description: "Every episode feeds your growth engine. We find the 30 seconds that made your guest laugh or your audience lean in — and turn it into a clip strangers can't scroll past.", color: '#10B981' }
+          ]}
+        />
+
+        {/* 4. WHY CHOOSE US — Stat Ledger */}
+        <section className="sp-why">
+          <div className="sp-why-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Why Choose Us</div>
+              <h2>Production Quality</h2>
+              <p>We treat every episode as a premium production, not just an edit.</p>
             </div>
-            <div className="premium-benefits-grid">
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(255, 106, 0, 0.05)' }}>
-                  <IconWrapper icon={Mic} size={22} color="var(--accent)" />
+            <div className="sp-why-ledger">
+              {[
+                { tag: 'Audio Precision', title: 'Sound Accuracy', desc: 'Pristine audio levels balanced perfectly across mobile and stereo speakers for professional broadcast quality.' },
+                { tag: 'Speed', title: '3–4 Day Turnaround', desc: 'Guaranteed episodic delivery to maintain your broadcast scheduling calendar without delays.' },
+                { tag: 'Accountability', title: 'Dedicated Director', desc: 'A single point of contact coordinating edit notes and final deliverables throughout production.' },
+                { tag: 'Retention', title: 'Retentive Hooks', desc: 'Highlight selections engineered to maximize viewership on social loops and drive audience growth.' }
+              ].map((item, i) => (
+                <div key={item.tag} className="sp-why-ledger-item">
+                  <div className="sp-why-ledger-tag">{item.tag}</div>
+                  <h3>{item.title}</h3>
+                  <p>{item.desc}</p>
                 </div>
-                <h3 className="premium-benefit-title">Multi-Camera Cuts</h3>
-                <p className="premium-benefit-desc">Dynamic angle switching matching conversational dynamics to sustain visual engagement.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
-                  <IconWrapper icon={Headphones} size={22} color="#3B82F6" />
-                </div>
-                <h3 className="premium-benefit-title">Studio Audio EQ</h3>
-                <p className="premium-benefit-desc">Removing static hiss, volume levels balancing, and EQ optimization for crisp listening.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(16, 185, 129, 0.05)' }}>
-                  <IconWrapper icon={Zap} size={22} color="#10B981" />
-                </div>
-                <h3 className="premium-benefit-title">Social Clip Engine</h3>
-                <p className="premium-benefit-desc">Extracting optimized vertical reels designed to capture feed attention and drive channel growth.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 4. WHY CHOOSE THIS SERVICE */}
-        <section className="premium-benefits-section" style={{ background: '#FAFAFB', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Why Choose Us</span>
-              <h2 className="sec-title">Production Quality</h2>
-            </div>
-            <div className="premium-benefits-grid">
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Shield} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Sound Accuracy</h3>
-                <p className="premium-benefit-desc">Pristine audio levels balanced perfectly across mobile and stereo speakers.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Clock} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">3-4d Quick Turnaround</h3>
-                <p className="premium-benefit-desc">Guaranteed episodic delivery to maintain your broadcast scheduling calendar.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Users} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Dedicated Director</h3>
-                <p className="premium-benefit-desc">A single point of contact coordinating edit notes and final deliverables.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Target} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Retentive Hooks</h3>
-                <p className="premium-benefit-desc">Highlight selections engineered to maximize viewership on social loops.</p>
-              </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 5. OUR PROCESS */}
-        <section className="premium-process-section" style={{ background: '#FFFFFF' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Operations</span>
-              <h2 className="sec-title">Our Production Workflow</h2>
+        {/* 5. WORKFLOW — Premium Cards */}
+        <section className="sp-workflow" id="workflow">
+          <div className="sp-workflow-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Operations</div>
+              <h2>Our Production Workflow</h2>
+              <p>A streamlined pipeline from raw recording to publish-ready episodes.</p>
             </div>
-            <div className="premium-process-grid">
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">01</div>
-                <h3 className="premium-process-step-title">Submit Stems</h3>
-                <p className="premium-process-step-desc">Provide raw recording links via Google Drive or WeTransfer.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">02</div>
-                <h3 className="premium-process-step-title">Mastering & Switching</h3>
-                <p className="premium-process-step-desc">We clean vocal tracks and align speaker camera transitions.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">03</div>
-                <h3 className="premium-process-step-title">Episodic Packaging</h3>
-                <p className="premium-process-step-desc">Adding intro/outro elements, graphics, and social promo cuts.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">04</div>
-                <h3 className="premium-process-step-title">Review & Deliver</h3>
-                <p className="premium-process-step-desc">Download optimized masters ready for major podcast feeds.</p>
-              </div>
+            <div className="sp-wf-grid">
+              {[
+                { num: '01', icon: UploadCloud, title: 'Submit Stems', desc: 'Provide raw recording links via Google Drive or WeTransfer.', color: 'var(--accent)' },
+                { num: '02', icon: Headphones, title: 'Mastering & Switching', desc: 'We clean vocal tracks and align speaker camera transitions.', color: '#F59E0B' },
+                { num: '03', icon: Layers, title: 'Episodic Packaging', desc: 'Adding intro/outro elements, graphics, and social promo cuts.', color: '#10B981' }
+              ].map((s, i) => (
+                <div key={s.num} className="sp-wf-card" style={{ '--stagger': i }}>
+                  <div className="sp-wf-step-badge">Step {s.num}</div>
+                  <div className="sp-wf-icon-wrap">
+                    <IconWrapper icon={s.icon} size={48} color={s.color} />
+                  </div>
+                  <h3>{s.title}</h3>
+                  <p>{s.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 6. TESTIMONIALS */}
-        <section className="section clients" id="clients" style={{ background: '#FAF9F6' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Testimonials</span>
-              <h2 className="sec-title">What Hosts Say</h2>
+        {/* 6. TESTIMONIALS — Homepage Marquee */}
+        <section className="sp-testimonials" id="clients">
+          <div className="sp-testimonials-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Testimonials</div>
+              <h2>What Hosts Say</h2>
+              <p>Trusted by podcasters and content creators who demand broadcast quality.</p>
             </div>
             <div className="cl-marquee">
               <div className="cl-track">
-                {[
-                  ...clients.map(c => ({ ...c, uniqueId: 'm1-' + c.handle })),
-                  ...clients.map(c => ({ ...c, uniqueId: 'm2-' + c.handle })),
-                  ...clients.map(c => ({ ...c, uniqueId: 'm3-' + c.handle }))
-                ].map((c) => (
-                  <div key={c.uniqueId} className="cl-card">
-                    <div className="cl-top">
-                      <div className="cl-av">{c.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
-                      <div className="cl-meta">
-                        <div className="cl-name">{c.name}</div>
-                        <div className="cl-handle">{c.handle}</div>
+                {[1, 2, 3].flatMap((copy) =>
+                  clients.slice(0, 3).map((c) => (
+                    <div key={c.handle + copy} className="cl-card">
+                      <div className="cl-top">
+                        <div className="cl-av">{c.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
+                        <div className="cl-meta">
+                          <div className="cl-name">{c.name}</div>
+                          <div className="cl-handle">{c.handle}</div>
+                        </div>
+                        <svg className="cl-badge" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--accent)" /></svg>
                       </div>
-                      <svg className="cl-badge" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--accent)" /></svg>
+                      <div className="cl-stars">
+                        {[1, 2, 3, 4, 5].map(s => <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>)}
+                      </div>
+                      <div className="cl-stats">
+                        <span className="cl-stat">{c.followers} Followers</span>
+                        <span className="cl-stat-div"></span>
+                        <span className="cl-stat">{c.industry}</span>
+                      </div>
+                      <p className="cl-review">"{c.review}"</p>
                     </div>
-                    <div className="cl-stars">
-                      {[1, 2, 3, 4, 5].map(s => <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>)}
-                    </div>
-                    <div className="cl-stats">
-                      <span className="cl-stat">{c.followers} Followers</span>
-                      <span className="cl-stat-div"></span>
-                      <span className="cl-stat">{c.industry}</span>
-                    </div>
-                    <p className="cl-review">"{c.review}"</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
         </section>
 
-        {/* 7. FAQ */}
-        <section className="section faq-section" id="faq" style={{ background: '#FFFFFF' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">FAQ</span>
-              <h2 className="sec-title">Frequently Asked Questions</h2>
+        {/* 7. FAQ — Left-aligned, Minimal */}
+        <section className="sp-faq" id="faq">
+          <div className="sp-faq-inner">
+            <div className="sp-faq-left">
+              <div className="sp-section-tag">FAQ</div>
+              <h2>Frequently Asked Questions</h2>
+              <p>Everything you need to know about our podcast production workflow.</p>
             </div>
-            <div className="faq-list">
+            <div className="sp-faq-rows">
               {faqs.map((f, i) => (
-                <div key={f.q} className={`faq-item ${activeFaq === i ? 'active' : ''}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)}>
-                  <div className="faq-question">
+                <div key={f.q} className={`sp-faq-row ${activeFaq === i ? 'active' : ''}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)}>
+                  <div className="sp-faq-question">
                     <span>{f.q}</span>
-                    <svg className="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    <svg className="sp-faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
-                  <div className="faq-answer">
+                  <div className="sp-faq-answer">
                     <p>{f.a}</p>
                   </div>
                 </div>
@@ -421,13 +395,16 @@ export default function PodcastEditingPage() {
           </div>
         </section>
 
-        {/* 8. FINAL CTA */}
-        <section style={{ padding: '80px 24px', background: '#FAFAFB', textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-          <div className="container" style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '16px', color: '#111827' }}>Ready to Scale Your Podcast?</h2>
-            <p style={{ color: '#4B5563', fontSize: '1rem', marginBottom: '32px' }}>Configure your production scope and launch high-retention episodes today.</p>
-            <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+        {/* 8. FINAL CTA — Full-width Banner */}
+        <section className="sp-cta">
+          <div className="sp-cta-inner">
+            <div>
+              <h2>Ready to Scale Your Podcast?</h2>
+              <p>Configure your production scope and launch high-retention episodes today.</p>
+            </div>
+            <a href="#configure" className="btn">
               Start Podcast Project
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
             </a>
           </div>
         </section>

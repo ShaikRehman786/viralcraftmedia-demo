@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Scissors, Activity, TrendingUp, Monitor, Home, Camera, MapPin, Sun, Zap, Layers, Shield, UploadCloud, DownloadCloud, CheckCircle2, Clock, Users, Target } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Camera, MapPin, Sun, Zap, Shield, Clock, Users, Target, UploadCloud, Layers, Home } from 'lucide-react';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
-import AnimatedCounter from './shared/AnimatedCounter.jsx';
+import WhatWeOffer from './shared/WhatWeOffer.jsx';
 import { clientTestimonials } from '../data/clientTestimonials.js';
 
 function IconWrapper({ icon: Icon, size = 32, color = 'var(--accent)', className = '', ...props }) {
@@ -194,48 +193,74 @@ export default function RealEstatePage() {
   return (
     <div className="service-page-wrap realestate-page">
       <Navbar />
-
       <main style={{ paddingTop: '80px' }}>
-        {/* 1. TEXT-FOCUSED CENTRED HERO */}
-        <section className="service-hero-centered">
-          <div className="service-hero-centered-content">
-            <div className="service-hero-badge">
-              <span className="service-hero-badge-dot"></span>
-              Premium Digital Services
+        {/* 1. EDITORIAL HERO — Left-aligned */}
+        <section className="sp-hero">
+          <div className="sp-hero-inner">
+            <div className="sp-hero-left">
+              <div className="sp-hero-eyebrow">Real Estate Media</div>
+              <h1>Luxury Real Estate Video Editing</h1>
+              <p>We edit listing walkthroughs, replacement sky colors, apply drone stabilizers, and build corporate branding graphics to accelerate property sales.</p>
+              <div className="sp-hero-actions">
+                <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+                  Order Real Estate Editing
+                </a>
+                <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>View Deliverables</a>
+              </div>
             </div>
-            <h1 className="service-hero-title">
-              Real Estate Video Editing
-            </h1>
-            <p className="service-hero-desc">
-              We edit listings walkthroughs, replacement sky colors, apply drone stabilizers, and build corporate branding graphics to accelerate property sales.
-            </p>
-            <div className="service-hero-highlights">
-              <span className="service-hero-highlight-item">✓ Sunset Sky Swaps</span>
-              <span className="service-hero-highlight-item">✓ Color Balance & HDR</span>
-              <span className="service-hero-highlight-item">✓ Drone Stabilizations</span>
-              <span className="service-hero-highlight-item">✓ Layout Stitching</span>
-              <span className="service-hero-highlight-item">✓ Agent Branding Cards</span>
-              <span className="service-hero-highlight-item">✓ 48-72hr Delivery SLA</span>
-            </div>
-            <div className="service-hero-actions">
-              <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none', background: '#C2410C', borderColor: '#C2410C' }}>
-                Order Real Estate Editing
-              </a>
-              <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
-                View Deliverables
-              </a>
+            <div className="sp-hero-right">
+              <div className="sp-hero-stat-row">
+                <div className="sp-hero-stat-card">
+                  <span className="stat-val">₹5K</span>
+                  <span className="stat-label">Flat Rate</span>
+                </div>
+                <div className="sp-hero-stat-card">
+                  <span className="stat-val">48–72h</span>
+                  <span className="stat-label">Delivery SLA</span>
+                </div>
+              </div>
+              <div className="sp-hero-feature-list">
+                {['Sunset Sky Swaps', 'Drone Stabilizations', 'Layout Stitching', 'Agent Branding Cards'].map(f => (
+                  <div key={f} className="sp-hero-feature">
+                    <span className="check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg></span>
+                    {f}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* 2. PAYMENT & INQUIRY FORM - IMMEDIATELY AFTER HERO */}
-        <section className="premium-form-section" id="configure">
-          <div className="container">
-            <div className="premium-form-wrapper">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '12px' }}>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#111827' }}>Order Real Estate Editing</h3>
-                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#C2410C' }}>₹{price.toLocaleString('en-IN')} Flat</span>
+        {/* 2. PAYMENT & INQUIRY FORM — Split layout */}
+        <section className="sp-enquiry" id="configure">
+          <div className="sp-enquiry-inner">
+            <div className="sp-enquiry-left">
+              <div className="sp-section-tag">Order Now</div>
+              <h2>Order Real Estate Editing</h2>
+              <p>Share your raw walkthrough footage and editing instructions. Payment is processed securely via Razorpay, and delivery arrives within 48–72 hours.</p>
+              <div className="sp-enquiry-trust">
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span>
+                  Secure Razorpay Checkout
+                </div>
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg></span>
+                  48–72 Hour Delivery
+                </div>
+                <div className="sp-trust-item">
+                  <span className="trust-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg></span>
+                  Cinema-Grade Quality
+                </div>
               </div>
+              <div style={{ marginTop: '32px', padding: '20px 24px', background: 'rgba(255,106,0,0.04)', borderRadius: '12px', border: '1px solid rgba(255,106,0,0.1)' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '6px' }}>Flat Rate</div>
+                <div style={{ fontFamily: "'Outfit', var(--font)", fontSize: '2rem', fontWeight: 900, color: 'var(--gray-900)', letterSpacing: '-0.02em' }}>₹{price.toLocaleString('en-IN')}</div>
+                <div style={{ fontSize: '0.88rem', color: 'var(--gray-500)', marginTop: '4px' }}>Per listing walkthrough — all edits included</div>
+              </div>
+            </div>
+            <div className="sp-enquiry-form-card">
+              <h3>Order Real Estate Editing</h3>
 
               {status === 'error' && <div className="alert alert-error" style={{ marginBottom: 20 }}><div className="alert-ic">!</div><div><h4>Payment Cancelled / Failed</h4><p>Please try again.</p></div></div>}
               {status === 'success' && (
@@ -247,8 +272,7 @@ export default function RealEstatePage() {
                     {pdfBase64 && (
                       <button
                         onClick={handleDownloadInvoice}
-                        className="wa-btn wa-btn-ghost mt-2"
-                        style={{ padding: '8px 16px', fontSize: '0.75rem' }}
+                        style={{ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 700, background: 'var(--accent)', color: '#FFF', border: 'none', borderRadius: '6px', cursor: 'pointer', marginTop: '8px' }}
                       >
                         Download Invoice (PDF)
                       </button>
@@ -259,61 +283,62 @@ export default function RealEstatePage() {
 
               {status !== 'success' && (
                 <form onSubmit={handlePay} noValidate>
-                  <div className="premium-form-group">
-                    <label>Realtor Name *</label>
-                    <input
-                      type="text"
-                      className={`premium-form-input ${errors.name ? 'err' : ''}`}
-                      placeholder="Your name"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                    />
-                    {errors.name && <span className="premium-form-error">{errors.name}</span>}
-                  </div>
-
-                  <div className="premium-form-group">
-                    <label>WhatsApp Number *</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <span className="premium-form-input" style={{ width: 'auto', background: '#F3F4F6', color: '#4B5563', padding: '12px' }}>+91</span>
+                  <div className="sp-form-row">
+                    <div className="sp-form-group">
+                      <label>Realtor Name *</label>
                       <input
                         type="text"
-                        className={`premium-form-input ${errors.phone ? 'err' : ''}`}
-                        placeholder="9876543210"
-                        value={phone}
-                        onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className={`sp-form-input ${errors.name ? 'err' : ''}`}
+                        placeholder="Your name"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
                       />
+                      {errors.name && <span className="sp-form-error">{errors.name}</span>}
                     </div>
-                    {errors.phone && <span className="premium-form-error">{errors.phone}</span>}
+                    <div className="sp-form-group">
+                      <label>WhatsApp Number *</label>
+                      <div className="sp-phone-group">
+                        <span className="sp-phone-prefix">+91</span>
+                        <input
+                          type="text"
+                          className={`sp-form-input ${errors.phone ? 'err' : ''}`}
+                          placeholder="9876543210"
+                          value={phone}
+                          onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        />
+                      </div>
+                      {errors.phone && <span className="sp-form-error">{errors.phone}</span>}
+                    </div>
                   </div>
 
-                  <div className="premium-form-group">
+                  <div className="sp-form-group">
                     <label>Email Address</label>
                     <input
                       type="email"
-                      className="premium-form-input"
+                      className="sp-form-input"
                       placeholder="you@domain.com"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                     />
                   </div>
 
-                  <div className="premium-form-group">
+                  <div className="sp-form-group">
                     <label>Raw Walkthrough Video Link *</label>
                     <input
                       type="url"
-                      className={`premium-form-input ${errors.link ? 'err' : ''}`}
+                      className={`sp-form-input ${errors.link ? 'err' : ''}`}
                       placeholder="Google Drive, WeTransfer, or Dropbox link"
                       value={link}
                       onChange={e => setLink(e.target.value)}
                     />
-                    {errors.link && <span className="premium-form-error">{errors.link}</span>}
+                    {errors.link && <span className="sp-form-error">{errors.link}</span>}
                   </div>
 
-                  <div className="premium-form-group">
+                  <div className="sp-form-group">
                     <label>Editing Instructions</label>
                     <textarea
                       rows="3"
-                      className="premium-form-input"
+                      className="sp-form-input"
                       style={{ resize: 'none' }}
                       placeholder="Branding card info, music style preference, special rooms to highlight..."
                       value={instructions}
@@ -323,8 +348,8 @@ export default function RealEstatePage() {
 
                   <button
                     type="submit"
-                    className="btn-nav-cta"
-                    style={{ width: '100%', justifyContent: 'center', border: 'none', minHeight: 48, cursor: 'pointer', background: '#C2410C', boxShadow: '0 6px 20px rgba(194, 65, 12, 0.18)' }}
+                    className="sp-form-submit"
+                    style={{ background: '#C2410C', boxShadow: '0 6px 20px rgba(194, 65, 12, 0.18)' }}
                     disabled={status === 'loading'}
                   >
                     {status === 'loading' ? 'Processing...' : `Pay ₹${price.toLocaleString('en-IN')} & Submit`}
@@ -335,173 +360,124 @@ export default function RealEstatePage() {
           </div>
         </section>
 
-        {/* 3. WHAT WE OFFER */}
-        <section className="premium-benefits-section" id="services">
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Deliverables Suite</span>
-              <h2 className="sec-title">What We Offer</h2>
+        {/* 3. WHAT WE OFFER — Process Rail */}
+        <WhatWeOffer
+          sectionTag="Deliverables Suite"
+          heading="What We Offer"
+          description="Cinema-grade property media from raw footage to publish-ready listings."
+          items={[
+            { index: '01', icon: Sun, title: 'Sunset Sky Swaps', description: 'Overcast footage becomes golden hour in post. Flat gray skies become rich twilight tones that make buyers feel the property before they walk through.', color: '#FF6A00' },
+            { index: '02', icon: Camera, title: 'Drone Stabilizations', description: 'Your aerials look like they were shot on a gimbal rig, not a drone fighting wind. Smoothed, colored, and paced to build desire from the first frame.', color: '#3B82F6' },
+            { index: '03', icon: MapPin, title: 'Layout Stitching', description: 'Rooms flow into each other like a real walkthrough. No hard cuts, no choppy transitions — just a natural pace that keeps buyers watching until the end.', color: '#10B981' }
+          ]}
+        />
+
+        {/* 4. WHY CHOOSE US — Stat Ledger */}
+        <section className="sp-why">
+          <div className="sp-why-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Why Choose Us</div>
+              <h2>Listing Standards</h2>
+              <p>Every frame is crafted to make properties sell faster.</p>
             </div>
-            <div className="premium-benefits-grid">
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(194, 65, 12, 0.05)' }}>
-                  <IconWrapper icon={Sun} size={22} color="#C2410C" />
+            <div className="sp-why-ledger">
+              {[
+                { tag: 'Accountability', title: 'Dedicated Project Coordinator', desc: 'Coordination point tracking edits and branding adjustments checkpoint throughout post-production.' },
+                { tag: 'Results', title: 'Conversion Focused', desc: 'Color pacing configurations structured to maximize inquiry sign-ups and property viewings.' },
+                { tag: 'Security', title: 'Secure Checkout', desc: 'All transactions are managed securely through SSL encrypted Razorpay gateways.' },
+                { tag: 'Scale', title: 'Scalable Formats', desc: 'Deliverables pre-packaged ready for MLS portals, YouTube, and social media reels.' }
+              ].map((item, i) => (
+                <div key={item.tag} className="sp-why-ledger-item">
+                  <div className="sp-why-ledger-tag">{item.tag}</div>
+                  <h3>{item.title}</h3>
+                  <p>{item.desc}</p>
                 </div>
-                <h3 className="premium-benefit-title">Sunset Sky Swaps</h3>
-                <p className="premium-benefit-desc">We replace overcast skies with custom twilight or golden hour parameters to lift visual aesthetics.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
-                  <IconWrapper icon={Camera} size={22} color="#3B82F6" />
-                </div>
-                <h3 className="premium-benefit-title">Drone Stabilizations</h3>
-                <p className="premium-benefit-desc">Stabilizing raw aerial pan edits to construct fluid visual listing paths.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(16, 185, 129, 0.05)' }}>
-                  <IconWrapper icon={MapPin} size={22} color="#10B981" />
-                </div>
-                <h3 className="premium-benefit-title">Layout Stitching</h3>
-                <p className="premium-benefit-desc">Smooth speed-ramped transitions connecting rooms together, preserving natural home flow.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 4. WHY CHOOSE THIS SERVICE */}
-        <section className="premium-benefits-section" style={{ background: '#FAFAFB', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Why Choose Us</span>
-              <h2 className="sec-title">Listing Standards</h2>
-            </div>
-            <div className="premium-benefits-grid">
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Users} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Dedicated Project Coordinator</h3>
-                <p className="premium-benefit-desc">Coordination point tracking edits and branding adjustments checkpoint.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Target} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Conversion Focused</h3>
-                <p className="premium-benefit-desc">Color pacing configurations structured to maximize inquiry sign-ups.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Shield} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Secure Checkout</h3>
-                <p className="premium-benefit-desc">All transactions are managed securely through SSL encrypted gateways.</p>
-              </div>
-
-              <div className="premium-benefit-card">
-                <div className="premium-benefit-icon" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                  <IconWrapper icon={Zap} size={22} color="#374151" />
-                </div>
-                <h3 className="premium-benefit-title">Scalable Formats</h3>
-                <p className="premium-benefit-desc">Deliverables pre-packaged ready for MLS portals, YouTube, and reels.</p>
-              </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 5. OUR PROCESS */}
-        <section className="premium-process-section" style={{ background: '#FFFFFF' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Timeline</span>
-              <h2 className="sec-title">Listing Post-Production Pipeline</h2>
+        {/* 5. WORKFLOW — Premium Cards */}
+        <section className="sp-workflow" id="workflow">
+          <div className="sp-workflow-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Timeline</div>
+              <h2>Listing Post-Production Pipeline</h2>
+              <p>From raw footage upload to publish-ready listing videos.</p>
             </div>
-            <div className="premium-process-grid">
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">01</div>
-                <h3 className="premium-process-step-title">Footage Upload</h3>
-                <p className="premium-process-step-desc">Provide raw walkthrough links via Drive, WeTransfer, or Dropbox.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">02</div>
-                <h3 className="premium-process-step-title">Color & sky balance</h3>
-                <p className="premium-process-step-desc">We clean wall shades, apply HDR exposure steps, and replace sky colors.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">03</div>
-                <h3 className="premium-process-step-title">Branding overlay</h3>
-                <p className="premium-process-step-desc">Stitching licensed backing tracks and agent contact layouts.</p>
-              </div>
-
-              <div className="premium-process-step">
-                <div className="premium-process-step-num">04</div>
-                <h3 className="premium-process-step-title">Launch Listing</h3>
-                <p className="premium-process-step-desc">Download finalized listings files ready to publish on MLS feeds.</p>
-              </div>
+            <div className="sp-wf-grid">
+              {[
+                { num: '01', icon: UploadCloud, title: 'Footage Upload', desc: 'Provide raw walkthrough links via Drive, WeTransfer, or Dropbox.', color: 'var(--accent)' },
+                { num: '02', icon: Sun, title: 'Color & Sky Balance', desc: 'We clean wall shades, apply HDR exposure steps, and replace sky colors.', color: '#F59E0B' },
+                { num: '03', icon: Camera, title: 'Branding Overlay', desc: 'Stitching licensed backing tracks and agent contact layouts.', color: '#10B981' }
+              ].map((s, i) => (
+                <div key={s.num} className="sp-wf-card" style={{ '--stagger': i }}>
+                  <div className="sp-wf-step-badge">Step {s.num}</div>
+                  <div className="sp-wf-icon-wrap">
+                    <IconWrapper icon={s.icon} size={48} color={s.color} />
+                  </div>
+                  <h3>{s.title}</h3>
+                  <p>{s.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 6. TESTIMONIALS */}
-        <section className="section clients" id="clients" style={{ background: '#FAF9F6' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Testimonials</span>
-              <h2 className="sec-title">What Realtors Say</h2>
+        {/* 6. TESTIMONIALS — Homepage Marquee */}
+        <section className="sp-testimonials" id="clients">
+          <div className="sp-testimonials-inner">
+            <div className="sp-section-header">
+              <div className="sp-section-tag">Testimonials</div>
+              <h2>What Realtors Say</h2>
+              <p>Trusted by real estate professionals who value premium property media.</p>
             </div>
             <div className="cl-marquee">
               <div className="cl-track">
-                {[
-                  ...clients.map(c => ({ ...c, uniqueId: 'm1-' + c.handle })),
-                  ...clients.map(c => ({ ...c, uniqueId: 'm2-' + c.handle })),
-                  ...clients.map(c => ({ ...c, uniqueId: 'm3-' + c.handle }))
-                ].map((c) => (
-                  <div key={c.uniqueId} className="cl-card">
-                    <div className="cl-top">
-                      <div className="cl-av">{c.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
-                      <div className="cl-meta">
-                        <div className="cl-name">{c.name}</div>
-                        <div className="cl-handle">{c.handle}</div>
+                {[1, 2, 3].flatMap((copy) =>
+                  clients.slice(0, 3).map((c) => (
+                    <div key={c.handle + copy} className="cl-card">
+                      <div className="cl-top">
+                        <div className="cl-av">{c.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
+                        <div className="cl-meta">
+                          <div className="cl-name">{c.name}</div>
+                          <div className="cl-handle">{c.handle}</div>
+                        </div>
+                        <svg className="cl-badge" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--accent)" /></svg>
                       </div>
-                      <svg className="cl-badge" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--accent)" /></svg>
+                      <div className="cl-stars">
+                        {[1, 2, 3, 4, 5].map(s => <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>)}
+                      </div>
+                      <div className="cl-stats">
+                        <span className="cl-stat">{c.followers} Followers</span>
+                        <span className="cl-stat-div"></span>
+                        <span className="cl-stat">{c.industry}</span>
+                      </div>
+                      <p className="cl-review">"{c.review}"</p>
                     </div>
-                    <div className="cl-stars">
-                      {[1, 2, 3, 4, 5].map(s => <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>)}
-                    </div>
-                    <div className="cl-stats">
-                      <span className="cl-stat">{c.followers} Followers</span>
-                      <span className="cl-stat-div"></span>
-                      <span className="cl-stat">{c.industry}</span>
-                    </div>
-                    <p className="cl-review">"{c.review}"</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
         </section>
 
-        {/* 7. FAQ */}
-        <section className="section faq-section" id="faq" style={{ background: '#FFFFFF' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">FAQ</span>
-              <h2 className="sec-title">Frequently Asked Questions</h2>
+        {/* 7. FAQ — Left-aligned, Minimal */}
+        <section className="sp-faq" id="faq">
+          <div className="sp-faq-inner">
+            <div className="sp-faq-left">
+              <div className="sp-section-tag">FAQ</div>
+              <h2>Frequently Asked Questions</h2>
+              <p>Common questions about our real estate video editing service.</p>
             </div>
-            <div className="faq-list">
+            <div className="sp-faq-rows">
               {faqs.map((f, i) => (
-                <div key={f.q} className={`faq-item ${activeFaq === i ? 'active' : ''}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)}>
-                  <div className="faq-question">
+                <div key={f.q} className={`sp-faq-row ${activeFaq === i ? 'active' : ''}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)}>
+                  <div className="sp-faq-question">
                     <span>{f.q}</span>
-                    <svg className="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    <svg className="sp-faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
-                  <div className="faq-answer">
+                  <div className="sp-faq-answer">
                     <p>{f.a}</p>
                   </div>
                 </div>
@@ -510,13 +486,16 @@ export default function RealEstatePage() {
           </div>
         </section>
 
-        {/* 8. FINAL CTA */}
-        <section style={{ padding: '80px 24px', background: '#FAFAFB', textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-          <div className="container" style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '16px', color: '#111827' }}>Let's Build Your Property Tour</h2>
-            <p style={{ color: '#4B5563', fontSize: '1rem', marginBottom: '32px' }}>Request cinematic listings walkthroughs and accelerate closing rates.</p>
-            <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none', background: '#C2410C', borderColor: '#C2410C' }}>
+        {/* 8. FINAL CTA — Full-width Banner */}
+        <section className="sp-cta">
+          <div className="sp-cta-inner">
+            <div>
+              <h2>Let's Build Your Property Tour</h2>
+              <p>Request cinematic listing walkthroughs and accelerate closing rates.</p>
+            </div>
+            <a href="#configure" className="btn">
               Order Real Estate Editing
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
             </a>
           </div>
         </section>

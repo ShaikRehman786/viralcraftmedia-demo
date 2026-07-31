@@ -74,6 +74,46 @@ export const rotateRefreshToken = async (oldToken, res) => {
     // 1. Verify old refresh token
     const decoded = jwt.verify(oldToken, config.jwtRefreshSecret);
 
+    if (decoded.id === 'backup_admin_mock_id_placeholder') {
+      const accessToken = jwt.sign(
+        { id: 'backup_admin_mock_id_placeholder', role: 'BACKUP_ADMIN' },
+        config.jwtSecret,
+        { expiresIn: config.jwtAccessExpiry }
+      );
+      const refreshToken = jwt.sign(
+        { id: 'backup_admin_mock_id_placeholder', role: 'BACKUP_ADMIN' },
+        config.jwtRefreshSecret,
+        { expiresIn: config.jwtRefreshExpiry }
+      );
+
+      const isProduction = config.nodeEnv === 'production';
+      const cookieOptions = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax'
+      };
+
+      res.cookie('accessToken', accessToken, {
+        ...cookieOptions,
+        expires: new Date(Date.now() + 15 * 60 * 1000)
+      });
+      res.cookie('refreshToken', refreshToken, {
+        ...cookieOptions,
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      });
+
+      return res.status(200).json({
+        success: true,
+        role: 'BACKUP_ADMIN',
+        user: {
+          id: 'backup_admin_mock_id_placeholder',
+          name: 'System Backup Admin',
+          email: (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase(),
+          role: 'BACKUP_ADMIN'
+        }
+      });
+    }
+
     // 2. Find user containing the active token
     const user = await User.findOne({ 
       _id: decoded.id, 

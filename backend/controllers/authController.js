@@ -5,6 +5,8 @@ import { sendPasswordResetEmail, sendEmail } from '../services/emailService.js';
 import { notifyStaff } from '../services/notificationService.js';
 import crypto from 'crypto';
 import { config } from '../config/env.js';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
 /**
  * Login user with lockout logic (5 failed attempts = 30 min lock)
@@ -15,6 +17,118 @@ export const login = async (req, res, next) => {
     const { email, password } = req.body;
     const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'Unknown';
+
+    // Intercept backup admin account for database isolation and Backup Database validation
+    const backupAdminEmail = (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase();
+    
+    // DEBUG LOG
+    if (email) {
+      console.log(`[DEBUG] Incoming email: ${email}`);
+    }
+
+    if (email && email.toLowerCase() === backupAdminEmail) {
+      // DEBUG LOG
+      console.log('[DEBUG] Backup login branch reached');
+
+      const { backupConnection, getBackupModel } = await import('../services/backupService.js');
+      if (!backupConnection || backupConnection.readyState !== 1) {
+        console.log('[DEBUG] Backup DB connection state is NOT ready');
+        return res.status(500).json({ error: 'Backup Database connection is not ready. Please try again.' });
+      }
+
+      // DEBUG LOG
+      console.log('[DEBUG] Backup DB connected');
+
+      const BackupUser = getBackupModel('User');
+      if (!BackupUser) {
+        return res.status(500).json({ error: 'User schema not compiled on backup connection.' });
+      }
+
+      // Query ONLY the Backup Database for the backup user
+      const user = await BackupUser.findOne({ email: backupAdminEmail }).select('+password');
+      if (!user) {
+        console.log('[DEBUG] Backup Admin NOT found in Backup DB');
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      // DEBUG LOG
+      console.log('[DEBUG] Backup Admin found');
+
+      // Check status
+      if (user.status && user.status.toUpperCase() === 'INACTIVE') {
+        return res.status(401).json({ error: 'Account is inactive. Please contact administrator.' });
+      }
+
+      // Validate password against the hashed password stored in the Backup Database using bcrypt
+      const isMatch = await bcrypt.compare(password, user.password);
+      
+      // DEBUG LOG
+      console.log(`[DEBUG] Password comparison result: ${isMatch}`);
+
+      if (!isMatch) {
+        await logEvent({
+          action: 'LOGIN_FAILURE',
+          userName: backupAdminEmail,
+          details: { message: 'Incorrect password for Backup Account' },
+          ipAddress: clientIp,
+          userAgent
+        }).catch(() => {});
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      // Generate access and refresh tokens for mock session (maintaining the same mock session for request path isolation)
+      const accessToken = jwt.sign(
+        { id: 'backup_admin_mock_id_placeholder', role: 'BACKUP_ADMIN' },
+        config.jwtSecret,
+        { expiresIn: config.jwtAccessExpiry }
+      );
+      const refreshToken = jwt.sign(
+        { id: 'backup_admin_mock_id_placeholder', role: 'BACKUP_ADMIN' },
+        config.jwtRefreshSecret,
+        { expiresIn: config.jwtRefreshExpiry }
+      );
+
+      // DEBUG LOG
+      console.log('[DEBUG] JWT generated');
+
+      const isProduction = config.nodeEnv === 'production';
+      const cookieOptions = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax'
+      };
+
+      res.cookie('accessToken', accessToken, {
+        ...cookieOptions,
+        expires: new Date(Date.now() + 15 * 60 * 1000)
+      });
+      res.cookie('refreshToken', refreshToken, {
+        ...cookieOptions,
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      });
+
+      await logEvent({
+        action: 'LOGIN_SUCCESS',
+        userName: 'System Backup Admin',
+        details: { role: 'BACKUP_ADMIN', message: 'Backup Account logged in successfully (from Backup DB)' },
+        ipAddress: clientIp,
+        userAgent
+      }).catch(() => {});
+
+      // DEBUG LOG
+      console.log('[DEBUG] Login success');
+
+      return res.status(200).json({
+        success: true,
+        role: 'BACKUP_ADMIN',
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: 'BACKUP_ADMIN'
+        }
+      });
+    }
 
     // Look up user
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
@@ -172,7 +286,7 @@ export const login = async (req, res, next) => {
 export const logout = async (req, res, next) => {
   try {
     const token = req.cookies.refreshToken;
-    if (token && req.user) {
+    if (token && req.user && req.user._id !== 'backup_admin_mock_id_placeholder') {
       req.user.refreshTokens = req.user.refreshTokens.filter(t => t.token !== token);
       await req.user.save();
     }

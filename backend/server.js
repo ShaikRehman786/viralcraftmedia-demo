@@ -1,9 +1,10 @@
+import './config/backupInit.js';
 import http from 'http';
 import { Server } from 'socket.io';
 import app from './app.js';
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
-import { seedSuperAdmin } from './config/seed.js';
+import { seedSuperAdmin, seedBackupAdmin } from './config/seed.js';
 import whatsappService from './services/whatsappService.js';
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -23,6 +24,9 @@ const startServer = async () => {
 
     // Seed database Super Admin
     await seedSuperAdmin();
+
+    // Seed dedicated Backup Admin account
+    await seedBackupAdmin();
 
     const server = http.createServer(app);
 

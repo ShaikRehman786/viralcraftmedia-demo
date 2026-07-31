@@ -149,6 +149,29 @@ export const getDashboardStats = async (req, res, next) => {
       .limit(10)
       .lean();
 
+    if (req.user.role === 'MANAGER') {
+      return res.status(200).json({
+        success: true,
+        stats: {
+          ordersToday,
+          pendingOrders,
+          completedOrders,
+          completedProjects: completedOrders,
+          pendingProjects: pendingOrders,
+          inProgress,
+          employeesOnline,
+          managersOnline,
+          projectsDueToday,
+          projectsDelayed,
+          averageDeliveryTime,
+          avgDeliveryHours: averageDeliveryTime,
+          customerSatisfaction,
+          employeeProductivity,
+          managerProductivity
+        }
+      });
+    }
+
     return res.status(200).json({
       success: true,
       stats: {

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Mic, Headphones, Zap, Shield, Clock, Users, Target, UploadCloud, DownloadCloud, Layers } from 'lucide-react';
+import { 
+  Mic, Headphones, Zap, Shield, Clock, Users, Target, UploadCloud, DownloadCloud, Layers
+} from 'lucide-react';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
 import WhatWeOffer from './shared/WhatWeOffer.jsx';
@@ -121,43 +123,286 @@ export default function PodcastEditingPage() {
     { q: 'How many social highlight shorts do I get?', a: 'Depending on your scope, our editors extract and package 2 to 5 high-retention vertical clips ready for shorts and reels.' }
   ];
 
+
+
   return (
     <div className="service-page-wrap podcast-page">
       <Navbar />
       <main style={{ paddingTop: '80px' }}>
-        {/* 1. EDITORIAL HERO — Left-aligned */}
-        <section className="sp-hero">
-          <div className="sp-hero-inner">
-            <div className="sp-hero-left">
-              <div className="sp-hero-eyebrow">Podcast Production</div>
-              <h1>Professional Podcast<br />Masterclass Production</h1>
-              <p>We edit room echoes, balance audio gains, sync multi-camera feeds, and create vertical reels to help you grow your show.</p>
-              <div className="sp-hero-actions">
-                <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+        <style>{`
+          @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+          }
+          .premium-floating-panel {
+            background: rgba(11, 11, 12, 0.25);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 28px 24px;
+            width: 100%;
+            max-width: 280px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            animation: float 6s ease-in-out infinite;
+          }
+          @media (max-width: 1024px) {
+            .premium-floating-panel {
+              max-width: 250px;
+              padding: 24px 20px;
+              gap: 16px;
+            }
+          }
+          @media (min-width: 769px) and (max-width: 1024px) {
+            .sp-hero {
+              min-height: auto !important;
+              padding-top: 50px !important;
+              padding-bottom: 70px !important;
+            }
+            .sp-hero-inner {
+              padding: 0 32px !important;
+              gap: 32px !important;
+            }
+            .sp-hero-left {
+              gap: 16px !important;
+            }
+          }
+          @media (max-width: 768px) {
+            .sp-hero {
+              min-height: auto !important;
+              padding-top: 30px !important;
+              padding-bottom: 55px !important;
+            }
+            .sp-hero-inner {
+              padding: 0 20px !important;
+              flex-direction: column !important;
+              align-items: flex-start !important;
+              justify-content: center !important;
+              gap: 24px !important;
+            }
+            .sp-hero-left {
+              gap: 12px !important;
+              align-items: flex-start !important;
+              text-align: left !important;
+              width: 100% !important;
+              flex: 1 1 auto !important;
+            }
+            .sp-hero-left h1 {
+              font-size: clamp(2rem, 8vw, 2.75rem) !important;
+            }
+            .sp-hero-left p {
+              font-size: 0.95rem !important;
+              line-height: 1.4 !important;
+              margin-top: 4px !important;
+            }
+            .sp-hero-actions {
+              margin-top: 6px !important;
+              gap: 12px !important;
+              width: 100% !important;
+            }
+            .sp-hero-actions a {
+              flex: 1 1 auto !important;
+              justify-content: center !important;
+              font-size: 0.9rem !important;
+              padding: 10px 16px !important;
+            }
+            .sp-hero-right {
+              justify-content: center !important;
+              width: 100% !important;
+            }
+            .premium-floating-panel {
+              max-width: 100% !important;
+              flex-direction: row !important;
+              flex-wrap: wrap !important;
+              justify-content: center !important;
+              align-items: center !important;
+              gap: 20px 32px !important;
+              padding: 16px 20px !important;
+              animation: none !important;
+              background: rgba(11, 11, 12, 0.45) !important;
+              border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            }
+            .sp-hero-overlay {
+              background: linear-gradient(to bottom, rgba(11, 11, 12, 0.75) 0%, rgba(11, 11, 12, 0.45) 60%, rgba(11, 11, 12, 0.8) 100%) !important;
+            }
+          }
+          .podcast-video-bg {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 55%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 15%;
+            transform: translate3d(0,0,0);
+            will-change: transform;
+            z-index: 0;
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 25%);
+            mask-image: linear-gradient(to right, transparent 0%, black 25%);
+          }
+          @media (max-width: 1200px) {
+            .podcast-video-bg {
+              width: 60%;
+              object-position: center 10%;
+              -webkit-mask-image: linear-gradient(to right, transparent 0%, black 30%);
+              mask-image: linear-gradient(to right, transparent 0%, black 30%);
+            }
+          }
+          @media (min-width: 769px) and (max-width: 1024px) {
+            .podcast-video-bg {
+              width: 50% !important;
+              object-position: center 25% !important;
+              transform: scale(1.05) !important;
+            }
+          }
+          @media (max-width: 768px) {
+            .podcast-video-bg {
+              width: 100%;
+              height: 100%;
+              left: 0;
+              object-position: center 30% !important;
+              transform: scale(1.1) !important;
+              -webkit-mask-image: none !important;
+              mask-image: none !important;
+            }
+          }
+        `}</style>
+
+        {/* 1. EDITORIAL HERO — Cinematic Video Redesign */}
+        <section className="sp-hero" style={{ 
+          position: 'relative', 
+          minHeight: '85vh', 
+          display: 'flex', 
+          alignItems: 'center', 
+          overflow: 'hidden',
+          background: '#0B0B0C'
+        }}>
+          {/* Background Video */}
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            className="podcast-video-bg"
+          >
+            <source src="/pod_service1.mp4" type="video/mp4" />
+          </video>
+
+          {/* Cinematic Dark Gradient Overlay */}
+          <div
+            className="sp-hero-overlay"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(to right, rgba(11, 11, 12, 0.95) 0%, rgba(11, 11, 12, 0.8) 40%, rgba(11, 11, 12, 0.15) 100%)',
+              zIndex: 1
+            }}
+          />
+
+          <div className="sp-hero-inner" style={{ 
+            position: 'relative', 
+            zIndex: 2,
+            width: '100%',
+            maxWidth: '1200px',
+            margin: '0 auto',
+            padding: '0 48px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '40px',
+            flexWrap: 'wrap'
+          }}>
+            {/* Left Content Column */}
+            <div className="sp-hero-left" style={{ 
+              flex: '1 1 500px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px'
+            }}>
+              <div className="sp-hero-eyebrow" style={{ 
+                fontSize: '0.85rem', 
+                fontWeight: 700, 
+                textTransform: 'uppercase', 
+                letterSpacing: '2px', 
+                color: 'var(--accent, #F97316)',
+                margin: 0
+              }}>
+                Podcast Production
+              </div>
+              
+              <h1 style={{ 
+                fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
+                fontWeight: 800, 
+                lineHeight: 1.1, 
+                color: '#FFFFFF',
+                margin: 0,
+                letterSpacing: '-1px'
+              }}>
+                Professional Podcast Production
+              </h1>
+              
+              <p style={{ 
+                fontSize: 'clamp(1rem, 2vw, 1.25rem)', 
+                lineHeight: 1.5, 
+                color: 'rgba(255, 255, 255, 0.7)',
+                margin: 0,
+                maxWidth: '480px'
+              }}>
+                We edit room echoes, balance audio levels, sync multi-camera tracks, and extract viral clips.
+              </p>
+              
+              <div className="sp-hero-actions" style={{ 
+                display: 'flex', 
+                gap: '16px',
+                marginTop: '8px'
+              }}>
+                <a href="#configure" className="btn btn-primary" style={{ 
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
                   Start Podcast Project
                 </a>
-                <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>View Deliverables</a>
+                <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
+                  View Deliverables
+                </a>
               </div>
             </div>
-            <div className="sp-hero-right">
-              <div className="sp-hero-stat-row">
-                <div className="sp-hero-stat-card">
-                  <span className="stat-val">3–4d</span>
-                  <span className="stat-label">Fast Delivery</span>
+
+            {/* Right Panel Column: Single Floating Glass Card (Option C) */}
+            <div className="sp-hero-right" style={{ 
+              flex: '1 1 320px',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center'
+            }}>
+              <div className="premium-floating-panel">
+                {/* Five Star Rating */}
+                <div style={{ display: 'flex', gap: '3px', color: '#F59E0B', fontSize: '0.7rem', letterSpacing: '1px' }}>
+                  ★ ★ ★ ★ ★
                 </div>
-                <div className="sp-hero-stat-card">
-                  <span className="stat-val">5+</span>
-                  <span className="stat-label">Clips Per Episode</span>
+
+                {/* Key Metrics */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ fontSize: 'clamp(1.5rem, 3vw, 1.8rem)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1, letterSpacing: '-0.5px' }}>250+</div>
+                  <div style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.45)', fontWeight: 500, letterSpacing: '0.2px' }}>Episodes Delivered</div>
                 </div>
-              </div>
-              <div className="sp-hero-feature-list">
-                {['Audio Mastering', 'Multi-Cam Cuts', 'Background Noise Fix', 'Social Clips Extraction'].map(f => (
-                  <div key={f} className="sp-hero-feature">
-                    <span className="check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg></span>
-                    {f}
-                  </div>
-                ))}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ fontSize: 'clamp(1.5rem, 3vw, 1.8rem)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1, letterSpacing: '-0.5px' }}>48M+</div>
+                  <div style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.45)', fontWeight: 500, letterSpacing: '0.2px' }}>Views Generated</div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.1px' }}>Trusted by Creators</div>
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.4)', fontWeight: 400, letterSpacing: '0.1px' }}>Worldwide Industry Leaders</div>
+                </div>
               </div>
             </div>
           </div>
@@ -269,17 +514,20 @@ export default function PodcastEditingPage() {
           </div>
         </section>
 
-        {/* 3. WHAT WE OFFER — Process Rail */}
-        <WhatWeOffer
-          sectionTag="Production Deliverables"
-          heading="What We Offer"
-          description="End-to-end podcast production from raw recording to publish-ready episodes."
-          items={[
-            { index: '01', icon: Mic, title: 'Multi-Camera Cuts', description: "Your listeners forget they're watching a podcast. Camera cuts arrive when the conversation demands them — no dead air, no awkward pauses.", color: '#FF6A00' },
-            { index: '02', icon: Headphones, title: 'Studio Audio EQ', description: 'Every voice comes through clean. Room echo disappears, plosives get tamed, and your audience stops adjusting volume between segments.', color: '#3B82F6' },
-            { index: '03', icon: Zap, title: 'Social Clip Engine', description: "Every episode feeds your growth engine. We find the 30 seconds that made your guest laugh or your audience lean in — and turn it into a clip strangers can't scroll past.", color: '#10B981' }
-          ]}
-        />
+        {/* 3. WHAT WE OFFER */}
+        <div id="services">
+          <WhatWeOffer
+            sectionTag="Production Deliverables"
+            heading="What We Offer"
+            description="End-to-end podcast production from raw recording to publish-ready episodes."
+            items={[
+              { index: '01', icon: Mic, title: 'Multi-Camera Cuts', description: "Your listeners forget they're watching a podcast. Camera cuts arrive when the conversation demands them — no dead air, no awkward pauses.", color: '#FF6A00' },
+              { index: '02', icon: Headphones, title: 'Studio Audio EQ', description: 'Every voice comes through clean. Room echo disappears, plosives get tamed, and your audience stops adjusting volume between segments.', color: '#3B82F6' },
+              { index: '03', icon: Zap, title: 'Social Clip Engine', description: "Every episode feeds your growth engine. We find the 30 seconds that made your guest laugh or your audience lean in — and turn it into a clip strangers can't scroll past.", color: '#10B981' }
+            ]}
+          />
+        </div>
+
 
         {/* 4. WHY CHOOSE US — Stat Ledger */}
         <section className="sp-why">

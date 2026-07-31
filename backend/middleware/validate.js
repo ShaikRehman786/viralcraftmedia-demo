@@ -5,7 +5,7 @@ export const sanitizeInput = (val) => {
   if (typeof val !== 'string') return val;
   return val
     .replace(/<[^>]*>/g, '') // Strip HTML tags
-    .replace(/[<>"'&]/g, '') // Strip dangerous characters
+    .replace(/[<>"']/g, '') // Strip dangerous characters
     .trim();
 };
 

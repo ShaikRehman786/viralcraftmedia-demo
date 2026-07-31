@@ -11,12 +11,18 @@ import teamLoggerRoutes from './teamLogger.js';
 import enquiryRoutes from './enquiries.js';
 import whatsappRoutes from './whatsapp.js';
 import pushRoutes from './push.js';
+import backupRoutes from './backup.js';
+import partnerRoutes from './partners.js';
+import adminReferralRoutes from './adminReferrals.js';
+
 import { 
   employeeForgotPassword, 
   employeeResetPassword, 
   employeeValidateResetToken 
 } from '../controllers/authController.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
+
+import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -34,12 +40,17 @@ router.post('/employee/reset-password/:token', employeeResetPassword);
 router.use('/projects', projectRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/analytics', analyticsRoutes);
-router.use('/calendar', calendarRoutes);
-router.use('/logs', logRoutes);
-router.use('/notifications', notificationRoutes);
+router.use('/calendar', protect, authorize('SUPER_ADMIN'), calendarRoutes);
+router.use('/logs', protect, authorize('SUPER_ADMIN'), logRoutes);
+router.use('/notifications', protect, authorize('SUPER_ADMIN'), notificationRoutes);
 router.use('/teamlogger', teamLoggerRoutes);
 router.use('/enquiries', enquiryRoutes);
-router.use('/whatsapp', whatsappRoutes);
+router.use('/whatsapp', protect, authorize('SUPER_ADMIN'), whatsappRoutes);
 router.use('/push', pushRoutes);
+router.use('/backup', protect, authorize('SUPER_ADMIN'), backupRoutes);
+
+// Partner Portal routes
+router.use('/partners', partnerRoutes);
+router.use('/admin/referrals', protect, authorize('SUPER_ADMIN'), adminReferralRoutes);
 
 export default router;

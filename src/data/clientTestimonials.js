@@ -1,5 +1,4 @@
 export const clientTestimonials = [
-  { name: "PropInspekt", handle: "@propinspekt", followers: "12K", industry: "Real Estate", review: "Excellent clipping quality and quick delivery. Boosted our Instagram reach significantly." },
   { name: "BAV Electric", handle: "@bav_electric", followers: "8.5K", industry: "Electrical Services", review: "Highly professional editing and structure. Our reels look premium now." },
   { name: "Tyent India", handle: "@tyentindia123", followers: "15K", industry: "Healthcare", review: "Retained our viewers instantly. Amazing work on the short clips!" },
   { name: "Krishna Tula", handle: "@krishnaramtul", followers: "4.4K", industry: "Business", review: "Excellent editing quality and fast delivery. Highly recommended." },

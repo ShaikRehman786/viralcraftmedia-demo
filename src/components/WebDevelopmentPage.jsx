@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Code, Globe, Zap, Shield, Clock, Users, Target, Monitor, CheckCircle2 } from 'lucide-react';
+import { 
+  Code, Globe, Zap, Shield, Clock, Users, Target, Monitor, CheckCircle2
+} from 'lucide-react';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
 import WhatWeOffer from './shared/WhatWeOffer.jsx';
@@ -120,13 +122,7 @@ export default function WebDevelopmentPage() {
     { q: 'How long does a complete design and build cycle take?', a: 'Standard landing pages are completed within 7 to 10 days, while custom dashboards and CRM platforms require 3 to 4 weeks depending on specs.' }
   ];
 
-  const services = [
-    { title: 'Business Websites', desc: 'Professional company websites built strictly for trust and conversions.' },
-    { title: 'Landing Pages', desc: 'High-converting pages designed for paid ads and lead generation.' },
-    { title: 'CRM Solutions', desc: 'Internal dashboards and workflow systems tailored to your business.' },
-    { title: 'Shopify Stores', desc: 'Fast and optimized online stores with secure checkout configurations.' },
-    { title: 'Custom Web Applications', desc: 'Scalable solutions built around your business operations.' }
-  ];
+
 
   return (
     <div className="service-page-wrap webdev-page">
@@ -276,17 +272,20 @@ export default function WebDevelopmentPage() {
           </div>
         </section>
 
-        {/* 3. WHAT WE OFFER — Process Rail */}
-        <WhatWeOffer
-          sectionTag="Our Service Suite"
-          heading="What We Offer"
-          description="Custom-engineered web solutions built from scratch — no templates, no page builders."
-          items={[
-            { index: '01', icon: Globe, title: 'Business Websites', description: 'Your site ships in 10 days, built from scratch. No page builders, no bloated templates — just fast, secure code that makes you look like the market leader.', color: '#FF6A00' },
-            { index: '02', icon: Target, title: 'Landing Pages', description: 'Every pixel pushes toward converting the visitor. We map layout, copy, and load speed to turn traffic into leads.', color: '#3B82F6' },
-            { index: '03', icon: Monitor, title: 'CRM Solutions', description: 'Your team gets a dashboard they actually want to use. Custom workflows, no training required, no "let me check with IT" when something needs to change.', color: '#10B981' }
-          ]}
-        />
+        {/* 3. WHAT WE OFFER */}
+        <div id="services">
+          <WhatWeOffer
+            sectionTag="Our Service Suite"
+            heading="What We Offer"
+            description="Custom-engineered web solutions built from scratch — no templates, no page builders."
+            items={[
+              { index: '01', icon: Globe, title: 'Business Websites', description: 'Your site ships in 10 days, built from scratch. No page builders, no bloated templates — just fast, secure code that makes you look like the market leader.', color: '#FF6A00' },
+              { index: '02', icon: Target, title: 'Landing Pages', description: 'Every pixel pushes toward converting the visitor. We map layout, copy, and load speed to turn traffic into leads.', color: '#3B82F6' },
+              { index: '03', icon: Monitor, title: 'CRM Solutions', description: 'Your team gets a dashboard they actually want to use. Custom workflows, no training required, no "let me check with IT" when something needs to change.', color: '#10B981' }
+            ]}
+          />
+        </div>
+
 
         {/* 4. WHY CHOOSE US — Stat Ledger */}
         <section className="sp-why">

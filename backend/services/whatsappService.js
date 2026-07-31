@@ -460,10 +460,11 @@ const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
           }
         }
 
-        sendTaskNotification(projectObj._id, assignedEmployeeIds).catch(err => {
-          console.error('[WA-NOTIFICATION] Failed to send WhatsApp notifications:', err.message);
-        });
       }
+
+      sendTaskNotification(projectObj._id, []).catch(err => {
+        console.error('[WA-NOTIFICATION] Failed to send WhatsApp notifications:', err.message);
+      });
 
       const assignedCount = projectObj.employees ? projectObj.employees.length : 0;
       const successReply = `🚀 *Project Auto-Created successfully!*\n\n• Name: ${projectObj.name}\n• Client: ${clientObj.name}\n• Department: ${projectObj.department}\n• Priority: ${projectObj.priority.toUpperCase()}\n• Deadline: ${projectObj.estimatedCompletion.toDateString()}\n• Employees Assigned: ${assignedCount}\n• Sub-tasks Generated: 8\n\nWhatsApp notifications are being sent to all assigned employees.`;
@@ -1327,130 +1328,10 @@ export const sendOrderCompletedWhatsApp = async (clientName, clientPhone, orderI
 
 export const sendTaskNotification = async (projectId, employeeIds) => {
   try {
-    const project = await Project.findById(projectId);
-    if (!project) {
-      console.error(`[WA-NOTIFICATION] Project not found for ID: ${projectId}`);
-      return;
-    }
-
-    const idsToNotify = employeeIds || project.employees || [];
-    let sentCount = 0;
-    let failedCount = 0;
-
-    for (const empId of idsToNotify) {
-      const employee = await User.findById(empId);
-      if (!employee) {
-        failedCount++;
-        continue;
-      }
-      
-      if (!employee.phone) {
-        failedCount++;
-        continue;
-      }
-
-      if (employee.status && employee.status.toLowerCase() !== 'active') {
-        failedCount++;
-        continue;
-      }
-
-      let cleanPhone = employee.phone.replace(/\D/g, '');
-      if (cleanPhone.startsWith('0')) {
-        cleanPhone = cleanPhone.slice(1);
-      }
-      if (cleanPhone.length === 10 && !cleanPhone.startsWith('91')) {
-        cleanPhone = '91' + cleanPhone;
-      }
-
-      if (cleanPhone.length !== 12) {
-        failedCount++;
-        continue;
-      }
-
-      const jid = `${cleanPhone}@c.us`;
-      const matchedTask = await Task.findOne({ project: projectId, assignedTo: empId });
-      const assignedTaskName = matchedTask ? matchedTask.name : `${project.category} Production`;
-      
-      const priorityStr = (project.priority || 'medium').charAt(0).toUpperCase() + (project.priority || 'medium').slice(1);
-      const deadlineStr = project.estimatedCompletion 
-        ? new Date(project.estimatedCompletion).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
-        : 'No deadline';
-
-      const driveLink = project.driveShareableLink || '';
-      
-      let text = `🔔 NEW PROJECT ASSIGNED
-
-Hello ${employee.name},
-
-You have been assigned a new project.
-
-Project
-${project.name}
-
-Department
-${project.department || 'General'}
-
-Your Assigned Task
-${assignedTaskName}
-
-Priority
-${priorityStr}
-
-Deadline
-${deadlineStr}`;
-
-      if (driveLink) {
-        text += `
-
-Project Files
-${driveLink}`;
-      }
-
-      text += `
-
-CRM Login
-https://crm.viralcraftmedia.com/login
-
-Please login to the CRM and click
-Accept Project
-before starting work.
-
-Thank you,
-ViralCraft Media`;
-
-      try {
-        if (!client) {
-          throw new Error('WhatsApp client is not initialized');
-        }
-        if (connectionStatus !== 'CONNECTED') {
-          throw new Error(`WhatsApp not connected (status: ${connectionStatus})`);
-        }
-
-        await client.sendMessage(jid, text);
-
-        const savedMsg = new WhatsAppMessage({
-          from: client.info.wid.user,
-          to: cleanPhone,
-          body: text,
-          type: 'out',
-          timestamp: new Date()
-        });
-        await savedMsg.save();
-
-        if (io) {
-          io.emit('whatsapp_new_message', savedMsg);
-        }
-
-        sentCount++;
-      } catch (sendErr) {
-        console.error(`[WA-NOTIFICATION] FAILED: ${employee.name} — ${sendErr.message}`);
-        failedCount++;
-      }
-    }
-
-    console.log(`[WA-NOTIFICATION] Project ${project.name}: Sent ${sentCount}/${idsToNotify.length}, Failed ${failedCount}`);
+    const { sendProjectAssignmentNotifications } = await import('./notificationService.js');
+    await sendProjectAssignmentNotifications(projectId);
   } catch (err) {
-    console.error('[WA-NOTIFICATION] FATAL:', err.message);
+    console.error('[WA-NOTIFICATION] sendTaskNotification failed:', err.message);
   }
 };
 

@@ -61,23 +61,27 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
           <div className="sidebar-group">
             <div className="sidebar-group-title">Main</div>
 
-            <button
-              className={`sidebar-link${activeTab === 'overview' ? ' active' : ''}`}
-              onClick={() => handleNav('overview')}
-            >
-              <LayoutDashboard /> Overview
-            </button>
+            {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER' || user.role === 'EMPLOYEE') && (
+              <button
+                className={`sidebar-link${activeTab === 'overview' ? ' active' : ''}`}
+                onClick={() => handleNav('overview')}
+              >
+                <LayoutDashboard />
+                {user.role === 'EMPLOYEE' ? 'My Dashboard' : user.role === 'MANAGER' ? 'Dashboard' : 'Overview'}
+              </button>
+            )}
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER' || user.role === 'EMPLOYEE' || user.role === 'CLIENT') && (
               <button
                 className={`sidebar-link${activeTab === 'projects' ? ' active' : ''}`}
                 onClick={() => handleNav('projects')}
               >
-                <ClipboardList /> Projects & Tasks
+                <ClipboardList />
+                {user.role === 'EMPLOYEE' ? 'My Projects' : 'Projects & Tasks'}
               </button>
             )}
 
-            {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER') && (
+            {user.role === 'SUPER_ADMIN' && (
               <button
                 className={`sidebar-link${activeTab === 'calendar' ? ' active' : ''}`}
                 onClick={() => handleNav('calendar')}
@@ -87,7 +91,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
             )}
           </div>
 
-          {user.role === 'SUPER_ADMIN' && (
+          {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER') && (
             <div className="sidebar-group">
               <div className="sidebar-group-title">Admin</div>
 
@@ -95,19 +99,21 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
                 className={`sidebar-link${activeTab === 'staff' ? ' active' : ''}`}
                 onClick={() => handleNav('staff')}
               >
-                <Users /> Role Management
+                <Users /> {user.role === 'MANAGER' ? 'Employees' : 'Role Management'}
               </button>
 
-              <button
-                className={`sidebar-link${activeTab === 'logs' ? ' active' : ''}`}
-                onClick={() => handleNav('logs')}
-              >
-                <ShieldCheck /> Security Logs
-              </button>
+              {user.role === 'SUPER_ADMIN' && (
+                <button
+                  className={`sidebar-link${activeTab === 'logs' ? ' active' : ''}`}
+                  onClick={() => handleNav('logs')}
+                >
+                  <ShieldCheck /> Security Logs
+                </button>
+              )}
             </div>
           )}
 
-          {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER') && (
+          {user.role === 'SUPER_ADMIN' && (
             <div className="sidebar-group">
               <div className="sidebar-group-title">CRM</div>
 
@@ -116,6 +122,13 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
                 onClick={() => handleNav('enquiries')}
               >
                 <UserPlus /> Inbound Leads
+              </button>
+
+              <button
+                className={`sidebar-link${activeTab === 'referrals' ? ' active' : ''}`}
+                onClick={() => handleNav('referrals')}
+              >
+                <Users /> Referral Management
               </button>
 
               <button

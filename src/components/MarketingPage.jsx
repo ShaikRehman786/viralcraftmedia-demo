@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BarChart3, Target, Users, Zap, Shield, TrendingUp, Calendar, Layers } from 'lucide-react';
+import { 
+  BarChart3, Target, Users, Zap, Shield, TrendingUp, Calendar, Layers
+} from 'lucide-react';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
 import WhatWeOffer from './shared/WhatWeOffer.jsx';
@@ -120,12 +122,135 @@ export default function MarketingPage() {
     { q: 'What analytics metrics do you monitor?', a: 'We focus on traffic quality: DM conversion triggers, qualified link clicks, and pipeline generation from comments.' }
   ];
 
+
+
   return (
     <div className="service-page-wrap marketing-page">
       <Navbar />
       <main style={{ paddingTop: '80px' }}>
+        <style>{`
+          .marketing-page .sp-hero {
+            background-image: none !important;
+            background-color: #0B0B0C !important;
+          }
+          .marketing-video-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 20%;
+            transform: translate3d(0,0,0);
+            will-change: transform;
+            z-index: 0;
+          }
+
+          @media (max-width: 1024px) {
+            .marketing-page .sp-hero {
+              min-height: auto !important;
+              padding-top: 50px !important;
+              padding-bottom: 70px !important;
+            }
+            .marketing-video-bg {
+              object-position: center 25% !important;
+            }
+          }
+
+          @media (max-width: 768px) {
+            .marketing-page .sp-hero {
+              min-height: auto !important;
+              padding-top: 30px !important;
+              padding-bottom: 55px !important;
+            }
+            .marketing-page .sp-hero-inner {
+              padding: 0 20px !important;
+              display: flex !important;
+              flex-direction: column !important;
+              align-items: flex-start !important;
+              justify-content: center !important;
+              gap: 24px !important;
+            }
+            .marketing-page .sp-hero-left {
+              gap: 12px !important;
+              align-items: flex-start !important;
+              text-align: left !important;
+              width: 100% !important;
+            }
+            .marketing-page .sp-hero h1 {
+              font-size: clamp(2rem, 8vw, 2.75rem) !important;
+            }
+            .marketing-page .sp-hero p {
+              font-size: 0.95rem !important;
+              line-height: 1.4 !important;
+              margin-top: 4px !important;
+            }
+            .marketing-page .sp-hero-actions {
+              margin-top: 6px !important;
+              gap: 12px !important;
+              width: 100% !important;
+            }
+            .marketing-page .sp-hero-actions a {
+              flex: 1 1 auto !important;
+              justify-content: center !important;
+              font-size: 0.9rem !important;
+              padding: 10px 16px !important;
+            }
+            .marketing-page .sp-hero-right {
+              display: flex !important;
+              flex-direction: column !important;
+              width: 100% !important;
+              margin-top: 8px !important;
+            }
+            .marketing-page .sp-hero-stat-row {
+              gap: 16px !important;
+              justify-content: flex-start !important;
+            }
+            .marketing-page .sp-hero-stat-card {
+              flex: 1 1 auto !important;
+              padding: 16px !important;
+              background: rgba(11, 11, 12, 0.45) !important;
+              border: 1px solid rgba(255, 255, 255, 0.08) !important;
+              border-radius: 12px !important;
+            }
+            .marketing-page .sp-hero-feature-list {
+              gap: 10px !important;
+              margin-top: 16px !important;
+              display: grid !important;
+              grid-template-columns: 1fr 1fr !important;
+              width: 100% !important;
+            }
+            .marketing-page .sp-hero-feature {
+              margin: 0 !important;
+              padding: 10px 12px !important;
+              font-size: 0.8rem !important;
+              background: rgba(11, 11, 12, 0.35) !important;
+              border: 1px solid rgba(255, 255, 255, 0.05) !important;
+              border-radius: 8px !important;
+            }
+            .marketing-video-bg {
+              object-position: center 30% !important;
+              transform: scale(1.1) !important;
+            }
+            .marketing-page .sp-hero::after {
+              background: linear-gradient(to bottom, rgba(11, 11, 12, 0.75) 0%, rgba(11, 11, 12, 0.45) 60%, rgba(11, 11, 12, 0.8) 100%) !important;
+            }
+          }
+        `}</style>
+
         {/* 1. EDITORIAL HERO — Left-aligned */}
         <section className="sp-hero">
+          {/* Background Video */}
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            className="marketing-video-bg"
+          >
+            <source src="/market_service.mp4" type="video/mp4" />
+          </video>
           <div className="sp-hero-inner">
             <div className="sp-hero-left">
               <div className="sp-hero-eyebrow">Growth Strategy</div>
@@ -268,17 +393,20 @@ export default function MarketingPage() {
           </div>
         </section>
 
-        {/* 3. WHAT WE OFFER — Process Rail */}
-        <WhatWeOffer
-          sectionTag="Deliverables Suite"
-          heading="What We Offer"
-          description="Data-driven social strategies that convert attention into measurable results."
-          items={[
-            { index: '01', icon: BarChart3, title: 'Competitor Audits', description: "We study what's working in your niche right now, then build a strategy that out-executes everyone else — not copies them.", color: '#FF6A00' },
-            { index: '02', icon: Target, title: 'Content Scripts', description: 'One idea becomes a hook, a story, and a call to action that actually gets replies. Your brand voice stays consistent without sounding like a corporate robot.', color: '#8B5CF6' },
-            { index: '03', icon: Users, title: 'Lead Funnel Sync', description: 'Every comment and DM feeds a trackable pipeline. We connect what you post to who raises their hand to buy — no more guessing.', color: '#10B981' }
-          ]}
-        />
+        {/* 3. WHAT WE OFFER */}
+        <div id="services">
+          <WhatWeOffer
+            sectionTag="Deliverables Suite"
+            heading="What We Offer"
+            description="Data-driven social strategies that convert attention into measurable results."
+            items={[
+              { index: '01', icon: BarChart3, title: 'Competitor Audits', description: "We study what's working in your niche right now, then build a strategy that out-executes everyone else — not copies them.", color: '#FF6A00' },
+              { index: '02', icon: Target, title: 'Content Scripts', description: 'One idea becomes a hook, a story, and a call to action that actually gets replies. Your brand voice stays consistent without sounding like a corporate robot.', color: '#8B5CF6' },
+              { index: '03', icon: Users, title: 'Lead Funnel Sync', description: 'Every comment and DM feeds a trackable pipeline. We connect what you post to who raises their hand to buy — no more guessing.', color: '#10B981' }
+            ]}
+          />
+        </div>
+
 
         {/* 4. WHY CHOOSE US — Stat Ledger */}
         <section className="sp-why">

@@ -41,11 +41,7 @@ export const createOrder = async (req, res, next) => {
     const numericAmount = parseInt(amount, 10);
     let verifiedAmount;
 
-    if (serviceType === 'Real Estate Video Editing') {
-      verifiedAmount = 5000;
-    } else {
-      verifiedAmount = calculatePricing(clipCount || 1);
-    }
+    verifiedAmount = calculatePricing(clipCount || 1);
     
     // Prevent client tampering. Always validate pricing on backend.
     if (numericAmount !== verifiedAmount) {

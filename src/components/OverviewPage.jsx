@@ -395,10 +395,12 @@ export default function OverviewPage({
               <span className="emp-detail-label">Deadline</span>
               <span className="emp-detail-value">{formatDate(project.estimatedCompletion)}</span>
             </div>
-            <div className="emp-project-detail">
-              <span className="emp-detail-label">Client</span>
-              <span className="emp-detail-value">{project.client?.name || '—'}</span>
-            </div>
+            {user.role !== 'EMPLOYEE' && (
+              <div className="emp-project-detail">
+                <span className="emp-detail-label">Client</span>
+                <span className="emp-detail-value">{project.client?.name || '—'}</span>
+              </div>
+            )}
           </div>
           {project.description && (
             <div className="emp-project-desc">
@@ -758,400 +760,402 @@ export default function OverviewPage({
               }
           </div>
 
-          {isLoading ? (
-            <div className="card mt-6">
-              <div className="card-header">
-                <div className="skeleton skeleton-title" style={{ width: '30%' }}></div>
-              </div>
-              <div className="card-body">
-                <div className="skeleton" style={{ height: 350, borderRadius: 'var(--r-lg)' }}></div>
-              </div>
-            </div>
-          ) : (
-            <div className="revenue-executive-center animate-slide-up">
-              {/* TOP BAR: Revenue Analytics Workspace */}
-              <div className="card-header revenue-card-header">
-                <div>
-                  <h3 className="section-title">Revenue Command Center</h3>
-                  <p className="section-subtitle">Enterprise business intelligence and live cash flow trajectory</p>
+          {isSuperAdmin && (
+            isLoading ? (
+              <div className="card mt-6">
+                <div className="card-header">
+                  <div className="skeleton skeleton-title" style={{ width: '30%' }}></div>
                 </div>
-                <div className="dashboard-header-right">
-                  <div className="header-meta-badge live-sync-badge">
-                    <span className="pulse-dot" />
-                    <span>Live Syncing</span>
-                  </div>
-                  <div className="header-meta-badge">
-                    <span>Last Updated: {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                  <div className="segmented-controls-wrapper">
-                    {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'This Month', 'Last Month', 'Quarter', 'Year', 'Previous Year', 'Custom'].map(f => (
-                      <button
-                        key={f}
-                        className={`segmented-control-btn ${activeFilter === f ? 'active' : ''}`}
-                        onClick={() => {
-                          if (f === 'Custom') {
-                            setShowCustomModal(true);
-                          } else {
-                            setActiveFilter(f);
-                          }
-                        }}
-                      >
-                        {f.replace('Last ', '')}
-                      </button>
-                    ))}
-                  </div>
-                  <button className="chart-control-btn flex items-center gap-1">
-                    <BarChart3 size={12} /> Export
-                  </button>
+                <div className="card-body">
+                  <div className="skeleton" style={{ height: 350, borderRadius: 'var(--r-lg)' }}></div>
                 </div>
               </div>
-
-              {/* ROW 1: Executive KPI Summary (8-card ribbon) */}
-              <div className="rev-kpi-ribbon">
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Revenue</span>
-                    <TrendingUp size={14} className="text-success" />
+            ) : (
+              <div className="revenue-executive-center animate-slide-up">
+                {/* TOP BAR: Revenue Analytics Workspace */}
+                <div className="card-header revenue-card-header">
+                  <div>
+                    <h3 className="section-title">Revenue Command Center</h3>
+                    <p className="section-subtitle">Enterprise business intelligence and live cash flow trajectory</p>
                   </div>
-                  <span className="rev-kpi-subcard-value">{formattedRevenue}</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend up">↑ 18.4%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Net Profit</span>
-                    <Sparkles size={14} className="text-purple" />
-                  </div>
-                  <span className="rev-kpi-subcard-value">{formattedNetProfit}</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend up">↑ 12.1%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--purple)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Growth</span>
-                    <TrendingUp size={14} className="text-success" />
-                  </div>
-                  <span className="rev-kpi-subcard-value">+18.4%</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend up">↑ 2.4%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Forecast</span>
-                    <TrendingUp size={14} className="text-info" />
-                  </div>
-                  <span className="rev-kpi-subcard-value">₹5.8L</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend up">↑ 22%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--info)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Outstanding</span>
-                    <Clock size={14} className="text-warning" />
-                  </div>
-                  <span className="rev-kpi-subcard-value">{formattedOutstanding}</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend down">↓ 4.2%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,5 Q15,25 30,10 T60,25 T90,8" fill="none" stroke="var(--warning)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Collection Rate</span>
-                    <CheckSquare size={14} className="text-success" />
-                  </div>
-                  <span className="rev-kpi-subcard-value">94.2%</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend up">↑ 1.1%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--success)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Target Achievement</span>
-                    <Sparkles size={14} className="text-accent" />
-                  </div>
-                  <span className="rev-kpi-subcard-value">92.4%</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend up">↑ 1.8%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--accent)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="rev-kpi-subcard">
-                  <div className="rev-kpi-subcard-header">
-                    <span className="rev-kpi-subcard-label">Avg Deal Value</span>
-                    <Briefcase size={14} className="text-info" />
-                  </div>
-                  <span className="rev-kpi-subcard-value">{formattedAverageDeal}</span>
-                  <div className="rev-kpi-subcard-footer">
-                    <span className="rev-kpi-subcard-trend up">↑ 5.4%</span>
-                    <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                      <path d="M0,10 Q20,25 40,5 T80,18 T100,5" fill="none" stroke="var(--info)" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* ROW 2: Three Column Analytics Workspace */}
-              <div className="rev-analytics-workspace">
-                {/* LEFT (25%) */}
-                <div className="rev-left-panel">
-                  <div className="rev-panel-card">
-                    <h4>Revenue Summary</h4>
-                    <div className="rev-panel-insight-item">
-                      <span className="rev-panel-insight-label">Top Service</span>
-                      <span className="rev-panel-insight-val" style={{ fontSize: '11px' }}>{bestCategory}</span>
+                  <div className="dashboard-header-right">
+                    <div className="header-meta-badge live-sync-badge">
+                      <span className="pulse-dot" />
+                      <span>Live Syncing</span>
                     </div>
-                    <div className="rev-panel-insight-item">
-                      <span className="rev-panel-insight-label">Health Score</span>
-                      <span className="rev-panel-insight-val" style={{ color: 'var(--success)' }}>94 / 100</span>
+                    <div className="header-meta-badge">
+                      <span>Last Updated: {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <div className="rev-panel-insight-item">
-                      <span className="rev-panel-insight-label">Best Month</span>
-                      <span className="rev-panel-insight-val">{highestMonth}</span>
-                    </div>
-                    <div className="rev-panel-insight-item">
-                      <span className="rev-panel-insight-label">Worst Month</span>
-                      <span className="rev-panel-insight-val">Jan (₹0k)</span>
-                    </div>
-                    <div className="rev-panel-insight-item">
-                      <span className="rev-panel-insight-label">Forecast Accuracy</span>
-                      <span className="rev-panel-insight-val">96.8%</span>
-                    </div>
-                    <div className="progress-ring-container">
-                      <div className="progress-ring-circle">92%</div>
-                    </div>
-                    <div className="text-center" style={{ fontSize: '12px', color: 'var(--gray-500)', fontWeight: 600 }}>
-                      Billing Pipeline Target
-                    </div>
-                  </div>
-                </div>
-
-                {/* CENTER (50%) */}
-                <div className="rev-center-panel" style={{ minHeight: '340px' }}>
-                  <div style={{ position: 'relative', height: '100%', padding: '24px 24px 16px 8px', flex: 1 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={dynamicChartData}>
-                        <defs>
-                          <linearGradient id="overviewRevenueGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
-                            <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="month" stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
-                        <YAxis stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
-                        <Tooltip
-                          contentStyle={{
-                            borderRadius: 12,
-                            border: '1px solid var(--gray-200)',
-                            boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
-                            background: 'var(--white)'
+                    <div className="segmented-controls-wrapper">
+                      {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'This Month', 'Last Month', 'Quarter', 'Year', 'Previous Year', 'Custom'].map(f => (
+                        <button
+                          key={f}
+                          className={`segmented-control-btn ${activeFilter === f ? 'active' : ''}`}
+                          onClick={() => {
+                            if (f === 'Custom') {
+                              setShowCustomModal(true);
+                            } else {
+                              setActiveFilter(f);
+                            }
                           }}
-                        />
-                        <Area type="monotone" dataKey="revenue" stroke="var(--accent)" fillOpacity={1} fill="url(#overviewRevenueGrad)" strokeWidth={2.5} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                    {dynamicChartData.every(d => d.revenue === 0) && (
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                        <BarChart3 size={32} style={{ color: 'var(--text-muted)', opacity: 0.3, marginBottom: '0.5rem' }} />
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No revenue data available for this timeframe</p>
-                      </div>
-                    )}
+                        >
+                          {f.replace('Last ', '')}
+                        </button>
+                      ))}
+                    </div>
+                    <button className="chart-control-btn flex items-center gap-1">
+                      <BarChart3 size={12} /> Export
+                    </button>
                   </div>
                 </div>
 
-                {/* RIGHT (25%) */}
-                <div className="rev-right-panel">
-                  <div className="rev-panel-card" style={{ gap: '8px', padding: '16px' }}>
-                    <h4>Real-time Operations</h4>
-                    <div className="rev-mini-card">
-                      <div className="rev-mini-card-left">
-                        <span className="rev-mini-card-label">Revenue Today</span>
-                        <span className="rev-mini-card-val">₹18,500</span>
-                      </div>
-                      <Sparkles size={14} className="text-accent" />
-                    </div>
-                    <div className="rev-mini-card">
-                      <div className="rev-mini-card-left">
-                        <span className="rev-mini-card-label">This Week</span>
-                        <span className="rev-mini-card-val">₹64,000</span>
-                      </div>
+                {/* ROW 1: Executive KPI Summary (8-card ribbon) */}
+                <div className="rev-kpi-ribbon">
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Revenue</span>
                       <TrendingUp size={14} className="text-success" />
                     </div>
-                    <div className="rev-mini-card">
-                      <div className="rev-mini-card-left">
-                        <span className="rev-mini-card-label">Pending Invoices</span>
-                        <span className="rev-mini-card-val">{projects.filter(p => p.status === 'review').length} billing</span>
-                      </div>
+                    <span className="rev-kpi-subcard-value">{formattedRevenue}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">↑ 18.4%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Net Profit</span>
+                      <Sparkles size={14} className="text-purple" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">{formattedNetProfit}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">↑ 12.1%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--purple)" strokeWidth="2" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Growth</span>
+                      <TrendingUp size={14} className="text-success" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">+18.4%</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">↑ 2.4%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Forecast</span>
+                      <TrendingUp size={14} className="text-info" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">₹5.8L</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">↑ 22%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--info)" strokeWidth="2" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Outstanding</span>
                       <Clock size={14} className="text-warning" />
                     </div>
-                    <div className="rev-mini-card">
-                      <div className="rev-mini-card-left">
-                        <span className="rev-mini-card-label">Top Customer</span>
-                        <span className="rev-mini-card-val" style={{ fontSize: '12px' }}>ViralCraft Client</span>
-                      </div>
-                      <Users size={14} className="text-purple" />
+                    <span className="rev-kpi-subcard-value">{formattedOutstanding}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend down">↓ 4.2%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,5 Q15,25 30,10 T60,25 T90,8" fill="none" stroke="var(--warning)" strokeWidth="2" />
+                      </svg>
                     </div>
-                    <div className="rev-mini-card">
-                      <div className="rev-mini-card-left">
-                        <span className="rev-mini-card-label">Operations Status</span>
-                        <span className="rev-mini-card-val" style={{ color: 'var(--success)', fontSize: '13px' }}>Optimal (A+)</span>
-                      </div>
-                      <Sparkles size={14} className="text-success" />
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Collection Rate</span>
+                      <CheckSquare size={14} className="text-success" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">94.2%</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">↑ 1.1%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--success)" strokeWidth="2" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Target Achievement</span>
+                      <Sparkles size={14} className="text-accent" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">92.4%</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">↑ 1.8%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--accent)" strokeWidth="2" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Avg Deal Value</span>
+                      <Briefcase size={14} className="text-info" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">{formattedAverageDeal}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">↑ 5.4%</span>
+                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
+                        <path d="M0,10 Q20,25 40,5 T80,18 T100,5" fill="none" stroke="var(--info)" strokeWidth="2" />
+                      </svg>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* UNDER THE CHART: Information-Dense Section Grid */}
-              <div className="section-grid-3" style={{ marginTop: '8px' }}>
-                <div className="card" style={{ padding: '20px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Service Breakdown</h4>
-                  <div className="flex-col gap-2">
-                    {Object.entries(categoryRevenueMap).slice(0, 4).map(([cat, val]) => {
-                      const share = totalRevenue > 0 ? Math.round((val / totalRevenue) * 100) : 0;
-                      return (
-                        <div key={cat} className="category-analytic-row">
-                          <div className="category-analytic-meta">
-                            <span className="text-xs font-semibold">{cat}</span>
-                            <span className="text-xs font-bold text-accent">₹{(val/100000).toFixed(1)}L ({share}%)</span>
-                          </div>
-                          <div className="category-progress-track">
-                            <div className="category-progress-fill" style={{ width: `${share}%`, background: 'var(--accent)' }} />
-                          </div>
+                {/* ROW 2: Three Column Analytics Workspace */}
+                <div className="rev-analytics-workspace">
+                  {/* LEFT (25%) */}
+                  <div className="rev-left-panel">
+                    <div className="rev-panel-card">
+                      <h4>Revenue Summary</h4>
+                      <div className="rev-panel-insight-item">
+                        <span className="rev-panel-insight-label">Top Service</span>
+                        <span className="rev-panel-insight-val" style={{ fontSize: '11px' }}>{bestCategory}</span>
+                      </div>
+                      <div className="rev-panel-insight-item">
+                        <span className="rev-panel-insight-label">Health Score</span>
+                        <span className="rev-panel-insight-val" style={{ color: 'var(--success)' }}>94 / 100</span>
+                      </div>
+                      <div className="rev-panel-insight-item">
+                        <span className="rev-panel-insight-label">Best Month</span>
+                        <span className="rev-panel-insight-val">{highestMonth}</span>
+                      </div>
+                      <div className="rev-panel-insight-item">
+                        <span className="rev-panel-insight-label">Worst Month</span>
+                        <span className="rev-panel-insight-val">Jan (₹0k)</span>
+                      </div>
+                      <div className="rev-panel-insight-item">
+                        <span className="rev-panel-insight-label">Forecast Accuracy</span>
+                        <span className="rev-panel-insight-val">96.8%</span>
+                      </div>
+                      <div className="progress-ring-container">
+                        <div className="progress-ring-circle">92%</div>
+                      </div>
+                      <div className="text-center" style={{ fontSize: '12px', color: 'var(--gray-500)', fontWeight: 600 }}>
+                        Billing Pipeline Target
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CENTER (50%) */}
+                  <div className="rev-center-panel" style={{ minHeight: '340px' }}>
+                    <div style={{ position: 'relative', height: '100%', padding: '24px 24px 16px 8px', flex: 1 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={dynamicChartData}>
+                          <defs>
+                            <linearGradient id="overviewRevenueGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
+                              <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="month" stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
+                          <YAxis stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{
+                              borderRadius: 12,
+                              border: '1px solid var(--gray-200)',
+                              boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+                              background: 'var(--white)'
+                            }}
+                          />
+                          <Area type="monotone" dataKey="revenue" stroke="var(--accent)" fillOpacity={1} fill="url(#overviewRevenueGrad)" strokeWidth={2.5} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                      {dynamicChartData.every(d => d.revenue === 0) && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                          <BarChart3 size={32} style={{ color: 'var(--text-muted)', opacity: 0.3, marginBottom: '0.5rem' }} />
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No revenue data available for this timeframe</p>
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT (25%) */}
+                  <div className="rev-right-panel">
+                    <div className="rev-panel-card" style={{ gap: '8px', padding: '16px' }}>
+                      <h4>Real-time Operations</h4>
+                      <div className="rev-mini-card">
+                        <div className="rev-mini-card-left">
+                          <span className="rev-mini-card-label">Revenue Today</span>
+                          <span className="rev-mini-card-val">₹18,500</span>
+                        </div>
+                        <Sparkles size={14} className="text-accent" />
+                      </div>
+                      <div className="rev-mini-card">
+                        <div className="rev-mini-card-left">
+                          <span className="rev-mini-card-label">This Week</span>
+                          <span className="rev-mini-card-val">₹64,000</span>
+                        </div>
+                        <TrendingUp size={14} className="text-success" />
+                      </div>
+                      <div className="rev-mini-card">
+                        <div className="rev-mini-card-left">
+                          <span className="rev-mini-card-label">Pending Invoices</span>
+                          <span className="rev-mini-card-val">{projects.filter(p => p.status === 'review').length} billing</span>
+                        </div>
+                        <Clock size={14} className="text-warning" />
+                      </div>
+                      <div className="rev-mini-card">
+                        <div className="rev-mini-card-left">
+                          <span className="rev-mini-card-label">Top Customer</span>
+                          <span className="rev-mini-card-val" style={{ fontSize: '12px' }}>ViralCraft Client</span>
+                        </div>
+                        <Users size={14} className="text-purple" />
+                      </div>
+                      <div className="rev-mini-card">
+                        <div className="rev-mini-card-left">
+                          <span className="rev-mini-card-label">Operations Status</span>
+                          <span className="rev-mini-card-val" style={{ color: 'var(--success)', fontSize: '13px' }}>Optimal (A+)</span>
+                        </div>
+                        <Sparkles size={14} className="text-success" />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="card" style={{ padding: '20px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Top Client Contributions</h4>
-                  <div className="flex-col gap-2">
-                    {projects.filter(p => p.client?.name && p.order?.amount).slice(0, 4).map(p => {
-                      const share = totalRevenue > 0 ? Math.round((p.order.amount / totalRevenue) * 100) : 0;
-                      return (
-                        <div key={p._id} className="employee-status-row">
-                          <div className="employee-status-left">
-                            <div className="avatar avatar-xs" style={{ background: getAvatarColor(p.client?._id) }}>
-                              {getInitials(p.client?.name)}
+                {/* UNDER THE CHART: Information-Dense Section Grid */}
+                <div className="section-grid-3" style={{ marginTop: '8px' }}>
+                  <div className="card" style={{ padding: '20px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Service Breakdown</h4>
+                    <div className="flex-col gap-2">
+                      {Object.entries(categoryRevenueMap).slice(0, 4).map(([cat, val]) => {
+                        const share = totalRevenue > 0 ? Math.round((val / totalRevenue) * 100) : 0;
+                        return (
+                          <div key={cat} className="category-analytic-row">
+                            <div className="category-analytic-meta">
+                              <span className="text-xs font-semibold">{cat}</span>
+                              <span className="text-xs font-bold text-accent">₹{(val/100000).toFixed(1)}L ({share}%)</span>
                             </div>
-                            <span className="text-xs font-semibold" style={{ marginLeft: 8 }}>{p.client?.name}</span>
+                            <div className="category-progress-track">
+                              <div className="category-progress-fill" style={{ width: `${share}%`, background: 'var(--accent)' }} />
+                            </div>
                           </div>
-                          <span className="text-xs font-bold text-accent">₹{(p.order.amount/1000).toFixed(0)}k ({share}%)</span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
-                <div className="card" style={{ padding: '20px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Monthly Intelligence</h4>
-                  <div className="flex-col gap-3">
-                    <div className="flex items-start gap-2">
-                      <span className="status-pill active" style={{ marginTop: 4 }} />
-                      <div className="flex-col">
-                        <span className="text-xs font-bold">Billing Acceleration</span>
-                        <span className="text-2xs text-muted">Service tiers grew by 18% month over month.</span>
-                      </div>
+                  <div className="card" style={{ padding: '20px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Top Client Contributions</h4>
+                    <div className="flex-col gap-2">
+                      {projects.filter(p => p.client?.name && p.order?.amount).slice(0, 4).map(p => {
+                        const share = totalRevenue > 0 ? Math.round((p.order.amount / totalRevenue) * 100) : 0;
+                        return (
+                          <div key={p._id} className="employee-status-row">
+                            <div className="employee-status-left">
+                              <div className="avatar avatar-xs" style={{ background: getAvatarColor(p.client?._id) }}>
+                                {getInitials(p.client?.name)}
+                              </div>
+                              <span className="text-xs font-semibold" style={{ marginLeft: 8 }}>{p.client?.name}</span>
+                            </div>
+                            <span className="text-xs font-bold text-accent">₹{(p.order.amount/1000).toFixed(0)}k ({share}%)</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="status-pill pending" style={{ marginTop: 4 }} />
-                      <div className="flex-col">
-                        <span className="text-xs font-bold">Payouts Under Review</span>
-                        <span className="text-2xs text-muted">{projects.filter(p => p.status === 'review').length} client deliverables are awaiting payouts.</span>
+                  </div>
+
+                  <div className="card" style={{ padding: '20px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Monthly Intelligence</h4>
+                    <div className="flex-col gap-3">
+                      <div className="flex items-start gap-2">
+                        <span className="status-pill active" style={{ marginTop: 4 }} />
+                        <div className="flex-col">
+                          <span className="text-xs font-bold">Billing Acceleration</span>
+                          <span className="text-2xs text-muted">Service tiers grew by 18% month over month.</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="status-pill inactive" style={{ marginTop: 4 }} />
-                      <div className="flex-col">
-                        <span className="text-xs font-bold">Category Distribution</span>
-                        <span className="text-2xs text-muted"><strong>{bestCategory}</strong> remains your top grossing segment.</span>
+                      <div className="flex items-start gap-2">
+                        <span className="status-pill pending" style={{ marginTop: 4 }} />
+                        <div className="flex-col">
+                          <span className="text-xs font-bold">Payouts Under Review</span>
+                          <span className="text-2xs text-muted">{projects.filter(p => p.status === 'review').length} client deliverables are awaiting payouts.</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="status-pill inactive" style={{ marginTop: 4 }} />
+                        <div className="flex-col">
+                          <span className="text-xs font-bold">Category Distribution</span>
+                          <span className="text-2xs text-muted"><strong>{bestCategory}</strong> remains your top grossing segment.</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
+                {showCustomModal && (
+                  <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    backdropFilter: 'blur(4px)'
+                  }}>
+                    <div className="card animate-fade-in" style={{ width: '320px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--white)', borderRadius: '16px', border: '1px solid var(--gray-200)' }}>
+                      <h3 className="section-title" style={{ fontSize: '16px', fontWeight: 800 }}>Custom Date Range</h3>
+                      <div className="flex-col gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <label className="text-xs font-semibold text-gray-500" style={{ marginBottom: 4 }}>Start Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={customRange.startDate}
+                          onChange={e => setCustomRange(prev => ({ ...prev, startDate: e.target.value }))}
+                          style={{ padding: '8px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px' }}
+                        />
+                      </div>
+                      <div className="flex-col gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <label className="text-xs font-semibold text-gray-500" style={{ marginBottom: 4 }}>End Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={customRange.endDate}
+                          onChange={e => setCustomRange(prev => ({ ...prev, endDate: e.target.value }))}
+                          style={{ padding: '8px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px' }}
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end mt-4" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setShowCustomModal(false)} style={{ padding: '6px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'transparent' }}>Cancel</button>
+                        <button
+                          className="btn btn-accent btn-sm"
+                          disabled={!customRange.startDate || !customRange.endDate}
+                          onClick={() => {
+                            setActiveFilter('Custom');
+                            setShowCustomModal(false);
+                          }}
+                          style={{ padding: '6px 12px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}
+                        >
+                          Apply Range
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              {showCustomModal && (
-                <div style={{
-                  position: 'fixed',
-                  inset: 0,
-                  background: 'rgba(0,0,0,0.5)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 9999,
-                  backdropFilter: 'blur(4px)'
-                }}>
-                  <div className="card animate-fade-in" style={{ width: '320px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--white)', borderRadius: '16px', border: '1px solid var(--gray-200)' }}>
-                    <h3 className="section-title" style={{ fontSize: '16px', fontWeight: 800 }}>Custom Date Range</h3>
-                    <div className="flex-col gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
-                      <label className="text-xs font-semibold text-gray-500" style={{ marginBottom: 4 }}>Start Date</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={customRange.startDate}
-                        onChange={e => setCustomRange(prev => ({ ...prev, startDate: e.target.value }))}
-                        style={{ padding: '8px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px' }}
-                      />
-                    </div>
-                    <div className="flex-col gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
-                      <label className="text-xs font-semibold text-gray-500" style={{ marginBottom: 4 }}>End Date</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={customRange.endDate}
-                        onChange={e => setCustomRange(prev => ({ ...prev, endDate: e.target.value }))}
-                        style={{ padding: '8px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px' }}
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end mt-4" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setShowCustomModal(false)} style={{ padding: '6px 12px', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'transparent' }}>Cancel</button>
-                      <button
-                        className="btn btn-accent btn-sm"
-                        disabled={!customRange.startDate || !customRange.endDate}
-                        onClick={() => {
-                          setActiveFilter('Custom');
-                          setShowCustomModal(false);
-                        }}
-                        style={{ padding: '6px 12px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}
-                      >
-                        Apply Range
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            )
           )}
 
           {isLoading ? (
@@ -1590,44 +1594,46 @@ export default function OverviewPage({
               </div>
             </div>
           ) : (
-            <div className="card mt-6">
-              <div className="card-header">
-                <h3 className="section-title">Recent Updates</h3>
-                <span className="badge badge-accent">{recentNotifications.length}</span>
-              </div>
-              <div className="card-body p-0">
-                {recentNotifications.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">
-                      <Bell size={24} />
+            user.role !== 'EMPLOYEE' && (
+              <div className="card mt-6">
+                <div className="card-header">
+                  <h3 className="section-title">Recent Updates</h3>
+                  <span className="badge badge-accent">{recentNotifications.length}</span>
+                </div>
+                <div className="card-body p-0">
+                  {recentNotifications.length === 0 ? (
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <Bell size={24} />
+                      </div>
+                      <p className="empty-title">All caught up</p>
+                      <p className="empty-desc">No new notifications</p>
                     </div>
-                    <p className="empty-title">All caught up</p>
-                    <p className="empty-desc">No new notifications</p>
-                  </div>
-                ) : (
-                  <div className="activity-feed">
-                    {recentNotifications.map((n) => {
-                      const typeColors = { info: '#3B82F6', success: '#10B981', warning: '#F59E0B', error: '#EF4444', critical: '#DC2626' };
-                      const dotColor = typeColors[n.type] || '#F97316';
-                      return (
-                        <div key={n._id} className="activity-item">
-                          <div className="activity-icon" style={{ background: `${n.color || dotColor}18`, color: n.color || dotColor }}>
-                            <Bell size={16} />
-                          </div>
-                          <div className="activity-content">
-                            <div className="activity-text"><strong>{n.title}</strong></div>
-                            <div className="activity-text text-muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>{n.message}</div>
-                            <div className="activity-time">
-                              {formatTimeAgo ? formatTimeAgo(n.createdAt) : new Date(n.createdAt).toLocaleString()}
+                  ) : (
+                    <div className="activity-feed">
+                      {recentNotifications.map((n) => {
+                        const typeColors = { info: '#3B82F6', success: '#10B981', warning: '#F59E0B', error: '#EF4444', critical: '#DC2626' };
+                        const dotColor = typeColors[n.type] || '#F97316';
+                        return (
+                          <div key={n._id} className="activity-item">
+                            <div className="activity-icon" style={{ background: `${n.color || dotColor}18`, color: n.color || dotColor }}>
+                              <Bell size={16} />
+                            </div>
+                            <div className="activity-content">
+                              <div className="activity-text"><strong>{n.title}</strong></div>
+                              <div className="activity-text text-muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>{n.message}</div>
+                              <div className="activity-time">
+                                {formatTimeAgo ? formatTimeAgo(n.createdAt) : new Date(n.createdAt).toLocaleString()}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
       )}

@@ -6,7 +6,9 @@ axios.defaults.withCredentials = true;
 
 const redirectByRole = (role) => {
   const normalized = role ? role.toUpperCase() : '';
-  if (normalized === 'SUPER_ADMIN') {
+  if (normalized === 'BACKUP_ADMIN') {
+    window.location.href = '/backup';
+  } else if (normalized === 'SUPER_ADMIN') {
     window.location.href = '/admin';
   } else if (normalized === 'MANAGER') {
     window.location.href = '/manager';

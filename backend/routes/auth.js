@@ -153,14 +153,13 @@ router.post('/logout-all', protect, logoutAllDevices);
 router.get('/staff', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res, next) => {
   try {
     const staff = await User.find({ role: { $in: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'] } })
-      .select('name email role status mustChangePassword lastActive department skills phone');
+      .select('name email role status mustChangePassword lastActive department skills phone invitationExpires');
     return res.status(200).json({ success: true, data: staff });
   } catch (err) {
     next(err);
   }
 });
 
-// 2. Invite a new Manager / Employee (Super Admin Only)
 // 2. Invite a new Manager / Employee (Super Admin Only)
 router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
@@ -175,10 +174,12 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
       return res.status(400).json({ error: 'Invalid role assignment. Must be MANAGER, EMPLOYEE, or CLIENT.' });
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Check if user already exists
-    const userExists = await User.findOne({ email: email.toLowerCase() });
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
-      return res.status(400).json({ error: 'A user with this email address already exists.' });
+      return res.status(409).json({ error: 'A user with this email address already exists.' });
     }
 
     // Generate secure invitation token and hash before storing
@@ -189,7 +190,7 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
     // Create User document
     const user = new User({
       name,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       phone: phone || '',
       password: crypto.randomBytes(16).toString('hex'), // temp key
       role: targetRole,

@@ -9,7 +9,7 @@ import whatsappService, { sendOrderCompletedWhatsApp, sendTaskNotification } fro
 import { sendDeliveryEmail, sendEmployeeTaskAlertEmail, sendEmail } from '../services/emailService.js';
 import { uploadFileToFolder } from '../services/driveService.js';
 import { config } from '../config/env.js';
-import { notifyStaff, notifyUser } from '../services/notificationService.js';
+import { notifyStaff, notifyUser, sendProjectAssignmentNotifications } from '../services/notificationService.js';
 
 /**
  * Lists all projects
@@ -53,7 +53,53 @@ export const getProjects = async (req, res, next) => {
       projects = projects.filter(p => p.client !== null);
     }
 
-    return res.status(200).json({ success: true, data: projects });
+    // Role-based sanitization of sensitive client & financial information
+    const sanitizedProjects = projects.map(proj => {
+      const p = proj.toObject ? proj.toObject() : proj;
+      
+      if (req.user.role === 'MANAGER') {
+        // Managers MUST NOT see client email, client phone, notes, invoices, payments, financial info
+        if (p.client) {
+          p.client.email = undefined;
+          p.client.phone = undefined;
+          p.client.notes = undefined;
+          p.client.invoices = undefined;
+          p.client.payments = undefined;
+        }
+        if (p.order) {
+          p.order.email = undefined;
+          p.order.phone = undefined;
+          p.order.amount = undefined;
+          p.order.budget = undefined;
+          p.order.razorpayOrderId = undefined;
+          p.order.razorpayPaymentId = undefined;
+          p.order.invoiceUrl = undefined;
+        }
+      } else if (req.user.role === 'EMPLOYEE') {
+        // Employees MUST NOT see client name/email/phone, payments, invoices, notes, revenue
+        if (p.client) {
+          p.client.name = undefined;
+          p.client.email = undefined;
+          p.client.phone = undefined;
+          p.client.notes = undefined;
+          p.client.invoices = undefined;
+          p.client.payments = undefined;
+        }
+        if (p.order) {
+          p.order.clientName = undefined;
+          p.order.email = undefined;
+          p.order.phone = undefined;
+          p.order.amount = undefined;
+          p.order.budget = undefined;
+          p.order.razorpayOrderId = undefined;
+          p.order.razorpayPaymentId = undefined;
+          p.order.invoiceUrl = undefined;
+        }
+      }
+      return p;
+    });
+
+    return res.status(200).json({ success: true, data: sanitizedProjects });
   } catch (err) {
     next(err);
   }
@@ -122,63 +168,13 @@ export const assignStaff = async (req, res, next) => {
     // Alert staff users
     const ioDispatcher = req.app.get('socketio_dispatch');
 
-    if (managerId) {
-      await notifyUser({
-        userId: managerId,
-        title: 'Project Assigned',
-        message: `You are now managing project: ${project.name}`,
-        type: 'info',
-        priority: 'high',
-        referenceId: project._id.toString(),
-        referenceModel: 'Project',
-        actionUrl: '/admin?tab=projects',
-        dispatcher: ioDispatcher
-      });
-    }
-
-    if (employeeIds && employeeIds.length > 0) {
-      for (const empId of employeeIds) {
-        const emp = await User.findById(empId);
-        if (emp) {
-          await notifyUser({
-            userId: empId,
-            title: 'Project Assigned',
-            message: `You are assigned to work on project: ${project.name}`,
-            type: 'info',
-            priority: 'high',
-            referenceId: project._id.toString(),
-            referenceModel: 'Project',
-            actionUrl: '/employee',
-            dispatcher: ioDispatcher,
-            metadata: { projectName: project.name }
-          });
-
-          await notifyStaff({
-            title: 'Project Assigned',
-            message: `${emp.name} was assigned to project: ${project.name}`,
-            type: 'info',
-            priority: 'high',
-            referenceId: project._id.toString(),
-            referenceModel: 'Project',
-            dispatcher: ioDispatcher,
-            metadata: { employeeName: emp.name, projectName: project.name }
-          });
-          
-          sendEmployeeTaskAlertEmail(emp.name, emp.email, project.name, project.estimatedCompletion).catch(console.error);
-        }
-      }
-    }
+    await sendProjectAssignmentNotifications(project._id, ioDispatcher);
 
     await logEvent({
       userId: req.user._id,
       userName: req.user.name,
       action: 'TASK_ASSIGNED',
       details: { projectId: project._id, managerId, employeeIds }
-    });
-
-    // Send WhatsApp work notifications asynchronously
-    sendTaskNotification(project._id, employeeIds).catch(err => {
-      console.error('[WA-NOTIFICATION] Failed to send WhatsApp notifications:', err.message);
     });
 
     return res.status(200).json({ success: true, data: project });
@@ -245,7 +241,7 @@ export const assignTask = async (req, res, next) => {
       await notifyUser({
         userId: assignedTo,
         title: 'Task Assigned',
-        message: `New task assigned: ${task.name}. Due: ${new Date(task.deadline).toLocaleDateString()}`,
+        message: 'A new task has been assigned to you. Please review the requirements and update the status as you make progress.',
         type: 'info',
         priority: 'high',
         referenceId: task._id.toString(),
@@ -253,6 +249,19 @@ export const assignTask = async (req, res, next) => {
         dispatcher: ioDispatcher,
         metadata: { taskName: task.name, deadline: task.deadline, projectId: task.project?._id?.toString() }
       });
+
+      if (req.user) {
+        await notifyUser({
+          userId: req.user._id,
+          title: 'Task Assigned',
+          message: 'A new task has been assigned successfully.',
+          type: 'success',
+          priority: 'medium',
+          referenceId: task._id.toString(),
+          referenceModel: 'Task',
+          dispatcher: ioDispatcher
+        });
+      }
 
       sendEmployeeTaskAlertEmail(employee.name, employee.email, task.name, task.deadline).catch(console.error);
 
@@ -295,32 +304,34 @@ export const submitTask = async (req, res, next) => {
 
     // Notify Project Manager / Admin
     const managerId = task.project.manager;
+    const ioDispatcher = req.app.get('socketio_dispatch');
+
     if (managerId) {
-      const ioDispatcher = req.app.get('socketio_dispatch');
       await notifyUser({
         userId: managerId,
-        title: 'Task Completed',
-        message: `Employee ${req.user.name} submitted work for: ${task.name}`,
-        type: 'success',
+        title: 'Project Submitted',
+        message: 'A team member has submitted work for review.',
+        type: 'info',
         priority: 'high',
-        referenceId: task._id.toString(),
-        referenceModel: 'Task',
+        referenceId: task.project?._id?.toString() || task.project?.toString(),
+        referenceModel: 'Project',
         actionUrl: '/admin?tab=projects',
         dispatcher: ioDispatcher,
         metadata: { employeeName: req.user.name, taskName: task.name, submissionUrl }
       });
     }
 
-    await notifyStaff({
-      title: 'Task Completed',
-      message: `${req.user.name} completed task: ${task.name}`,
-      type: 'success',
-      priority: 'high',
-      referenceId: task._id.toString(),
-      referenceModel: 'Task',
-      dispatcher: req.app.get('socketio_dispatch'),
-      metadata: { employeeName: req.user.name, taskName: task.name }
+    await notifyUser({
+      userId: req.user._id,
+      title: 'Project Submitted',
+      message: 'Your work has been submitted for review.',
+      type: 'info',
+      priority: 'medium',
+      referenceId: task.project?._id?.toString() || task.project?.toString(),
+      referenceModel: 'Project',
+      dispatcher: ioDispatcher
     });
+
 
     await logEvent({
       userId: req.user._id,
@@ -362,14 +373,27 @@ export const reviewTask = async (req, res, next) => {
       if (task.assignedTo) {
         await notifyUser({
           userId: task.assignedTo,
-          title: 'Task Rejected',
-          message: `Feedback on task '${task.name}': ${feedback}`,
+          title: 'Revision Required',
+          message: 'Your submission needs a few changes. Please review the feedback and resubmit.',
           type: 'warning',
           priority: 'high',
-          referenceId: task._id.toString(),
-          referenceModel: 'Task',
+          referenceId: task.project?._id?.toString() || task.project?.toString(),
+          referenceModel: 'Project',
           dispatcher: ioDispatcher,
           metadata: { taskName: task.name, feedback }
+        });
+      }
+
+      if (req.user) {
+        await notifyUser({
+          userId: req.user._id,
+          title: 'Revision Required',
+          message: 'Revision request sent to the assigned employee.',
+          type: 'info',
+          priority: 'medium',
+          referenceId: task.project?._id?.toString() || task.project?.toString(),
+          referenceModel: 'Project',
+          dispatcher: ioDispatcher
         });
       }
 
@@ -391,14 +415,27 @@ export const reviewTask = async (req, res, next) => {
       if (task.assignedTo) {
         await notifyUser({
           userId: task.assignedTo,
-          title: 'Task Approved',
-          message: `Great job! Your submission for '${task.name}' has been approved.`,
+          title: 'Project Approved',
+          message: 'Your submission has been approved. Great work!',
           type: 'success',
           priority: 'high',
-          referenceId: task._id.toString(),
-          referenceModel: 'Task',
+          referenceId: task.project?._id?.toString() || task.project?.toString(),
+          referenceModel: 'Project',
           dispatcher: ioDispatcher,
           metadata: { taskName: task.name }
+        });
+      }
+
+      if (req.user) {
+        await notifyUser({
+          userId: req.user._id,
+          title: 'Project Approved',
+          message: 'Project work approved successfully.',
+          type: 'success',
+          priority: 'medium',
+          referenceId: task.project?._id?.toString() || task.project?.toString(),
+          referenceModel: 'Project',
+          dispatcher: ioDispatcher
         });
       }
 
@@ -643,6 +680,66 @@ export const trackTaskTime = async (req, res, next) => {
     }
 
     await task.save();
+
+    try {
+      const ioDispatcher = req.app.get('socketio_dispatch');
+      const projectObj = await Project.findById(task.project);
+      
+      if (action === 'start') {
+        if (task.assignedTo) {
+          await notifyUser({
+            userId: task.assignedTo,
+            title: 'Project Started',
+            message: 'Work has started on your assigned project.',
+            type: 'info',
+            priority: 'medium',
+            referenceId: projectObj?._id?.toString() || task.project?.toString(),
+            referenceModel: 'Project',
+            dispatcher: ioDispatcher
+          });
+        }
+        if (projectObj && projectObj.manager) {
+          await notifyUser({
+            userId: projectObj.manager,
+            title: 'Project Started',
+            message: 'Your team has started working on the project.',
+            type: 'info',
+            priority: 'medium',
+            referenceId: projectObj._id.toString(),
+            referenceModel: 'Project',
+            dispatcher: ioDispatcher
+          });
+        }
+      } else if (action === 'complete') {
+        if (task.assignedTo) {
+          await notifyUser({
+            userId: task.assignedTo,
+            title: 'Project Submitted',
+            message: 'Your work has been submitted for review.',
+            type: 'info',
+            priority: 'medium',
+            referenceId: projectObj?._id?.toString() || task.project?.toString(),
+            referenceModel: 'Project',
+            dispatcher: ioDispatcher
+          });
+        }
+        if (projectObj && projectObj.manager) {
+          await notifyUser({
+            userId: projectObj.manager,
+            title: 'Project Submitted',
+            message: 'A team member has submitted work for review.',
+            type: 'info',
+            priority: 'high',
+            referenceId: projectObj._id.toString(),
+            referenceModel: 'Project',
+            dispatcher: ioDispatcher
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Time tracking notification failed:', notifErr.message);
+    }
+
     return res.status(200).json({ success: true, data: task });
   } catch (err) {
     next(err);
@@ -698,14 +795,13 @@ export const finalApproveProject = async (req, res, next) => {
         if (t.assignedTo) {
           await notifyUser({
             userId: t.assignedTo,
-            title: 'Task Rejected',
-            message: `Final delivery review rejected for revision: ${feedback}`,
+            title: 'Revision Required',
+            message: 'Your submission needs a few changes. Please review the feedback and resubmit.',
             type: 'warning',
             priority: 'high',
-            referenceId: t._id.toString(),
-            referenceModel: 'Task',
-            dispatcher: ioDispatcher,
-            metadata: { taskName: t.name, feedback }
+            referenceId: project._id.toString(),
+            referenceModel: 'Project',
+            dispatcher: ioDispatcher
           });
         }
       }
@@ -714,15 +810,14 @@ export const finalApproveProject = async (req, res, next) => {
       if (project.manager) {
         await notifyUser({
           userId: project.manager,
-          title: 'Project Rework Required',
-          message: `Project '${project.name}' final delivery was rejected. Feedback: ${feedback}`,
+          title: 'Revision Required',
+          message: 'Revision request sent to the assigned employee.',
           type: 'warning',
-          priority: 'critical',
+          priority: 'high',
           referenceId: project._id.toString(),
           referenceModel: 'Project',
           actionUrl: '/admin?tab=projects',
-          dispatcher: ioDispatcher,
-          metadata: { projectName: project.name, feedback }
+          dispatcher: ioDispatcher
         });
       }
 
@@ -792,6 +887,36 @@ export const finalApproveProject = async (req, res, next) => {
           </div>
         `
       }).catch(console.error);
+
+      // Notify Assigned Employees of Project Completion
+      if (project.employees && project.employees.length > 0) {
+        for (const empId of project.employees) {
+          await notifyUser({
+            userId: empId,
+            title: 'Project Completed',
+            message: 'This project has been marked as completed. Thank you for your work.',
+            type: 'success',
+            priority: 'high',
+            referenceId: project._id.toString(),
+            referenceModel: 'Project',
+            dispatcher: ioDispatcher
+          });
+        }
+      }
+
+      // Notify Project Manager
+      if (project.manager) {
+        await notifyUser({
+          userId: project.manager,
+          title: 'Project Completed',
+          message: 'The project has been completed successfully.',
+          type: 'success',
+          priority: 'high',
+          referenceId: project._id.toString(),
+          referenceModel: 'Project',
+          dispatcher: ioDispatcher
+        });
+      }
 
       await notifyStaff({
         title: 'Project Delivered',

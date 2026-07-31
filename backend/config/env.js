@@ -52,6 +52,16 @@ export const config = {
   mongoUri: process.env.MONGO_URI || process.env.MONGODB_URI,
   
   // ##################################
+  // BACKUP SYSTEM CONFIGURATION
+  // ##################################
+  backupMongoUri: process.env.BACKUP_MONGODB_URI,
+  backupAdminEmail: process.env.BACKUP_ADMIN_EMAIL || 'shaikrehman78609@gmail.com',
+  backupAdminPassword: process.env.BACKUP_ADMIN_PASSWORD || 'vcm@Backup2026',
+  backupAdminName: process.env.BACKUP_ADMIN_NAME || 'Backup Administrator',
+  backupAdminRole: process.env.BACKUP_ADMIN_ROLE || 'backup_admin',
+  backupJwtSecret: process.env.BACKUP_JWT_SECRET || process.env.JWT_SECRET,
+  
+  // ##################################
   // JWT CONFIGURATION
   // Required: Set JWT_SECRET and JWT_REFRESH_SECRET in .env
   // ##################################

@@ -9,6 +9,8 @@ import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import AnimatedCounter from './components/shared/AnimatedCounter.jsx';
 import { clientTestimonials } from './data/clientTestimonials.js';
+import PartnerLoginPage from './components/PartnerLoginPage.jsx';
+import PartnerDashboardPage from './components/PartnerDashboardPage.jsx';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -16,7 +18,7 @@ const ClipEditingPage = React.lazy(() => import('./components/ClipEditingPage.js
 const PodcastEditingPage = React.lazy(() => import('./components/PodcastEditingPage.jsx'));
 const MarketingPage = React.lazy(() => import('./components/MarketingPage.jsx'));
 const WebDevelopmentPage = React.lazy(() => import('./components/WebDevelopmentPage.jsx'));
-const RealEstatePage = React.lazy(() => import('./components/RealEstatePage.jsx'));
+
 import {
   Clock3,
   BarChart3,
@@ -975,36 +977,6 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
                 </div>
               </div>
 
-              {/* Card 5: Real Estate Walkthroughs */}
-              <div className="premium-service-card card-real-estate">
-                <div>
-                  <div className="premium-card-badge">REAL ESTATE</div>
-                  <div className="premium-card-header">
-                    <h3 className="premium-service-title">Cinematic Walkthroughs</h3>
-                    <span className="premium-service-subtitle">Perfect For: Realtors & Brokers</span>
-                  </div>
-                  
-                  <div className="premium-card-divider"></div>
-                  
-                  <p className="premium-one-liner-val">Luxury real estate property walkthroughs and listing showpieces.</p>
-                  
-                  <div className="premium-card-divider"></div>
-                  
-                  <div className="card-section-block">
-                    <ul className="deliverables-list">
-                      <li>✓ Sunset Sky Swap Grading</li>
-                      <li>✓ Smooth Drone Pan Stabilization</li>
-                      <li>✓ Cinematic Real Estate Walkthroughs</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="premium-pricing-cta">
-                  <Link to="/services/real-estate-video-editing" className="btn-premium-cta">
-                    Customize Service &rarr;
-                  </Link>
-                </div>
-              </div>
 
             </div>
           </div>
@@ -1241,6 +1213,7 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
 
 import axios from 'axios';
 import { Navigate, Link } from 'react-router-dom';
+import BackupPortalPage from './components/BackupPortalPage.jsx';
 
 export const AuthContext = createContext(null);
 
@@ -1304,13 +1277,72 @@ function ProtectedRoute({ children, allowedRoles }) {
   return children;
 }
 
+export const PartnerAuthContext = createContext(null);
+
+export function usePartnerAuth() {
+  return useContext(PartnerAuthContext);
+}
+
+export function PartnerAuthProvider({ children }) {
+  const [partner, setPartner] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    axios.get('/api/partners/me')
+      .then(res => {
+        setPartner(res.data.partner);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  return (
+    <PartnerAuthContext.Provider value={{ partner, setPartner, loading }}>
+      {children}
+    </PartnerAuthContext.Provider>
+  );
+}
+
+function PartnerProtectedRoute({ children }) {
+  const { partner, loading } = usePartnerAuth();
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B0B0C', color: '#FFF' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <span className="spinner" style={{ border: '3px solid rgba(255,106,0,0.1)', borderTopColor: 'var(--accent)', borderRadius: '50%', width: '24px', height: '24px', animation: 'spin 1s linear infinite' }}></span>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.85rem', color: '#A1A1AA' }}>Validating partner credentials...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!partner) {
+    return <Navigate to="/partner/login" replace />;
+  }
+
+  return children;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
     <AuthProvider>
+    <PartnerAuthProvider>
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/partner/login" element={<PartnerLoginPage />} />
+        <Route 
+          path="/partner/*" 
+          element={
+            <PartnerProtectedRoute>
+              <PartnerDashboardPage />
+            </PartnerProtectedRoute>
+          } 
+        />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<AcceptInvitationPage />} />
         <Route path="/accept-invitation/:token" element={<AcceptInvitationPage />} />
@@ -1332,11 +1364,14 @@ export default function App() {
             <WebDevelopmentPage />
           </React.Suspense>
         } />
-        <Route path="/services/real-estate-video-editing" element={
-          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Real Estate...</div>}>
-            <RealEstatePage />
-          </React.Suspense>
-        } />
+        <Route 
+          path="/backup/*" 
+          element={
+            <ProtectedRoute allowedRoles={['BACKUP_ADMIN']}>
+              <BackupPortalPage />
+            </ProtectedRoute>
+          } 
+        />
         <Route 
           path="/dashboard/*" 
           element={
@@ -1379,6 +1414,7 @@ export default function App() {
         />
       </Routes>
     </Router>
+    </PartnerAuthProvider>
     </AuthProvider>
     </ErrorBoundary>
   );

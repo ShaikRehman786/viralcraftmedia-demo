@@ -25,15 +25,15 @@ const COMMANDS = [
 ];
 
 const ROLE_ACCESS = {
-  overview: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
+  overview: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
   projects: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
-  calendar: ['SUPER_ADMIN', 'MANAGER'],
-  staff: ['SUPER_ADMIN'],
+  calendar: ['SUPER_ADMIN'],
+  staff: ['SUPER_ADMIN', 'MANAGER'],
   logs: ['SUPER_ADMIN'],
-  enquiries: ['SUPER_ADMIN', 'MANAGER'],
-  whatsapp: ['SUPER_ADMIN', 'MANAGER'],
+  enquiries: ['SUPER_ADMIN'],
+  whatsapp: ['SUPER_ADMIN'],
   payments: ['CLIENT', 'SUPER_ADMIN'],
-  'notification-center': ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
+  'notification-center': ['SUPER_ADMIN'],
 };
 
 const TAB_LABELS = {
@@ -55,6 +55,14 @@ function canAccess(pageId, role) {
 }
 
 export default function TopBar({ user, unreadCount, notifications, sidebarOpen, setSidebarOpen, activeTab, onNavigate, onMarkRead, onMarkAllRead }) {
+  const getTabLabel = (tabId) => {
+    if (tabId === 'overview') {
+      if (user?.role === 'EMPLOYEE') return 'My Dashboard';
+      if (user?.role === 'MANAGER') return 'Dashboard';
+    }
+    return TAB_LABELS[tabId] || tabId;
+  };
+
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -165,7 +173,7 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
             <Menu size={18} />
           </button>
           <div className="header-breadcrumb">
-            <span>{TAB_LABELS[activeTab] || activeTab}</span>
+            <span>{getTabLabel(activeTab)}</span>
           </div>
         </div>
 

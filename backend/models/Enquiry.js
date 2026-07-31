@@ -25,7 +25,7 @@ const enquirySchema = new mongoose.Schema({
   },
   serviceCategory: {
     type: String,
-    enum: ['Clip Editing', 'Podcast Editing', 'Social Media Marketing', 'Website Design & Development', 'Real Estate Video Editing'],
+    enum: ['Clip Editing', 'Podcast Editing', 'Social Media Marketing', 'Website Design & Development'],
     required: true
   },
   description: {

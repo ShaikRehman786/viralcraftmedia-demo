@@ -29,11 +29,25 @@ import StaffPage from './StaffPage.jsx';
 import LogsPage from './LogsPage.jsx';
 import EnquiriesPage from './EnquiriesPage.jsx';
 import PaymentsPage from './PaymentsPage.jsx';
+import ReferralManagementPage from './ReferralManagementPage.jsx';
 
 axios.defaults.withCredentials = true;
 
 const SOCKET_URL = import.meta.env.VITE_API_URL;
 const getSocketUrl = () => SOCKET_URL;
+
+const ROLE_ACCESS = {
+  overview: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
+  projects: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
+  calendar: ['SUPER_ADMIN'],
+  staff: ['SUPER_ADMIN', 'MANAGER'],
+  logs: ['SUPER_ADMIN'],
+  enquiries: ['SUPER_ADMIN'],
+  whatsapp: ['SUPER_ADMIN'],
+  payments: ['CLIENT', 'SUPER_ADMIN'],
+  'notification-center': ['SUPER_ADMIN'],
+  referrals: ['SUPER_ADMIN'],
+};
 
 export default function DashboardPage() {
   const { user, setUser } = useAuth();
@@ -55,6 +69,19 @@ export default function DashboardPage() {
       navigate(`/${basePath}/${tabId}`, { replace: false });
     }
   }, [navigate, location.pathname]);
+
+  useEffect(() => {
+    if (!user) return;
+    const allowedRoles = ROLE_ACCESS[activeTab];
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+      let fallback = 'overview';
+      if (user.role === 'CLIENT') {
+        fallback = 'projects';
+      }
+      setActiveTab(fallback);
+    }
+  }, [activeTab, user, setActiveTab]);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toasts, addToast, removeToast } = useToast();
   const [projects, setProjects] = useState([]);
@@ -217,7 +244,7 @@ export default function DashboardPage() {
             acceptedAt: p.acceptedAt,
             acceptedBy: p.acceptedBy,
             assignments: p.assignments,
-            client: p.client ? { _id: p.client._id, name: p.client.name } : undefined,
+            client: undefined,
             order: undefined
           })));
         } else {
@@ -399,6 +426,7 @@ export default function DashboardPage() {
       whatsapp: ['SUPER_ADMIN', 'MANAGER'],
       payments: ['CLIENT', 'SUPER_ADMIN'],
       'notification-center': ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
+      referrals: ['SUPER_ADMIN'],
     };
 
     const canAccessTab = (tabId, role) => {
@@ -1215,6 +1243,9 @@ export default function DashboardPage() {
             )}
             {activeTab === 'notification-center' && (
               <NotificationCenterPage user={user} formatTimeAgo={formatTimeAgo} />
+            )}
+            {activeTab === 'referrals' && (
+              <ReferralManagementPage user={user} addToast={addToast} />
             )}
           </div>
         </div>

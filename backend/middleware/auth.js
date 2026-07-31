@@ -23,8 +23,20 @@ export const protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, config.jwtSecret);
 
-    // Get user from database, excluding password
-    const user = await User.findById(decoded.id);
+    let user;
+    if (decoded.id === 'backup_admin_mock_id_placeholder' || decoded.role === 'BACKUP_ADMIN') {
+      user = {
+        _id: 'backup_admin_mock_id_placeholder',
+        name: 'System Backup Admin',
+        email: (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase(),
+        role: 'BACKUP_ADMIN',
+        status: 'active'
+      };
+    } else {
+      // Get user from database, excluding password
+      user = await User.findById(decoded.id);
+    }
+
     if (!user || user.status === 'inactive') {
       return res.status(401).json({ error: 'User is inactive or no longer exists.' });
     }
@@ -50,6 +62,24 @@ export const protect = async (req, res, next) => {
     }
 
     req.user = user;
+
+    // Intercept backup admin account for database isolation and read-only lockdown
+    const backupAdminEmail = (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase();
+    if (user.email.toLowerCase() === backupAdminEmail) {
+      if (req.method !== 'GET' && !req.path.toLowerCase().endsWith('/logout')) {
+        return res.status(403).json({ 
+          error: 'Access Denied', 
+          message: 'Read-only access. Write operations are disabled for the backup account.' 
+        });
+      }
+
+      // Dynamic import to prevent circular dependencies on bootstrap
+      const { runInBackupContext } = await import('../services/backupService.js');
+      return runInBackupContext(() => {
+        next();
+      });
+    }
+
     next();
   } catch (err) {
     console.warn('Access token verification failed:', err.message);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Scissors, Activity, TrendingUp, Monitor, Home, Play, Heart, MessageCircle, Bookmark, Zap, Target, Layers, UserCheck, Clock, Shield, UploadCloud, DownloadCloud } from 'lucide-react';
+import { Scissors, Activity, TrendingUp, Monitor, Play, Heart, MessageCircle, Bookmark, Zap, Target, Layers, UserCheck, Clock, Shield, UploadCloud, DownloadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Footer from './Footer.jsx';
 import AnimatedCounter from './shared/AnimatedCounter.jsx';
@@ -595,19 +595,6 @@ export default function ClipEditingPage() {
                 <Link to="/services/web-design-development" className="btn btn-ghost" style={{ width: '100%', marginTop: '24px', textAlign: 'center', display: 'block' }}>Start Project</Link>
               </div>
 
-              {/* Service 5: Real Estate Video Editing */}
-              <div className="svc-card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
-                <div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={Home} size={44} color="#EF4444" className="svc-icon" />
-                    <div className="svc-hdr-group">
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Real Estate Video</h3>
-                    </div>
-                  </div>
-                  <p style={{ color: '#575F6E', fontSize: '0.9rem', lineHeight: '1.6' }}>Cinema-grade real estate video editing engineered to capture property value and drive buyer leads.</p>
-                </div>
-                <Link to="/services/real-estate-video-editing" className="btn btn-ghost" style={{ width: '100%', marginTop: '24px', textAlign: 'center', display: 'block' }}>Book Project</Link>
-              </div>
 
             </div>
           </div>

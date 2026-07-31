@@ -30,8 +30,7 @@ const CATEGORY_ICONS = {
   'Clip Editing': '🎬',
   'Podcast Editing': '🎙',
   'Social Media Marketing': '📈',
-  'Website Design & Development': '🌐',
-  'Real Estate Video Editing': '🏠'
+  'Website Design & Development': '🌐'
 };
 
 export default function EnquiriesPage({
@@ -86,7 +85,6 @@ export default function EnquiriesPage({
           <option value="Podcast Editing">Podcast Editing</option>
           <option value="Social Media Marketing">Social Media Marketing</option>
           <option value="Website Design & Development">Website Design & Development</option>
-          <option value="Real Estate Video Editing">Real Estate Video Editing</option>
         </select>
       </div>
 

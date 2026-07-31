@@ -30,13 +30,14 @@ const ROLE_META = {
 };
 
 const STATUS_META = {
-  ACTIVE: { label: 'Online', dot: 'sp-dot-online', pill: 'sp-pill-online' },
-  INVITED: { label: 'Invited', dot: 'sp-dot-invited', pill: 'sp-pill-invited' },
-  PENDING_APPROVAL: { label: 'Pending', dot: 'sp-dot-pending', pill: 'sp-pill-pending' },
+  ACTIVE: { label: 'Active Employee', dot: 'sp-dot-online', pill: 'sp-pill-online' },
+  INVITED: { label: 'Pending Invite', dot: 'sp-dot-invited', pill: 'sp-pill-invited' },
+  EXPIRED: { label: 'Expired Invite', dot: 'sp-dot-offline', pill: 'sp-pill-expired' },
+  PENDING_APPROVAL: { label: 'Accepted Invite', dot: 'sp-dot-pending', pill: 'sp-pill-pending' },
   DISABLED: { label: 'Suspended', dot: 'sp-dot-offline', pill: 'sp-pill-suspended' },
-  INACTIVE: { label: 'Inactive', dot: 'sp-dot-offline', pill: 'sp-pill-inactive' },
-  REJECTED: { label: 'Rejected', dot: 'sp-dot-offline', pill: 'sp-pill-inactive' },
-  CANCELLED: { label: 'Cancelled', dot: 'sp-dot-offline', pill: 'sp-pill-inactive' }
+  INACTIVE: { label: 'Deactivated', dot: 'sp-dot-offline', pill: 'sp-pill-inactive' },
+  REJECTED: { label: 'Rejected Invite', dot: 'sp-dot-offline', pill: 'sp-pill-inactive' },
+  CANCELLED: { label: 'Cancelled Invite', dot: 'sp-dot-offline', pill: 'sp-pill-inactive' }
 };
 
 const PERM_CHIPS = {
@@ -49,6 +50,17 @@ function getInitials(name) {
   if (!name) return '?';
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
+
+export const getEffectiveStatus = (member) => {
+  const statusUpper = (member.status || '').toUpperCase();
+  if (statusUpper === 'INVITED') {
+    if (member.invitationExpires && new Date(member.invitationExpires) < new Date()) {
+      return 'EXPIRED';
+    }
+    return 'INVITED';
+  }
+  return statusUpper;
+};
 
 export default function StaffPage({
   user, staff,
@@ -93,17 +105,21 @@ export default function StaffPage({
   }, [staff]);
 
   const stats = useMemo(() => {
-    if (!staff) return { total: 0, online: 0, managers: 0, employees: 0, pending: 0, admins: 0, departments: 0 };
+    if (!staff) return { total: 0, online: 0, managers: 0, employees: 0, pendingInvites: 0, acceptedInvites: 0, offline: 0, departments: 0 };
+    
+    const staffMembers = staff.filter(s => ['ACTIVE', 'DISABLED', 'INACTIVE', 'PENDING_APPROVAL'].includes((s.status || '').toUpperCase()) || s.role === 'SUPER_ADMIN');
+    
     return {
-      total: staff.length,
-      online: staff.filter(s => (s.status || '').toUpperCase() === 'ACTIVE').length,
-      admins: staff.filter(s => s.role === 'SUPER_ADMIN').length,
-      managers: staff.filter(s => s.role === 'MANAGER').length,
-      employees: staff.filter(s => s.role === 'EMPLOYEE').length,
-      pending: staff.filter(s => {
-        const st = (s.status || '').toUpperCase();
-        return st === 'PENDING_APPROVAL' || st === 'INVITED';
+      total: staffMembers.length,
+      managers: staff.filter(s => s.role === 'MANAGER' && ['ACTIVE', 'DISABLED', 'INACTIVE'].includes((s.status || '').toUpperCase())).length,
+      employees: staff.filter(s => s.role === 'EMPLOYEE' && ['ACTIVE', 'DISABLED', 'INACTIVE'].includes((s.status || '').toUpperCase())).length,
+      pendingInvites: staff.filter(s => {
+        const eff = getEffectiveStatus(s);
+        return eff === 'INVITED';
       }).length,
+      acceptedInvites: staff.filter(s => (s.status || '').toUpperCase() === 'PENDING_APPROVAL').length,
+      online: staff.filter(s => (s.status || '').toUpperCase() === 'ACTIVE').length,
+      offline: staffMembers.filter(s => (s.status || '').toUpperCase() !== 'ACTIVE').length,
       departments: new Set(staff.map(s => s.department).filter(Boolean)).size
     };
   }, [staff]);
@@ -111,13 +127,22 @@ export default function StaffPage({
   const filteredStaff = useMemo(() => {
     if (!staff) return [];
     return staff.filter(s => {
+      const effectiveStatus = getEffectiveStatus(s);
+      const statusLabel = STATUS_META[effectiveStatus]?.label || s.status || '';
+      const roleLabel = ROLE_META[s.role]?.label || s.role || '';
+
       const matchesSearch = !search ||
         s.name?.toLowerCase().includes(search.toLowerCase()) ||
         s.email?.toLowerCase().includes(search.toLowerCase()) ||
-        s.department?.toLowerCase().includes(search.toLowerCase());
+        s.phone?.toLowerCase().includes(search.toLowerCase()) ||
+        s.department?.toLowerCase().includes(search.toLowerCase()) ||
+        roleLabel.toLowerCase().includes(search.toLowerCase()) ||
+        statusLabel.toLowerCase().includes(search.toLowerCase());
+
       const matchesRole = roleFilter === 'ALL' || s.role === roleFilter;
-      const matchesStatus = statusFilter === 'ALL' || (s.status || '').toUpperCase() === statusFilter;
+      const matchesStatus = statusFilter === 'ALL' || effectiveStatus === statusFilter;
       const matchesDept = deptFilter === 'ALL' || s.department === deptFilter;
+
       return matchesSearch && matchesRole && matchesStatus && matchesDept;
     });
   }, [staff, search, roleFilter, statusFilter, deptFilter]);
@@ -139,7 +164,7 @@ export default function StaffPage({
         /* ── STAT CARDS ── */
         .sp-stats {
           display: grid;
-          grid-template-columns: repeat(6, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
           gap: 8px;
           margin-bottom: 16px;
         }
@@ -323,6 +348,7 @@ export default function StaffPage({
         }
         .sp-pill-online { background: #ECFDF5; color: #047857; }
         .sp-pill-invited { background: #FFFBEB; color: #B45309; }
+        .sp-pill-expired { background: #FEF3C7; color: #D97706; }
         .sp-pill-pending { background: #FFF7ED; color: #C2410C; }
         .sp-pill-suspended { background: #FEF2F2; color: #B91C1C; }
         .sp-pill-inactive { background: var(--gray-100); color: var(--gray-500); }
@@ -439,12 +465,12 @@ export default function StaffPage({
 
         @media (max-width: 1200px) {
           .sp-grid { grid-template-columns: repeat(2, 1fr); }
-          .sp-stats { grid-template-columns: repeat(3, 1fr); }
+          .sp-stats { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
         }
         @media (max-width: 768px) {
           .sp-root { padding: 1rem; }
           .sp-grid { grid-template-columns: 1fr; gap: 8px; }
-          .sp-stats { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+          .sp-stats { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important; gap: 8px !important; }
           .sp-stat-card { padding: 10px 12px; gap: 8px; }
           .sp-stat-icon { width: 30px; height: 30px; }
           .sp-lbl-mobile { display: inline; }
@@ -679,11 +705,13 @@ export default function StaffPage({
         <div className="sp-stats">
           {[
             { label: 'Total Staff', mobileLabel: 'Total', value: stats.total, bg: 'var(--gray-50)', icon: <Users size={16} style={{ color: 'var(--gray-600)' }} /> },
-            { label: 'Online', mobileLabel: 'Online', value: stats.online, bg: '#ECFDF5', icon: <Activity size={16} style={{ color: '#10B981' }} /> },
-            { label: 'Admins', mobileLabel: 'Admins', value: stats.admins, bg: '#FFF7ED', icon: <Shield size={16} style={{ color: '#F97316' }} /> },
             { label: 'Managers', mobileLabel: 'Managers', value: stats.managers, bg: '#EFF6FF', icon: <Briefcase size={16} style={{ color: '#3B82F6' }} /> },
-            { label: 'Departments', mobileLabel: 'Depts', value: stats.departments, bg: '#F5F3FF', icon: <Building size={16} style={{ color: '#8B5CF6' }} /> },
-            { label: 'Pending', mobileLabel: 'Pending', value: stats.pending, bg: '#FFFBEB', icon: <Clock size={16} style={{ color: '#F59E0B' }} /> }
+            { label: 'Employees', mobileLabel: 'Employees', value: stats.employees, bg: '#ECFDF5', icon: <Users size={16} style={{ color: '#10B981' }} /> },
+            { label: 'Pending Invites', mobileLabel: 'Pending', value: stats.pendingInvites, bg: '#FFFBEB', icon: <Clock size={16} style={{ color: '#F59E0B' }} /> },
+            { label: 'Accepted Invites', mobileLabel: 'Accepted', value: stats.acceptedInvites, bg: '#FFF7ED', icon: <CheckCircle size={16} style={{ color: '#F97316' }} /> },
+            { label: 'Online Users', mobileLabel: 'Online', value: stats.online, bg: '#E0F2FE', icon: <Activity size={16} style={{ color: '#0284C7' }} /> },
+            { label: 'Offline Users', mobileLabel: 'Offline', value: stats.offline, bg: '#F3F4F6', icon: <UserX size={16} style={{ color: '#6B7280' }} /> },
+            { label: 'Departments', mobileLabel: 'Depts', value: stats.departments, bg: '#F5F3FF', icon: <Building size={16} style={{ color: '#8B5CF6' }} /> }
           ].map(s => (
             <div key={s.label} className="sp-stat-card">
               <div className="sp-stat-icon" style={{ background: s.bg }}>{s.icon}</div>
@@ -702,7 +730,7 @@ export default function StaffPage({
         <div className="sp-toolbar">
           <div className="sp-search">
             <Search size={14} style={{ color: 'var(--gray-400)', flexShrink: 0 }} />
-            <input placeholder="Search by name, email, or department..." value={search} onChange={e => setSearch(e.target.value)} />
+            <input placeholder="Search name, email, phone, role, status, dept..." value={search} onChange={e => setSearch(e.target.value)} />
             {search && (
               <button className="sp-search-x" onClick={() => setSearch('')}>
                 <X size={13} />
@@ -723,10 +751,20 @@ export default function StaffPage({
           </div>
           <div className="sp-sep sp-desktop-only" />
           <div className="sp-filter-group sp-desktop-only">
-            <span className={`sp-chip${statusFilter === 'ALL' ? ' active' : ''}`} onClick={() => setStatusFilter('ALL')}>All Status</span>
-            <span className={`sp-chip${statusFilter === 'ACTIVE' ? ' active' : ''}`} onClick={() => setStatusFilter('ACTIVE')}>Online</span>
-            <span className={`sp-chip${statusFilter === 'INVITED' ? ' active' : ''}`} onClick={() => setStatusFilter('INVITED')}>Invited</span>
-            <span className={`sp-chip${statusFilter === 'PENDING_APPROVAL' ? ' active' : ''}`} onClick={() => setStatusFilter('PENDING_APPROVAL')}>Pending</span>
+            <div className={`sp-chip${statusFilter !== 'ALL' ? ' active' : ''}`} style={{ padding: '0' }}>
+              <Activity size={11} style={{ marginLeft: '8px' }} />
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                <option value="ALL">All Statuses</option>
+                <option value="ACTIVE">Online / Active</option>
+                <option value="INVITED">Pending Invite</option>
+                <option value="EXPIRED">Expired Invite</option>
+                <option value="PENDING_APPROVAL">Accepted (Pending Approval)</option>
+                <option value="DISABLED">Suspended</option>
+                <option value="INACTIVE">Deactivated</option>
+                <option value="REJECTED">Rejected Invite</option>
+                <option value="CANCELLED">Cancelled Invite</option>
+              </select>
+            </div>
           </div>
           {departments.length > 0 && (
             <>
@@ -765,7 +803,8 @@ export default function StaffPage({
       ) : (
         <div className="sp-grid">
           {filteredStaff.map((member, idx) => {
-            const st = getStatus(member.status);
+            const effectiveStatus = getEffectiveStatus(member);
+            const st = STATUS_META[effectiveStatus] || { label: member.status || 'Unknown', dot: 'sp-dot-offline', pill: 'sp-pill-inactive' };
             const roleMeta = ROLE_META[member.role] || ROLE_META.EMPLOYEE;
             const perms = PERM_CHIPS[member.role] || [];
             const statusUpper = (member.status || '').toUpperCase();
@@ -799,7 +838,7 @@ export default function StaffPage({
                 {/* STATUS + DEPARTMENT PILLS */}
                 <div className="sp-card-pill-row">
                   <span className={`sp-pill ${st.pill}`}>
-                    <span className="sp-pill-dot" style={{ background: statusUpper === 'ACTIVE' ? '#10B981' : statusUpper === 'INVITED' || statusUpper === 'PENDING_APPROVAL' ? '#F59E0B' : '#D1D5DB' }} />
+                    <span className="sp-pill-dot" style={{ background: effectiveStatus === 'ACTIVE' ? '#10B981' : effectiveStatus === 'INVITED' || effectiveStatus === 'PENDING_APPROVAL' ? '#F59E0B' : '#D1D5DB' }} />
                     {st.label}
                   </span>
                   {member.department && (
@@ -827,18 +866,49 @@ export default function StaffPage({
                       <span className="sp-detail-val">{member.phone}</span>
                     </div>
                   )}
-                  {joined && (
-                    <div className="sp-detail" title={`Joined ${joined}`}>
-                      <UserPlus size={10} />
-                      <span className="sp-detail-val">{joined}</span>
-                    </div>
+                  
+                  {/* Dynamic dates based on invitation lifecycle */}
+                  {['INVITED', 'EXPIRED', 'CANCELLED'].includes(effectiveStatus) && (
+                    <>
+                      {joined && (
+                        <div className="sp-detail" title={`Invite Sent: ${joined}`}>
+                          <Send size={10} />
+                          <span className="sp-detail-val">Sent: {joined}</span>
+                        </div>
+                      )}
+                      {member.invitationExpires && (
+                        <div className="sp-detail" title={`Expires: ${formatDate(member.invitationExpires)}`}>
+                          <Clock size={10} />
+                          <span className="sp-detail-val">Expires: {formatDate(member.invitationExpires)}</span>
+                        </div>
+                      )}
+                    </>
                   )}
-                  {lastActive && (
-                    <div className="sp-detail">
-                      <Activity size={10} />
-                      <span className="sp-detail-val">{lastActive}</span>
-                    </div>
+                  {effectiveStatus === 'PENDING_APPROVAL' && (
+                    <>
+                      {member.updatedAt && (
+                        <div className="sp-detail" title={`Accepted: ${formatDate(member.updatedAt)}`}>
+                          <CheckCircle size={10} />
+                          <span className="sp-detail-val">Accepted: {formatDate(member.updatedAt)}</span>
+                        </div>
+                      )}
+                    </>
                   )}
+                  {['ACTIVE', 'DISABLED', 'INACTIVE', 'REJECTED'].includes(effectiveStatus) && (
+                    <>
+                      {joined && (
+                        <div className="sp-detail" title={`Joined: ${joined}`}>
+                          <UserPlus size={10} />
+                          <span className="sp-detail-val">Joined: {joined}</span>
+                        </div>
+                      )}
+                      <div className="sp-detail" title={lastActive ? `Last Login: ${lastActive}` : 'Last Active: Never'}>
+                        <Activity size={10} />
+                        <span className="sp-detail-val">{lastActive ? `Active: ${lastActive}` : 'Active: Never'}</span>
+                      </div>
+                    </>
+                  )}
+
                   {member.skills && (Array.isArray(member.skills) ? member.skills.length > 0 : true) && (
                     <div className="sp-detail" title={Array.isArray(member.skills) ? member.skills.join(', ') : member.skills}>
                       <Briefcase size={10} />
@@ -1061,11 +1131,19 @@ export default function StaffPage({
               
               <div className="sp-drawer-section">
                 <label className="sp-drawer-label">Status</label>
-                <div className="sp-drawer-chips">
-                  <span className={`sp-chip${statusFilter === 'ALL' ? ' active' : ''}`} onClick={() => setStatusFilter('ALL')}>All Status</span>
-                  <span className={`sp-chip${statusFilter === 'ACTIVE' ? ' active' : ''}`} onClick={() => setStatusFilter('ACTIVE')}>Online</span>
-                  <span className={`sp-chip${statusFilter === 'INVITED' ? ' active' : ''}`} onClick={() => setStatusFilter('INVITED')}>Invited</span>
-                  <span className={`sp-chip${statusFilter === 'PENDING_APPROVAL' ? ' active' : ''}`} onClick={() => setStatusFilter('PENDING_APPROVAL')}>Pending</span>
+                <div className="sp-drawer-select-wrapper">
+                  <Activity size={14} className="sp-select-icon" />
+                  <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="sp-drawer-select">
+                    <option value="ALL">All Statuses</option>
+                    <option value="ACTIVE">Online / Active</option>
+                    <option value="INVITED">Pending Invite</option>
+                    <option value="EXPIRED">Expired Invite</option>
+                    <option value="PENDING_APPROVAL">Accepted (Pending Approval)</option>
+                    <option value="DISABLED">Suspended</option>
+                    <option value="INACTIVE">Deactivated</option>
+                    <option value="REJECTED">Rejected Invite</option>
+                    <option value="CANCELLED">Cancelled Invite</option>
+                  </select>
                 </div>
               </div>
 

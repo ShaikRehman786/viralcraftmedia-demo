@@ -16,11 +16,12 @@ const sendTokenResponse = (partner, statusCode, res) => {
     { expiresIn: '24h' }
   );
 
+  const isProduction = config.nodeEnv === 'production';
   const cookieOptions = {
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax'
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax'
   };
 
   res
@@ -91,9 +92,12 @@ export const loginPartner = async (req, res) => {
 // @route   POST /api/partners/logout
 // @access  Public
 export const logoutPartner = async (req, res) => {
+  const isProduction = config.nodeEnv === 'production';
   res.cookie('partnerAccessToken', 'none', {
     expires: new Date(Date.now() + 5 * 1000),
-    httpOnly: true
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax'
   });
 
   res.status(200).json({ success: true, message: 'Logged out successfully' });

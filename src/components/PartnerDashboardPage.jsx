@@ -544,9 +544,6 @@ export default function PartnerDashboardPage() {
                             }}>
                               <div>
                                 <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: 0, color: 'var(--gray-800)' }}>{c.service}</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px', fontSize: '0.7rem', color: 'var(--gray-500)' }}>
-                                  <span>Project Value: ₹{c.bookingValue?.toLocaleString()}</span>
-                                </div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--success)' }}>
@@ -705,7 +702,6 @@ export default function PartnerDashboardPage() {
                         <tr>
                           <th>Service Category</th>
                           <th>Origin Campaign</th>
-                          <th>Project Value</th>
                           <th>Commission Amount</th>
                           <th>Status</th>
                           <th>Settlement Date</th>
@@ -715,16 +711,15 @@ export default function PartnerDashboardPage() {
                       <tbody>
                         {commissions.length === 0 ? (
                           <tr>
-                            <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--gray-400)' }}>No commission logs found.</td>
+                            <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--gray-400)' }}>No commission logs found.</td>
                           </tr>
                         ) : (
                           commissions.map(c => (
                             <tr key={c._id}>
                               <td><strong>{c.service}</strong></td>
                               <td>{c.campaignName}</td>
-                              <td>₹{(c.bookingValue || 0).toLocaleString()}</td>
                               <td style={{ color: 'var(--success)', fontWeight: 700 }}>
-                                ₹{(c.commissionAmount || 0).toLocaleString()} ({c.commissionPercentage || 0}%)
+                                ₹{(c.commissionAmount || 0).toLocaleString()}
                               </td>
                               <td>
                                 <span className={`badge ${
@@ -763,13 +758,9 @@ export default function PartnerDashboardPage() {
                             </span>
                           </div>
 
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', background: 'var(--gray-50)', padding: '8px', borderRadius: '8px', fontSize: '0.8rem' }}>
-                            <div>
-                              <span style={{ display: 'block', fontSize: '0.625rem', color: 'var(--gray-400)' }}>PROJECT VALUE</span>
-                              <strong>₹{(c.bookingValue || 0).toLocaleString()}</strong>
-                            </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', background: 'var(--gray-50)', padding: '8px', borderRadius: '8px', fontSize: '0.8rem' }}>
                             <div style={{ textAlign: 'right' }}>
-                              <span style={{ display: 'block', fontSize: '0.625rem', color: 'var(--gray-400)' }}>COMMISSION ({c.commissionPercentage || 0}%)</span>
+                              <span style={{ display: 'block', fontSize: '0.625rem', color: 'var(--gray-400)' }}>COMMISSION</span>
                               <strong style={{ color: 'var(--success)' }}>₹{(c.commissionAmount || 0).toLocaleString()}</strong>
                             </div>
                           </div>

@@ -4,17 +4,25 @@ import {
   createPartner,
   updatePartner,
   deletePartner,
-  getAdminReferrals,
-  updateReferralStatus,
-  approveCommission,
-  rejectReferral,
+  resetPartnerPassword,
+  getCampaigns,
+  createCampaign,
+  updateCampaign,
+  deleteCampaign,
+  duplicateCampaign,
+  getAdminAnalytics,
+  getBookings,
+  createBookingCommission,
   getAdminCommissions,
-  payCommission
+  updateCommissionStatus,
+  payCommission,
+  getPayments,
+  getReports
 } from '../controllers/adminReferralController.js';
 
 const router = express.Router();
 
-// Partners CRUD
+// Partners Management
 router.route('/partners')
   .get(getPartners)
   .post(createPartner);
@@ -23,14 +31,29 @@ router.route('/partners/:id')
   .put(updatePartner)
   .delete(deletePartner);
 
-// Referrals
-router.get('/leads', getAdminReferrals);
-router.put('/leads/:id/status', updateReferralStatus);
-router.post('/leads/:id/approve', approveCommission);
-router.delete('/leads/:id', rejectReferral);
+router.post('/partners/:id/reset-password', resetPartnerPassword);
 
-// Commissions & Payouts
-router.get('/payouts', getAdminCommissions);
-router.post('/payouts/:id/pay', payCommission);
+// Campaigns Management
+router.route('/campaigns')
+  .get(getCampaigns)
+  .post(createCampaign);
+
+router.route('/campaigns/:id')
+  .put(updateCampaign)
+  .delete(deleteCampaign);
+
+router.post('/campaigns/:id/duplicate', duplicateCampaign);
+
+// Analytics, Bookings, & Payouts
+router.get('/analytics', getAdminAnalytics);
+router.get('/bookings', getBookings);
+router.post('/bookings/:id/commission', createBookingCommission);
+
+router.get('/commissions', getAdminCommissions);
+router.put('/commissions/:id/status', updateCommissionStatus);
+router.post('/commissions/:id/pay', payCommission);
+
+router.get('/payments', getPayments);
+router.get('/reports', getReports);
 
 export default router;

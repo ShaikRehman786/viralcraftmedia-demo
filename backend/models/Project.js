@@ -134,6 +134,16 @@ const projectSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
+  },
+  // Referral Lead attribution (optional — preserved when the project is converted from a referral enquiry)
+  referral: {
+    isReferral: { type: Boolean, default: false },
+    partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner', default: null },
+    campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'ReferralCampaign', default: null },
+    enquiryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Enquiry', default: null },
+    partnerAgency: { type: String, default: '' },
+    campaignName: { type: String, default: '' },
+    referralCode: { type: String, default: '' }
   }
 }, {
   timestamps: true

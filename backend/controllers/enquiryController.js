@@ -3,6 +3,11 @@ import User from '../models/User.js';
 import Client from '../models/Client.js';
 import Order from '../models/Order.js';
 import Project from '../models/Project.js';
+import Partner from '../models/Partner.js';
+import ReferralCampaign from '../models/ReferralCampaign.js';
+import ReferralBooking from '../models/ReferralBooking.js';
+import ReferralVisit from '../models/ReferralVisit.js';
+import Notification from '../models/Notification.js';
 import { logEvent } from '../services/loggingService.js';
 import { generateSequentialOrderId } from '../services/orderService.js';
 import { getSuggestedEmployee } from '../services/routingService.js';
@@ -39,6 +44,165 @@ export const createEnquiry = async (req, res, next) => {
     });
 
     await enquiry.save();
+
+    // Referral attribution is only allowed from a verified referral cookie or body fallback.
+    let referralAttribution = null;
+    let cookieFound = false;
+
+    if (req.cookies && req.cookies.referral_partner_campaign) {
+      cookieFound = true;
+      try {
+        referralAttribution = typeof req.cookies.referral_partner_campaign === 'string'
+          ? JSON.parse(req.cookies.referral_partner_campaign)
+          : req.cookies.referral_partner_campaign;
+      } catch (err) {
+        console.error('[Enquiry Attribution] Cookie parsing failed:', err.message);
+      }
+    }
+
+    if (!referralAttribution && req.body.referralDetails) {
+      referralAttribution = req.body.referralDetails;
+    }
+
+
+    let referralValid = false;
+    let campaign = null;
+    let partner = null;
+    let visit = null;
+
+    let isCampaignFound = false;
+    let isCampaignActive = false;
+    let isCampaignExpired = false;
+    let isPartnerActive = false;
+
+    if (referralAttribution && referralAttribution.campaignId) {
+      try {
+        campaign = await ReferralCampaign.findById(referralAttribution.campaignId);
+        isCampaignFound = !!campaign;
+        
+        if (campaign) {
+          isCampaignActive = campaign.status === 'ACTIVE';
+          isCampaignExpired = campaign.expiryDate <= new Date();
+          
+          partner = await Partner.findById(campaign.partner);
+          if (partner) {
+            isPartnerActive = partner.status === 'ACTIVE';
+          }
+        }
+
+        if (campaign && partner && referralAttribution.visitorId) {
+          visit = await ReferralVisit.exists({
+            campaign: campaign._id,
+            partner: partner._id,
+            visitorId: referralAttribution.visitorId
+          });
+        }
+
+        referralValid = Boolean(
+          campaign &&
+          isCampaignActive &&
+          !isCampaignExpired &&
+          partner &&
+          isPartnerActive &&
+          referralAttribution.referralCode === campaign.referralCode &&
+          String(referralAttribution.partnerId) === String(partner._id) &&
+          visit
+        );
+      } catch (attrErr) {
+        console.error('[Enquiry Attribution] Attributing enquiry failed:', attrErr.message);
+      }
+    }
+
+
+    if (referralValid) {
+      try {
+        const clickedAt = referralAttribution.clickedAt || referralAttribution.timestamp;
+
+        // Automatically attach referral metadata to the enquiry (never entered manually by the customer)
+        if (!enquiry.referral || !enquiry.referral.isReferral) {
+          enquiry.referral = {
+            isReferral: true,
+            partnerId: partner._id,
+            campaignId: campaign._id,
+            referralCode: campaign.referralCode,
+            campaignName: campaign.campaignName,
+            partnerAgency: partner.agencyName,
+            landingPage: campaign.landingPage,
+            visitorId: referralAttribution.visitorId,
+            referralSource: 'referral',
+            clickedAt: clickedAt ? new Date(clickedAt) : null,
+            submittedAt: new Date(),
+            referralStatus: 'Pending'
+          };
+          await enquiry.save();
+        }
+
+        const booking = await ReferralBooking.create({
+          partner: partner._id,
+          campaign: campaign._id,
+          enquiry: enquiry._id,
+          clientName: name,
+          email: email || '',
+          phone,
+          service: serviceCategory,
+          referralTimestamp: clickedAt ? new Date(clickedAt) : new Date(),
+          status: 'Pending'
+        });
+
+        // Notify admins of new booking
+        const admins = await User.find({ role: 'SUPER_ADMIN' });
+        for (const admin of admins) {
+          const adminNotify = new Notification({
+            user: admin._id,
+            userModel: 'User',
+            title: 'New Referral Booking',
+            message: `New booking for "${serviceCategory}" by ${name} attributed to partner campaign "${campaign.campaignName}".`,
+            type: 'success',
+            priority: 'high',
+            icon: 'Award',
+            actionUrl: '/admin?tab=referrals'
+          });
+          await adminNotify.save();
+        }
+
+        // Notify partner of new lead attribution
+        const partnerNotify = new Notification({
+          user: partner._id,
+          userModel: 'Partner',
+          title: 'New Referral Lead Attributed',
+          message: `A new referral lead for "${serviceCategory}" by ${name} has been attributed to your campaign "${campaign.campaignName}".`,
+          type: 'success',
+          priority: 'high',
+          icon: 'Award',
+          actionUrl: '/partner/commissions'
+        });
+        await partnerNotify.save();
+
+        // Dispatch realtime Socket.io update to partner
+        const dispatch = req.app.get('socketio_dispatch');
+        if (dispatch) {
+          dispatch(partner._id.toString(), 'commission-updated', { partnerId: partner._id });
+        }
+
+        // Clear attribution cookie to prevent duplicate bookings on refresh
+        res.clearCookie('referral_partner_campaign', {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
+        });
+      } catch (attrErr) {
+        console.error('[Enquiry Attribution] Booking creation failed:', attrErr.message);
+      }
+    } else {
+      // Clear cookie if it existed but was not valid
+      if (cookieFound) {
+        res.clearCookie('referral_partner_campaign', {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
+        });
+      }
+    }
 
     // 1. Send confirmation and admin emails using Resend
     if (email) {
@@ -113,7 +277,7 @@ export const createEnquiry = async (req, res, next) => {
  */
 export const getEnquiries = async (req, res, next) => {
   try {
-    const { search, status, category } = req.query;
+    const { search, status, category, referral } = req.query;
     const filter = {};
 
     if (status && status !== 'all') {
@@ -124,14 +288,39 @@ export const getEnquiries = async (req, res, next) => {
       filter.serviceCategory = category;
     }
 
+    const andConditions = [];
+
     if (search) {
       const regex = new RegExp(search, 'i');
-      filter.$or = [
-        { name: regex },
-        { phone: regex },
-        { email: regex },
-        { enquiryId: regex }
-      ];
+      andConditions.push({
+        $or: [
+          { name: regex },
+          { phone: regex },
+          { email: regex },
+          { enquiryId: regex },
+          { 'referral.referralCode': regex },
+          { 'referral.campaignName': regex },
+          { 'referral.partnerAgency': regex }
+        ]
+      });
+    }
+
+    // Referral Lead source filters (additive — existing status/category filtering is untouched)
+    if (referral && referral !== 'all') {
+      if (referral === 'referral' || referral === 'partner') {
+        andConditions.push({ 'referral.isReferral': true });
+      } else if (referral === 'organic' || referral === 'direct' || referral === 'website') {
+        andConditions.push({
+          $or: [
+            { 'referral.isReferral': false },
+            { 'referral.isReferral': { $exists: false } }
+          ]
+        });
+      }
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
     }
 
     const enquiries = await Enquiry.find(filter)
@@ -341,6 +530,21 @@ export const convertEnquiryToProject = async (req, res, next) => {
       suggestedEmployee: suggestedId
     });
     await project.save();
+
+    // 4b. Preserve referral metadata on the converted project (used later for commission calculations)
+    if (enquiry.referral && enquiry.referral.isReferral) {
+      project.referral = {
+        isReferral: true,
+        partnerId: enquiry.referral.partnerId || null,
+        campaignId: enquiry.referral.campaignId || null,
+        enquiryId: enquiry._id,
+        partnerAgency: enquiry.referral.partnerAgency || '',
+        campaignName: enquiry.referral.campaignName || '',
+        referralCode: enquiry.referral.referralCode || ''
+      };
+      project.source = 'Partner Referral';
+      await project.save();
+    }
 
     order.project = project._id;
     await order.save();

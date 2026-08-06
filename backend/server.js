@@ -6,6 +6,7 @@ import connectDB from './config/db.js';
 import { config } from './config/env.js';
 import { seedSuperAdmin, seedBackupAdmin } from './config/seed.js';
 import whatsappService from './services/whatsappService.js';
+import { startReferralCampaignMonitor } from './services/referralCron.js';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.warn('Unhandled Promise Rejection (handled gracefully):', reason);
@@ -53,6 +54,9 @@ const startServer = async () => {
     whatsappService.init(io).catch((err) => {
       console.error('[WA-AUTOMATION] WhatsApp initial startup failed (non-fatal):', err.message);
     });
+
+    // Start background referral campaign status monitor
+    startReferralCampaignMonitor();
 
     // Track active connection sockets grouped by User ID
     const activeClients = new Map();

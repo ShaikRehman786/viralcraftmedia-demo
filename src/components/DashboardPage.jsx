@@ -131,6 +131,7 @@ export default function DashboardPage() {
   const [enqSearch, setEnqSearch] = useState('');
   const [enqStatusFilter, setEnqStatusFilter] = useState('all');
   const [enqCategoryFilter, setEnqCategoryFilter] = useState('all');
+  const [enqReferralFilter, setEnqReferralFilter] = useState('all');
   const [noteText, setNoteText] = useState('');
   const [activeEnquiryForNote, setActiveEnquiryForNote] = useState(null);
   
@@ -899,7 +900,7 @@ export default function DashboardPage() {
 
   const loadEnquiries = async () => {
     try {
-      const res = await axios.get(`/api/enquiries?search=${enqSearch}&status=${enqStatusFilter}&category=${enqCategoryFilter}`);
+      const res = await axios.get(`/api/enquiries?search=${enqSearch}&status=${enqStatusFilter}&category=${enqCategoryFilter}&referral=${enqReferralFilter}`);
       setEnquiries(res.data.data);
     } catch (err) {
       // enquiry load failed silently
@@ -910,7 +911,7 @@ export default function DashboardPage() {
     if (user && (user.role === 'SUPER_ADMIN' || user.role === 'MANAGER')) {
       loadEnquiries();
     }
-  }, [user, enqSearch, enqStatusFilter, enqCategoryFilter]);
+  }, [user, enqSearch, enqStatusFilter, enqCategoryFilter, enqReferralFilter]);
 
   const handleAssignManager = async (enquiryId, managerId) => {
     try {
@@ -1223,6 +1224,8 @@ export default function DashboardPage() {
                 setEnqStatusFilter={setEnqStatusFilter}
                 enqCategoryFilter={enqCategoryFilter}
                 setEnqCategoryFilter={setEnqCategoryFilter}
+                enqReferralFilter={enqReferralFilter}
+                setEnqReferralFilter={setEnqReferralFilter}
                 noteText={noteText}
                 setNoteText={setNoteText}
                 activeEnquiryForNote={activeEnquiryForNote}

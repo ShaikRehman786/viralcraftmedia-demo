@@ -38,6 +38,7 @@ export default function EnquiriesPage({
   enqSearch, setEnqSearch,
   enqStatusFilter, setEnqStatusFilter,
   enqCategoryFilter, setEnqCategoryFilter,
+  enqReferralFilter, setEnqReferralFilter,
   noteText, setNoteText,
   activeEnquiryForNote, setActiveEnquiryForNote,
   handleAssignManager,
@@ -86,6 +87,14 @@ export default function EnquiriesPage({
           <option value="Social Media Marketing">Social Media Marketing</option>
           <option value="Website Design & Development">Website Design & Development</option>
         </select>
+        <select value={enqReferralFilter} onChange={e => setEnqReferralFilter(e.target.value)} className="select w-160">
+          <option value="all">All Leads</option>
+          <option value="referral">🔗 Referral Leads</option>
+          <option value="organic">Organic Leads</option>
+          <option value="direct">Direct Leads</option>
+          <option value="website">Website Leads</option>
+          <option value="partner">⭐ Partner Leads</option>
+        </select>
       </div>
 
       {enquiries.length === 0 ? (
@@ -117,6 +126,11 @@ export default function EnquiriesPage({
                     <span className={`badge ${STATUS_BADGES[enq.status] || 'badge-gray'}`}>
                       {enq.status?.replace(/_/g, ' ')}
                     </span>
+                    {enq.referral?.isReferral && (
+                      <span className="badge badge-warning" title={`Referral code: ${enq.referral.referralCode || 'N/A'}`}>
+                        🔗 Partner Referral
+                      </span>
+                    )}
                   </div>
                   {enq.budget > 0 && (
                     <span className="badge badge-success flex-row gap-1">
@@ -259,6 +273,35 @@ export default function EnquiriesPage({
                     <X size={16} />
                   </button>
                 </div>
+                {selectedEnquiry.referral?.isReferral && (
+                  <div className="card-body" style={{ borderBottom: '1px solid var(--border)', background: 'rgba(249, 115, 22, 0.04)' }}>
+                    <div className="flex-row gap-2 items-center mb-3">
+                      <span className="badge badge-warning">🔗 Partner Referral</span>
+                      <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text)' }}>Referral Information</h4>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px 18px' }}>
+                      {[
+                        { label: 'Partner Agency', value: selectedEnquiry.referral.partnerAgency || '—' },
+                        { label: 'Campaign Name', value: selectedEnquiry.referral.campaignName || '—' },
+                        { label: 'Referral Code', value: selectedEnquiry.referral.referralCode || '—', mono: true },
+                        { label: 'Campaign Source', value: selectedEnquiry.referral.referralSource || '—' },
+                        { label: 'Landing Page', value: selectedEnquiry.referral.landingPage || '—' },
+                        { label: 'Click Date', value: selectedEnquiry.referral.clickedAt ? new Date(selectedEnquiry.referral.clickedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' },
+                        { label: 'Submission Date', value: selectedEnquiry.referral.submittedAt ? new Date(selectedEnquiry.referral.submittedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : (selectedEnquiry.createdAt ? new Date(selectedEnquiry.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—') },
+                        { label: 'Referral Status', value: selectedEnquiry.referral.referralStatus || 'Pending', badge: true }
+                      ].map(item => (
+                        <div key={item.label} style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 2 }}>{item.label}</div>
+                          {item.badge ? (
+                            <span className={`badge ${item.value === 'Completed' ? 'badge-success' : item.value === 'Cancelled' ? 'badge-gray' : 'badge-warning'}`}>{item.value}</span>
+                          ) : (
+                            <div className={item.mono ? 'font-mono text-xs' : 'text-sm'} style={{ color: 'var(--text)', fontWeight: 600, wordBreak: 'break-word' }}>{item.value}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="card-body p-0">
                   {(!selectedEnquiry.notes || selectedEnquiry.notes.length === 0) ? (
                     <div style={{

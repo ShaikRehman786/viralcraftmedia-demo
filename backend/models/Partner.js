@@ -33,10 +33,23 @@ const partnerSchema = new mongoose.Schema({
     type: String,
     enum: ['ACTIVE', 'INACTIVE'],
     default: 'ACTIVE'
+  },
+  notes: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  profileImage: {
+    type: String,
+    default: ''
   }
 }, {
   timestamps: true
 });
+
+// Database indexes for fast querying
+partnerSchema.index({ status: 1 });
+partnerSchema.index({ createdAt: -1 });
 
 // Pre-save hook to hash password
 partnerSchema.pre('save', async function () {

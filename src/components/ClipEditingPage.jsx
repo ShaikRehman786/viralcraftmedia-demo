@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { getReferralAttribution } from '../services/referralAttribution.js';
 import { Scissors, Activity, TrendingUp, Monitor, Play, Heart, MessageCircle, Bookmark, Zap, Target, Layers, UserCheck, Clock, Shield, UploadCloud, DownloadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Footer from './Footer.jsx';
@@ -148,7 +149,8 @@ export default function ClipEditingPage() {
               clipCount: jobs,
               amount: price,
               platform,
-              serviceType: 'Clip Editing'
+              serviceType: 'Clip Editing',
+              referralDetails: getReferralAttribution()
             });
 
             if (vRes.data.success) {
@@ -198,7 +200,8 @@ export default function ClipEditingPage() {
         phone: `91${phone}`,
         serviceCategory: 'Clip Editing',
         description: `Platform: ${platform}\nRaw Link: ${link}\nInstructions: ${instructions}\nQty: ${jobs} clips`,
-        budget: price
+        budget: price,
+        referralDetails: getReferralAttribution()
       });
       setStatus('query_sent');
     } catch (err) {

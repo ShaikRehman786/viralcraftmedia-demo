@@ -1158,6 +1158,69 @@ export default function OverviewPage({
             )
           )}
 
+          {isSuperAdmin && analytics?.referralStats && (
+            <div className="card mt-6 animate-slide-up" style={{ padding: '20px' }}>
+              <div className="card-header" style={{ padding: 0, marginBottom: '16px' }}>
+                <div>
+                  <h3 className="section-title">Referral Performance</h3>
+                  <p className="section-subtitle">Partner campaign leads, conversion and attributed revenue</p>
+                </div>
+              </div>
+              <div className="rev-kpi-ribbon">
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Referral Leads</span>
+                    <UserCheck size={14} className="text-accent" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">{analytics.referralStats.totalReferralLeads}</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">Converted: {analytics.referralStats.convertedReferralLeads}</span>
+                  </div>
+                </div>
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Referral Conversion</span>
+                    <TrendingUp size={14} className="text-success" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">{analytics.referralStats.referralConversionRate}%</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">Lead → Project</span>
+                  </div>
+                </div>
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Top Referral Partner</span>
+                    <Users size={14} className="text-purple" />
+                  </div>
+                  <span className="rev-kpi-subcard-value" style={{ fontSize: '15px' }}>{analytics.referralStats.topReferralPartner?.name || '—'}</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">{analytics.referralStats.topReferralPartner?.leads || 0} leads</span>
+                  </div>
+                </div>
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Top Campaign</span>
+                    <Sparkles size={14} className="text-accent" />
+                  </div>
+                  <span className="rev-kpi-subcard-value" style={{ fontSize: '15px' }}>{analytics.referralStats.topPerformingCampaign?.name || '—'}</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">{analytics.referralStats.topPerformingCampaign?.leads || 0} leads</span>
+                  </div>
+                </div>
+                <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard-header">
+                    <span className="rev-kpi-subcard-label">Referral Revenue</span>
+                    <Briefcase size={14} className="text-info" />
+                  </div>
+                  <span className="rev-kpi-subcard-value">₹{(analytics.referralStats.referralRevenue / 1000).toFixed(0)}K</span>
+                  <div className="rev-kpi-subcard-footer">
+                    <span className="rev-kpi-subcard-trend up">Converted projects</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="section-grid mt-6">
               <div className="card">

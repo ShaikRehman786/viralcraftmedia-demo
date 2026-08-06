@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import User from '../models/User.js';
+import Enquiry from '../models/Enquiry.js';
 
 /**
  * Gathers business statistics and metrics using real MongoDB aggregates
@@ -149,6 +150,41 @@ export const getDashboardStats = async (req, res, next) => {
       .limit(10)
       .lean();
 
+    // 11. Referral Lead analytics (Admin Dashboard only)
+    let referralStats = null;
+    if (req.user.role === 'SUPER_ADMIN') {
+      const referralEnquiries = await Enquiry.find({ 'referral.isReferral': true }).select('status budget referral').lean();
+      const totalReferralLeads = referralEnquiries.length;
+      const convertedReferralLeads = referralEnquiries.filter(e => e.status === 'converted_project').length;
+      const referralConversionRate = totalReferralLeads > 0
+        ? Number(((convertedReferralLeads / totalReferralLeads) * 100).toFixed(1))
+        : 0;
+
+      const partnerCounts = {};
+      const campaignCounts = {};
+      referralEnquiries.forEach(e => {
+        const agency = (e.referral && e.referral.partnerAgency) || 'Unknown';
+        const camp = (e.referral && e.referral.campaignName) || 'Unknown';
+        partnerCounts[agency] = (partnerCounts[agency] || 0) + 1;
+        campaignCounts[camp] = (campaignCounts[camp] || 0) + 1;
+      });
+      const topPartner = Object.entries(partnerCounts).sort((a, b) => b[1] - a[1])[0];
+      const topCampaign = Object.entries(campaignCounts).sort((a, b) => b[1] - a[1])[0];
+
+      const referralRevenue = referralEnquiries
+        .filter(e => e.status === 'converted_project')
+        .reduce((sum, e) => sum + (e.budget || 0), 0);
+
+      referralStats = {
+        totalReferralLeads,
+        convertedReferralLeads,
+        referralConversionRate,
+        topReferralPartner: topPartner ? { name: topPartner[0], leads: topPartner[1] } : null,
+        topPerformingCampaign: topCampaign ? { name: topCampaign[0], leads: topCampaign[1] } : null,
+        referralRevenue
+      };
+    }
+
     if (req.user.role === 'MANAGER') {
       return res.status(200).json({
         success: true,
@@ -193,7 +229,8 @@ export const getDashboardStats = async (req, res, next) => {
         employeeProductivity,
         managerProductivity,
         growthChart,
-        recentOrders
+        recentOrders,
+        referralStats
       }
     });
   } catch (err) {

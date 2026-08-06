@@ -5,11 +5,11 @@ import Partner from '../models/Partner.js';
 export const protectPartner = async (req, res, next) => {
   let token;
 
-  // Check cookies for partner access token
+  // 1. Check cookies for partner access token
   if (req.cookies && req.cookies.partnerAccessToken) {
     token = req.cookies.partnerAccessToken;
   }
-  // Check Authorization header
+  // 2. Check Authorization header
   else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
@@ -20,10 +20,16 @@ export const protectPartner = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, config.jwtSecret);
+
+    // Verify token was generated for a partner role
+    if (decoded.role !== 'PARTNER') {
+      return res.status(403).json({ error: 'Access denied. Invalid role assignment.' });
+    }
+
     const partner = await Partner.findById(decoded.id);
 
-    if (!partner || partner.status === 'INACTIVE') {
-      return res.status(401).json({ error: 'Partner account is inactive or no longer exists.' });
+    if (!partner || partner.status !== 'ACTIVE') {
+      return res.status(401).json({ error: 'Partner account is inactive, disabled, or no longer exists.' });
     }
 
     req.partner = partner;

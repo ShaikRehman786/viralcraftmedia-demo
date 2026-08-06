@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { getReferralAttribution } from '../services/referralAttribution.js';
 import { 
   Code, Globe, Zap, Shield, Clock, Users, Target, Monitor, CheckCircle2
 } from 'lucide-react';
@@ -103,7 +104,8 @@ export default function WebDevelopmentPage() {
         phone: `91${phone}`,
         serviceCategory: 'Website Design & Development',
         description: `Project Scope details: ${instructions}\nSource Page: Website Development`,
-        budget: budget ? Number(budget) : 0
+        budget: budget ? Number(budget) : 0,
+        referralDetails: getReferralAttribution()
       });
       setStatus('query_sent');
     } catch (err) {

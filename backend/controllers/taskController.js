@@ -4,6 +4,8 @@ import User from '../models/User.js';
 import Order from '../models/Order.js';
 import Client from '../models/Client.js';
 import ChatMessage from '../models/ChatMessage.js';
+import ReferralBooking from '../models/ReferralBooking.js';
+import Enquiry from '../models/Enquiry.js';
 import { logEvent } from '../services/loggingService.js';
 import whatsappService, { sendOrderCompletedWhatsApp, sendTaskNotification } from '../services/whatsappService.js';
 import { sendDeliveryEmail, sendEmployeeTaskAlertEmail, sendEmail } from '../services/emailService.js';
@@ -834,6 +836,26 @@ export const finalApproveProject = async (req, res, next) => {
     if (decision === 'approve') {
       project.status = 'completed';
       await project.save();
+
+      // Referral Lead integration: when a referral project reaches the completion stage,
+      // its attributed booking becomes eligible for commission (no commission is created at enquiry time).
+      if (project.referral && project.referral.isReferral && project.referral.enquiryId) {
+        try {
+          const booking = await ReferralBooking.findOne({ enquiry: project.referral.enquiryId });
+          if (booking && booking.status !== 'Completed') {
+            booking.status = 'Completed';
+            await booking.save();
+
+            const referralEnquiry = await Enquiry.findById(project.referral.enquiryId);
+            if (referralEnquiry && referralEnquiry.referral) {
+              referralEnquiry.referral.referralStatus = 'Completed';
+              await referralEnquiry.save();
+            }
+          }
+        } catch (referralErr) {
+          console.error('[Referral Eligibility] Failed to mark booking eligible at project completion:', referralErr.message);
+        }
+      }
 
       const order = await Order.findById(project.order);
       if (order) {

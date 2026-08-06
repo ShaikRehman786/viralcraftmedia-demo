@@ -1,15 +1,21 @@
 import mongoose from 'mongoose';
 
 const partnerCommissionSchema = new mongoose.Schema({
-  referral: {
+  booking: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'PartnerReferral',
-    required: true
+    ref: 'ReferralBooking',
+    required: true,
+    index: true
   },
   partner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Partner',
-    required: true
+    required: true,
+    index: true
+  },
+  commissionPercentage: {
+    type: Number,
+    required: [true, 'Commission percentage is required']
   },
   commissionAmount: {
     type: Number,
@@ -17,8 +23,9 @@ const partnerCommissionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Approved', 'Paid'],
-    default: 'Approved'
+    enum: ['Pending', 'Approved', 'Paid', 'Cancelled', 'Payment Pending', 'Rejected'],
+    default: 'Pending',
+    index: true
   },
   paymentDate: {
     type: Date,
@@ -37,6 +44,8 @@ const partnerCommissionSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+partnerCommissionSchema.index({ createdAt: -1 });
 
 const PartnerCommission = mongoose.model('PartnerCommission', partnerCommissionSchema);
 export default PartnerCommission;

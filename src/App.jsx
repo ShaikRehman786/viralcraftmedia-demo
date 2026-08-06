@@ -11,6 +11,8 @@ import AnimatedCounter from './components/shared/AnimatedCounter.jsx';
 import { clientTestimonials } from './data/clientTestimonials.js';
 import PartnerLoginPage from './components/PartnerLoginPage.jsx';
 import PartnerDashboardPage from './components/PartnerDashboardPage.jsx';
+import ReferralRedirect from './components/ReferralRedirect.jsx';
+import { getReferralAttribution } from './services/referralAttribution.js';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -211,7 +213,8 @@ function LandingPage() {
           phone: enquiryPhone,
           serviceCategory: enquiryService,
           description: enquiryDesc,
-          budget: enquiryBudget ? Number(enquiryBudget) : undefined
+          budget: enquiryBudget ? Number(enquiryBudget) : undefined,
+          referralDetails: getReferralAttribution()
         })
       });
       const data = await res.json();
@@ -446,7 +449,8 @@ function LandingPage() {
           email: '',
           serviceCategory: 'Clip Editing',
           description: `Platform: ${platform}\nVideo Link: ${link}\nInstructions: ${instructions}\nClips: ${jobs}`,
-          budget: price
+          budget: price,
+          referralDetails: getReferralAttribution()
         })
       });
       const data = await res.json();
@@ -489,7 +493,7 @@ function LandingPage() {
         handler: async (resp) => {
           toast('Verifying...', 'info');
           try {
-            const vRes = await fetch(`${API_BASE}/api/verify-payment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ razorpay_order_id: oData.orderId, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature, name, contact: `91${phone}`, videoLink: link, instructions, clipCount: jobs, amount: price, platform }) });
+            const vRes = await fetch(`${API_BASE}/api/verify-payment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ razorpay_order_id: oData.orderId, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature, name, contact: `91${phone}`, videoLink: link, instructions, clipCount: jobs, amount: price, platform, referralDetails: getReferralAttribution() }) });
             if (!vRes.ok) throw new Error('Verify failed');
             const vData = await vRes.json();
             if (vData.success) {
@@ -1335,6 +1339,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/partner/login" element={<PartnerLoginPage />} />
+        <Route path="/r/:referralCode" element={<ReferralRedirect />} />
         <Route 
           path="/partner/*" 
           element={
@@ -1348,7 +1353,11 @@ export default function App() {
         <Route path="/accept-invitation/:token" element={<AcceptInvitationPage />} />
         <Route path="/invite/:token" element={<AcceptInvitationPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-        <Route path="/services/clip-editing" element={<Navigate to="/#pricing" replace />} />
+        <Route path="/services/clip-editing" element={
+          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Clip Editing...</div>}>
+            <ClipEditingPage />
+          </React.Suspense>
+        } />
         <Route path="/services/podcast-editing" element={
           <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Podcast Editing...</div>}>
             <PodcastEditingPage />
@@ -1364,6 +1373,9 @@ export default function App() {
             <WebDevelopmentPage />
           </React.Suspense>
         } />
+        <Route path="/services/web-development" element={<Navigate to="/services/web-design-development" replace />} />
+        <Route path="/services/branding" element={<Navigate to="/" replace />} />
+        <Route path="/services/real-estate-editing" element={<Navigate to="/" replace />} />
         <Route 
           path="/backup/*" 
           element={

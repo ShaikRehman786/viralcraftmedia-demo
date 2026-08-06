@@ -6,6 +6,8 @@ import Order from '../models/Order.js';
 import Project from '../models/Project.js';
 import { calculatePricing, ingestVerifiedOrder, generateSequentialOrderId } from '../services/orderService.js';
 import { logEvent } from '../services/loggingService.js';
+import { createEnquiry as createEnquiryPipeline } from './enquiryController.js';
+import Enquiry from '../models/Enquiry.js';
 import { generateInvoicePdf } from '../utils/pdfGenerator.js';
 import { sendEmail } from '../services/emailService.js';
 import { getSuggestedEmployee } from '../services/routingService.js';
@@ -152,6 +154,7 @@ export const verifyPayment = async (req, res, next) => {
     // 4. Ingest order to auto-create Projects/Tasks/Clients
     // Pass in Socket.io dispatcher if available, otherwise mock
     const ioDispatcher = req.app.get('socketio_dispatch');
+    const projectServiceType = serviceType === 'Clip Editing' ? 'Short Form Editing' : serviceType;
     const { orderId, project, driveShareableLink } = await ingestVerifiedOrder({
       razorpay_order_id,
       razorpay_payment_id,
@@ -164,11 +167,70 @@ export const verifyPayment = async (req, res, next) => {
       clipCount,
       amount,
       platform,
-      serviceType
+      serviceType: projectServiceType
     }, ioDispatcher);
 
     payment.orderId = orderId;
     await payment.save();
+
+    // If a referral cookie exists or referralDetails are passed in the request body, trigger the referral attribution/notification flow.
+    if ((req.cookies && req.cookies.referral_partner_campaign) || req.body.referralDetails) {
+      try {
+        const mockRes = {
+          headersSent: false,
+          status: function(statusCode) {
+            this.statusCode = statusCode;
+            return this;
+          },
+          json: function(data) {
+            this.body = data;
+            return this;
+          },
+          clearCookie: function(cookieName, cookieOptions) {
+            res.clearCookie(cookieName, cookieOptions);
+            return this;
+          }
+        };
+
+        const enquiryReq = {
+          body: {
+            name,
+            email: email || '',
+            phone: contact,
+            serviceCategory: serviceType || 'Clip Editing',
+            description: instructions || 'Paid Order Conversion',
+            budget: amount,
+            referralDetails: req.body.referralDetails
+          },
+          cookies: req.cookies,
+          app: req.app
+        };
+
+        await createEnquiryPipeline(enquiryReq, mockRes, (err) => {
+          if (err) console.error('[Referral Integration] createEnquiryPipeline error:', err.message);
+        });
+
+        // Find the created Enquiry and link it to the newly created Project
+        const enquiry = await Enquiry.findOne({ phone: contact }).sort({ createdAt: -1 });
+        if (enquiry && enquiry.referral && enquiry.referral.isReferral) {
+          if (project) {
+            project.referral = {
+              isReferral: true,
+              partnerId: enquiry.referral.partnerId || null,
+              campaignId: enquiry.referral.campaignId || null,
+              enquiryId: enquiry._id,
+              partnerAgency: enquiry.referral.partnerAgency || '',
+              campaignName: enquiry.referral.campaignName || '',
+              referralCode: enquiry.referral.referralCode || ''
+            };
+            project.source = 'Partner Referral';
+            await project.save();
+          }
+        }
+      } catch (refErr) {
+        console.error('[Referral Integration] Failed to execute referral workflow:', refErr.message);
+      }
+    }
 
     const payoutDispatcher = req.app.get('socketio_dispatch');
     await notifyStaff({

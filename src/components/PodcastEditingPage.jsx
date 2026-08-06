@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { getReferralAttribution } from '../services/referralAttribution.js';
 import { 
   Mic, Headphones, Zap, Shield, Clock, Users, Target, UploadCloud, DownloadCloud, Layers
 } from 'lucide-react';
@@ -104,7 +105,8 @@ export default function PodcastEditingPage() {
         phone: `91${phone}`,
         serviceCategory: 'Podcast Editing',
         description: `Raw Audio/Video Link: ${link}\nInstructions/Notes: ${instructions}\nSource Page: Podcast Editing`,
-        budget: 0
+        budget: 0,
+        referralDetails: getReferralAttribution()
       });
       setStatus('query_sent');
     } catch (err) {

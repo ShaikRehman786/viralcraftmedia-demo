@@ -11,7 +11,9 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // Error caught by boundary — UI displays fallback
+    console.error("ErrorBoundary caught an error in Component:", errorInfo.componentStack);
+    console.error("Exact Exception:", error.toString());
+    console.error("Stack Trace:", error.stack);
   }
 
   render() {
@@ -23,9 +25,9 @@ export default class ErrorBoundary extends React.Component {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#F9FAFB',
-          color: '#111827',
-          fontFamily: 'var(--font)',
+          background: '#0B0B0C',
+          color: '#FFF',
+          fontFamily: 'var(--font), sans-serif',
           padding: '40px',
           textAlign: 'center'
         }}>
@@ -45,16 +47,34 @@ export default class ErrorBoundary extends React.Component {
               <line x1="9" y1="9" x2="15" y2="15"/>
             </svg>
           </div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '8px' }}>
-            Something went wrong
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '8px', color: '#EF4444' }}>
+            React Crash Caught
           </h2>
-          <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '24px', maxWidth: '400px' }}>
-            An unexpected error occurred. Please try refreshing the page.
+          <p style={{ color: '#A1A1AA', fontSize: '0.9rem', marginBottom: '16px', maxWidth: '600px' }}>
+            An unexpected error occurred in the component hierarchy. See diagnostics below:
           </p>
+          <pre style={{
+            background: '#18181B',
+            color: '#F4F4F5',
+            padding: '16px',
+            borderRadius: '8px',
+            fontSize: '0.8rem',
+            textAlign: 'left',
+            overflowX: 'auto',
+            maxWidth: '90%',
+            marginBottom: '24px',
+            fontFamily: 'monospace',
+            whiteSpace: 'pre-wrap',
+            border: '1px solid rgba(239,68,68,0.2)'
+          }}>
+            <strong>Error:</strong> {this.state.error && this.state.error.toString()}
+            {"\n\n"}
+            <strong>Stack Trace:</strong> {this.state.error && this.state.error.stack}
+          </pre>
           <button
             onClick={() => window.location.reload()}
             style={{
-              background: 'var(--gradient-accent)',
+              background: '#F97316',
               color: '#FFF',
               border: 'none',
               padding: '12px 24px',
@@ -66,9 +86,6 @@ export default class ErrorBoundary extends React.Component {
           >
             Refresh Page
           </button>
-          <p style={{ color: '#9CA3AF', fontSize: '0.75rem', marginTop: '24px' }}>
-            If the problem persists, contact support.
-          </p>
         </div>
       );
     }

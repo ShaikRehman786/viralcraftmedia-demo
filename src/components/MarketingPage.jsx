@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { getReferralAttribution } from '../services/referralAttribution.js';
 import { 
   BarChart3, Target, Users, Zap, Shield, TrendingUp, Calendar, Layers
 } from 'lucide-react';
@@ -103,7 +104,8 @@ export default function MarketingPage() {
         phone: `91${phone}`,
         serviceCategory: 'Social Media Marketing',
         description: `Strategy requirements: ${instructions}\nSource Page: Social Media Marketing`,
-        budget: budget ? Number(budget) : 0
+        budget: budget ? Number(budget) : 0,
+        referralDetails: getReferralAttribution()
       });
       setStatus('query_sent');
     } catch (err) {

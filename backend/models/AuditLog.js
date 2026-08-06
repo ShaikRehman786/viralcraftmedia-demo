@@ -44,6 +44,15 @@ const auditLogSchema = new mongoose.Schema({
       'WHATSAPP_MESSAGE_SENT',
       'WHATSAPP_MESSAGE_RECEIVED',
       'WHATSAPP_ACTION',
+      'PARTNER_CREATED',
+      'PARTNER_EDITED',
+      'PARTNER_STATUS_CHANGE',
+      'CAMPAIGN_CREATED',
+      'CAMPAIGN_EDITED',
+      'CAMPAIGN_EXPIRED',
+      'COMMISSION_APPROVED',
+      'COMMISSION_PAID',
+      'PAYMENT_RECORDED',
       'ERROR'
     ]
   },

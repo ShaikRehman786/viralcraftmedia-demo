@@ -188,6 +188,9 @@ export default function ProjectsPage({
           <span className={getStatusBadge(project.status)}>
             {project.status?.replace(/_/g, ' ')}
           </span>
+          {project.referral?.isReferral && (
+            <span className="badge badge-warning" title={`${project.referral.partnerAgency || 'Partner'} — ${project.referral.referralCode || ''}`}>🔗 Referral</span>
+          )}
         </div>
         <div className="kanban-card-footer">
           <span className="text-xs text-muted flex items-center gap-1">
@@ -276,6 +279,9 @@ export default function ProjectsPage({
           <div className="flex items-center gap-2 flex-wrap">
             <span className={getStatusBadge(project.status)}>{project.status?.replace(/_/g, ' ')}</span>
             <span className={getPriorityBadge(project.priority)}>{project.priority}</span>
+            {project.referral?.isReferral && (
+              <span className="badge badge-warning">🔗 Referral Project</span>
+            )}
           </div>
         </div>
         {project.description && (
@@ -288,6 +294,17 @@ export default function ProjectsPage({
             <span className="text-xs text-muted flex items-center gap-1">
               <Briefcase size={12} /> {project.client.name}
             </span>
+          )}
+          {!isEmployee && project.referral?.isReferral && (
+            <>
+              <span className="text-xs text-muted flex items-center gap-1">
+                <UserCheck size={12} /> {project.referral.partnerAgency || 'Referral Partner'}
+              </span>
+              <span className="text-xs text-muted flex items-center gap-1">
+                <FolderOpen size={11} /> {project.referral.campaignName || 'Campaign'}
+              </span>
+              <span className="text-xs font-mono text-accent">{project.referral.referralCode}</span>
+            </>
           )}
           {project.manager?.name && (
             <span className="text-xs text-muted flex items-center gap-1">

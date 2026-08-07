@@ -79,13 +79,16 @@ export const seedSuperAdmin = async () => {
 
 export const seedBackupAdmin = async () => {
   try {
-    const email = (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase();
+    const email = (config.backupAdminEmail || 'backupadmin@viralcraftmedia.com').toLowerCase();
     const password = config.backupAdminPassword || 'vcm@Backup2026';
     const name = config.backupAdminName || 'Backup Administrator';
     const role = config.backupAdminRole || 'backup_admin';
 
-    // 1. Remove backup user from Production Database to ensure complete isolation
-    await User.deleteOne({ email }).catch(() => {});
+    // Remove backup user from Production Database to ensure complete isolation (only if not super admin email)
+    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase();
+    if (email !== superAdminEmail) {
+      await User.deleteOne({ email }).catch(() => {});
+    }
 
     // 2. Wait up to 10 seconds for Backup Database connection pool to be ready
     const { backupConnection, getBackupModel } = await import('../services/backupService.js');

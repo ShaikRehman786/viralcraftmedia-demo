@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Users,
   ShieldCheck,
+  Database,
   UserPlus,
   MessageCircle,
   Receipt,
@@ -103,12 +104,20 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
               </button>
 
               {user.role === 'SUPER_ADMIN' && (
-                <button
-                  className={`sidebar-link${activeTab === 'logs' ? ' active' : ''}`}
-                  onClick={() => handleNav('logs')}
-                >
-                  <ShieldCheck /> Security Logs
-                </button>
+                <>
+                  <button
+                    className={`sidebar-link${activeTab === 'logs' ? ' active' : ''}`}
+                    onClick={() => handleNav('logs')}
+                  >
+                    <ShieldCheck /> Security Logs
+                  </button>
+                  <button
+                    className={`sidebar-link${activeTab === 'backup' ? ' active' : ''}`}
+                    onClick={() => handleNav('backup')}
+                  >
+                    <Database /> Backup & Recovery
+                  </button>
+                </>
               )}
             </div>
           )}

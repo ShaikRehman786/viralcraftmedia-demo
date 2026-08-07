@@ -3,6 +3,7 @@ import { getSignedTokenResponse, rotateRefreshToken } from '../services/authServ
 import { logEvent } from '../services/loggingService.js';
 import { sendPasswordResetEmail, sendEmail } from '../services/emailService.js';
 import { notifyStaff } from '../services/notificationService.js';
+import { recordLoginBackup, recordLogoutBackup } from '../services/backupService.js';
 import crypto from 'crypto';
 import { config } from '../config/env.js';
 import jwt from 'jsonwebtoken';
@@ -19,7 +20,7 @@ export const login = async (req, res, next) => {
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
     // Intercept backup admin account for database isolation and Backup Database validation
-    const backupAdminEmail = (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase();
+    const backupAdminEmail = (config.backupAdminEmail || 'backupadmin@viralcraftmedia.com').toLowerCase();
     
     // DEBUG LOG
     if (email) {
@@ -273,6 +274,8 @@ export const login = async (req, res, next) => {
       userAgent
     });
 
+    recordLoginBackup({ user, ip: clientIp, userAgent }).catch(() => {});
+
     return getSignedTokenResponse(user, 200, res);
   } catch (err) {
     next(err);
@@ -285,6 +288,10 @@ export const login = async (req, res, next) => {
  */
 export const logout = async (req, res, next) => {
   try {
+    if (req.user) {
+      recordLogoutBackup({ user: req.user, ip: req.ip || '127.0.0.1', userAgent: req.headers['user-agent'] || 'Unknown' }).catch(() => {});
+    }
+
     const token = req.cookies.refreshToken;
     if (token && req.user && req.user._id !== 'backup_admin_mock_id_placeholder') {
       req.user.refreshTokens = req.user.refreshTokens.filter(t => t.token !== token);

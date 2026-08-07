@@ -47,7 +47,7 @@ router.use('/teamlogger', teamLoggerRoutes);
 router.use('/enquiries', enquiryRoutes);
 router.use('/whatsapp', protect, authorize('SUPER_ADMIN'), whatsappRoutes);
 router.use('/push', pushRoutes);
-router.use('/backup', protect, authorize('SUPER_ADMIN'), backupRoutes);
+router.use('/backup', backupRoutes);
 
 // Partner Portal routes
 router.use('/partners', partnerRoutes);

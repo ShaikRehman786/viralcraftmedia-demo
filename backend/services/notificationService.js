@@ -1,5 +1,6 @@
 import Notification from '../models/Notification.js';
 import { sendPushToUser, sendPushToStaff } from './pushService.js';
+import { recordNotificationBackup } from './backupService.js';
 
 const NOTIFICATION_ICONS = {
   'New Lead': 'UserPlus',
@@ -109,6 +110,7 @@ export async function createNotification({
     });
 
     await notify.save();
+    recordNotificationBackup({ notification: notify, receiver: { _id: userId } }).catch(() => {});
     return notify;
   } catch (err) {
     console.error('Notification creation failed:', err.message);

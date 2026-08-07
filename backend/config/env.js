@@ -55,7 +55,7 @@ export const config = {
   // BACKUP SYSTEM CONFIGURATION
   // ##################################
   backupMongoUri: process.env.BACKUP_MONGODB_URI,
-  backupAdminEmail: process.env.BACKUP_ADMIN_EMAIL || 'shaikrehman78609@gmail.com',
+  backupAdminEmail: process.env.BACKUP_ADMIN_EMAIL || 'backupadmin@viralcraftmedia.com',
   backupAdminPassword: process.env.BACKUP_ADMIN_PASSWORD || 'vcm@Backup2026',
   backupAdminName: process.env.BACKUP_ADMIN_NAME || 'Backup Administrator',
   backupAdminRole: process.env.BACKUP_ADMIN_ROLE || 'backup_admin',

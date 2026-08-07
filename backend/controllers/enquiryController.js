@@ -31,21 +31,9 @@ export const createEnquiry = async (req, res, next) => {
     const count = await Enquiry.countDocuments();
     const enquiryId = `VCM-ENQ-${String(count + 1).padStart(4, '0')}`;
 
-    const enquiry = new Enquiry({
-      enquiryId,
-      name,
-      email: email ? email.toLowerCase() : '',
-      phone,
-      serviceCategory,
-      description: description || '',
-      budget: budget ? Number(budget) : 0,
-      status: 'pending_review',
-      timeline: [{ activity: 'Enquiry received via service page form' }]
-    });
 
-    await enquiry.save();
 
-    // Referral attribution is only allowed from a verified referral cookie or body fallback.
+    // 1. Read referral attribution from cookie or body
     let referralAttribution = null;
     let cookieFound = false;
 
@@ -64,80 +52,124 @@ export const createEnquiry = async (req, res, next) => {
       referralAttribution = req.body.referralDetails;
     }
 
-
+    // 2. Validate referral attribution strictly against ALL requirements:
+    // - Valid referral URL click occurred
+    // - Campaign exists
+    // - Campaign status is ACTIVE
+    // - Campaign has NOT expired (expiryDate > Date.now())
+    // - Partner exists and status is ACTIVE
+    // - Referral tracking created a matching ReferralVisit log
     let referralValid = false;
     let campaign = null;
     let partner = null;
-    let visit = null;
 
-    let isCampaignFound = false;
-    let isCampaignActive = false;
-    let isCampaignExpired = false;
-    let isPartnerActive = false;
-
-    if (referralAttribution && referralAttribution.campaignId) {
+    if (referralAttribution && (referralAttribution.campaignId || referralAttribution.referralCode)) {
       try {
-        campaign = await ReferralCampaign.findById(referralAttribution.campaignId);
-        isCampaignFound = !!campaign;
-        
+        if (referralAttribution.campaignId) {
+          campaign = await ReferralCampaign.findById(referralAttribution.campaignId);
+        } else if (referralAttribution.referralCode) {
+          campaign = await ReferralCampaign.findOne({ referralCode: referralAttribution.referralCode });
+        }
+
         if (campaign) {
-          isCampaignActive = campaign.status === 'ACTIVE';
-          isCampaignExpired = campaign.expiryDate <= new Date();
-          
-          partner = await Partner.findById(campaign.partner);
-          if (partner) {
-            isPartnerActive = partner.status === 'ACTIVE';
+          const now = new Date();
+          const isCampaignActive = campaign.status === 'ACTIVE';
+          const isCampaignNotExpired = campaign.expiryDate && new Date(campaign.expiryDate) > now;
+
+          if (campaign.partner) {
+            partner = await Partner.findById(campaign.partner);
           }
-        }
 
-        if (campaign && partner && referralAttribution.visitorId) {
-          visit = await ReferralVisit.exists({
-            campaign: campaign._id,
-            partner: partner._id,
-            visitorId: referralAttribution.visitorId
-          });
-        }
+          const isPartnerActive = partner && partner.status === 'ACTIVE';
 
-        referralValid = Boolean(
-          campaign &&
-          isCampaignActive &&
-          !isCampaignExpired &&
-          partner &&
-          isPartnerActive &&
-          referralAttribution.referralCode === campaign.referralCode &&
-          String(referralAttribution.partnerId) === String(partner._id) &&
-          visit
-        );
+          let visit = false;
+          if (campaign && partner && referralAttribution.visitorId) {
+            visit = await ReferralVisit.exists({
+              campaign: campaign._id,
+              partner: partner._id,
+              visitorId: referralAttribution.visitorId
+            });
+          }
+
+          referralValid = Boolean(
+            campaign &&
+            isCampaignActive &&
+            isCampaignNotExpired &&
+            partner &&
+            isPartnerActive &&
+            visit
+          );
+        }
       } catch (attrErr) {
         console.error('[Enquiry Attribution] Attributing enquiry failed:', attrErr.message);
+        referralValid = false;
       }
     }
 
+    // Explicit referral metadata initialization
+    let referralData = {
+      isReferral: false,
+      partnerId: null,
+      campaignId: null,
+      referralCode: '',
+      campaignName: '',
+      partnerAgency: '',
+      landingPage: '',
+      visitorId: '',
+      referralSource: 'organic',
+      clickedAt: null,
+      submittedAt: null,
+      referralStatus: 'Pending'
+    };
 
-    if (referralValid) {
+    if (referralValid && campaign && partner) {
+      const clickedAt = referralAttribution.clickedAt || referralAttribution.timestamp;
+      referralData = {
+        isReferral: true,
+        partnerId: partner._id,
+        campaignId: campaign._id,
+        referralCode: campaign.referralCode,
+        campaignName: campaign.campaignName,
+        partnerAgency: partner.agencyName,
+        landingPage: campaign.landingPage || campaign.targetRoute || '/',
+        visitorId: referralAttribution.visitorId || '',
+        referralSource: 'referral',
+        clickedAt: clickedAt ? new Date(clickedAt) : new Date(),
+        submittedAt: new Date(),
+        referralStatus: 'Pending'
+      };
+    }
+
+    const enquiry = new Enquiry({
+      enquiryId,
+      name,
+      email: email ? email.toLowerCase() : '',
+      phone,
+      serviceCategory,
+      description: description || '',
+      budget: budget ? Number(budget) : 0,
+      status: 'pending_review',
+      timeline: [{ activity: 'Enquiry received via service page form' }],
+      referral: referralData
+    });
+
+    await enquiry.save();
+
+    // Clear attribution cookie after processing
+    if (cookieFound || req.cookies?.referral_partner_campaign) {
+      res.clearCookie('referral_partner_campaign', {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
+    }
+
+    // If and ONLY IF referral is valid, create ReferralBooking & notifications
+    if (referralValid && campaign && partner) {
       try {
         const clickedAt = referralAttribution.clickedAt || referralAttribution.timestamp;
 
-        // Automatically attach referral metadata to the enquiry (never entered manually by the customer)
-        if (!enquiry.referral || !enquiry.referral.isReferral) {
-          enquiry.referral = {
-            isReferral: true,
-            partnerId: partner._id,
-            campaignId: campaign._id,
-            referralCode: campaign.referralCode,
-            campaignName: campaign.campaignName,
-            partnerAgency: partner.agencyName,
-            landingPage: campaign.landingPage,
-            visitorId: referralAttribution.visitorId,
-            referralSource: 'referral',
-            clickedAt: clickedAt ? new Date(clickedAt) : null,
-            submittedAt: new Date(),
-            referralStatus: 'Pending'
-          };
-          await enquiry.save();
-        }
-
-        const booking = await ReferralBooking.create({
+        await ReferralBooking.create({
           partner: partner._id,
           campaign: campaign._id,
           enquiry: enquiry._id,
@@ -178,29 +210,12 @@ export const createEnquiry = async (req, res, next) => {
         });
         await partnerNotify.save();
 
-        // Dispatch realtime Socket.io update to partner
         const dispatch = req.app.get('socketio_dispatch');
         if (dispatch) {
           dispatch(partner._id.toString(), 'commission-updated', { partnerId: partner._id });
         }
-
-        // Clear attribution cookie to prevent duplicate bookings on refresh
-        res.clearCookie('referral_partner_campaign', {
-          httpOnly: false,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
       } catch (attrErr) {
         console.error('[Enquiry Attribution] Booking creation failed:', attrErr.message);
-      }
-    } else {
-      // Clear cookie if it existed but was not valid
-      if (cookieFound) {
-        res.clearCookie('referral_partner_campaign', {
-          httpOnly: false,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
       }
     }
 

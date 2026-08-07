@@ -1,14 +1,29 @@
 // Reads the referral session stored by the Referral Redirect flow.
-// The server prefers the httpOnly-readable `referral_partner_campaign` cookie,
-// but this localStorage fallback covers browsers where the cookie could not be
-// set or was cleared. It is attached to enquiry submissions as `referralDetails`
-// so the visitor is never asked to enter referral information manually.
+// Validates expiration and campaign presence.
+
+export function clearReferralAttribution() {
+  try {
+    localStorage.removeItem('referral_partner_campaign_fallback');
+  } catch (err) {}
+}
+
 export function getReferralAttribution() {
   try {
     const raw = localStorage.getItem('referral_partner_campaign_fallback');
     if (!raw) return undefined;
     const parsed = JSON.parse(raw);
-    return parsed && parsed.campaignId ? parsed : undefined;
+    if (!parsed || !parsed.campaignId) {
+      clearReferralAttribution();
+      return undefined;
+    }
+
+    // Expiry check: if campaign has an expiryDate and it is passed, clear and ignore
+    if (parsed.expiryDate && new Date(parsed.expiryDate) <= new Date()) {
+      clearReferralAttribution();
+      return undefined;
+    }
+
+    return parsed;
   } catch (err) {
     return undefined;
   }

@@ -12,7 +12,9 @@ import { clientTestimonials } from './data/clientTestimonials.js';
 import PartnerLoginPage from './components/PartnerLoginPage.jsx';
 import PartnerDashboardPage from './components/PartnerDashboardPage.jsx';
 import ReferralRedirect from './components/ReferralRedirect.jsx';
-import { getReferralAttribution } from './services/referralAttribution.js';
+import { getReferralAttribution, clearReferralAttribution } from './services/referralAttribution.js';
+import CRMGlobalLoader from './components/shared/CRMGlobalLoader.jsx';
+import { LoadingProvider } from './context/LoadingContext.jsx';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -221,6 +223,7 @@ function LandingPage() {
       if (!res.ok) throw new Error(data.error || 'Submission failed');
       
       setEnquiryStatus('success');
+      clearReferralAttribution();
       toast('Enquiry submitted successfully! Harsha will reach out on WhatsApp.', 'success');
       
       // Reset form
@@ -1335,6 +1338,7 @@ export default function App() {
     <ErrorBoundary>
     <AuthProvider>
     <PartnerAuthProvider>
+    <LoadingProvider>
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -1354,22 +1358,22 @@ export default function App() {
         <Route path="/invite/:token" element={<AcceptInvitationPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/services/clip-editing" element={
-          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Clip Editing...</div>}>
+          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Clip Editing..." />}>
             <ClipEditingPage />
           </React.Suspense>
         } />
         <Route path="/services/podcast-editing" element={
-          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Podcast Editing...</div>}>
+          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Podcast Editing..." />}>
             <PodcastEditingPage />
           </React.Suspense>
         } />
         <Route path="/services/social-media-marketing" element={
-          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Marketing...</div>}>
+          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Marketing..." />}>
             <MarketingPage />
           </React.Suspense>
         } />
         <Route path="/services/web-design-development" element={
-          <React.Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0E0E10', color: '#FFF' }}>Loading Web Engineering...</div>}>
+          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Web Engineering..." />}>
             <WebDevelopmentPage />
           </React.Suspense>
         } />
@@ -1379,7 +1383,7 @@ export default function App() {
         <Route 
           path="/backup/*" 
           element={
-            <ProtectedRoute allowedRoles={['BACKUP_ADMIN']}>
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'BACKUP_ADMIN', 'backup_admin']}>
               <BackupPortalPage />
             </ProtectedRoute>
           } 
@@ -1426,6 +1430,7 @@ export default function App() {
         />
       </Routes>
     </Router>
+    </LoadingProvider>
     </PartnerAuthProvider>
     </AuthProvider>
     </ErrorBoundary>

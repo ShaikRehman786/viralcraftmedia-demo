@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { getReferralAttribution } from '../services/referralAttribution.js';
+import { getReferralAttribution, clearReferralAttribution } from '../services/referralAttribution.js';
 import { 
   BarChart3, Target, Users, Zap, Shield, TrendingUp, Calendar, Layers
 } from 'lucide-react';
@@ -107,6 +107,7 @@ export default function MarketingPage() {
         budget: budget ? Number(budget) : 0,
         referralDetails: getReferralAttribution()
       });
+      clearReferralAttribution();
       setStatus('query_sent');
     } catch (err) {
       setStatus('error');

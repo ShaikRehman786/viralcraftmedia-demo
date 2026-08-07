@@ -30,6 +30,7 @@ import LogsPage from './LogsPage.jsx';
 import EnquiriesPage from './EnquiriesPage.jsx';
 import PaymentsPage from './PaymentsPage.jsx';
 import ReferralManagementPage from './ReferralManagementPage.jsx';
+import BackupPortalPage from './BackupPortalPage.jsx';
 
 axios.defaults.withCredentials = true;
 
@@ -42,6 +43,7 @@ const ROLE_ACCESS = {
   calendar: ['SUPER_ADMIN'],
   staff: ['SUPER_ADMIN', 'MANAGER'],
   logs: ['SUPER_ADMIN'],
+  backup: ['SUPER_ADMIN', 'BACKUP_ADMIN'],
   enquiries: ['SUPER_ADMIN'],
   whatsapp: ['SUPER_ADMIN'],
   payments: ['CLIENT', 'SUPER_ADMIN'],
@@ -1249,6 +1251,9 @@ export default function DashboardPage() {
             )}
             {activeTab === 'referrals' && (
               <ReferralManagementPage user={user} addToast={addToast} />
+            )}
+            {activeTab === 'backup' && (
+              <BackupPortalPage embedded={true} />
             )}
           </div>
         </div>

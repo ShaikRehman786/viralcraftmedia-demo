@@ -64,9 +64,11 @@ export const protect = async (req, res, next) => {
     req.user = user;
 
     // Intercept backup admin account for database isolation and read-only lockdown
-    const backupAdminEmail = (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase();
+    const backupAdminEmail = (config.backupAdminEmail || 'backupadmin@viralcraftmedia.com').toLowerCase();
     if (user.email.toLowerCase() === backupAdminEmail) {
-      if (req.method !== 'GET' && !req.path.toLowerCase().endsWith('/logout')) {
+      const isBackupRoute = (req.originalUrl && req.originalUrl.includes('/api/backup')) || (req.baseUrl && req.baseUrl.includes('/backup')) || req.path.toLowerCase().startsWith('/backup');
+      
+      if (!isBackupRoute && req.method !== 'GET' && !req.path.toLowerCase().endsWith('/logout')) {
         return res.status(403).json({ 
           error: 'Access Denied', 
           message: 'Read-only access. Write operations are disabled for the backup account.' 

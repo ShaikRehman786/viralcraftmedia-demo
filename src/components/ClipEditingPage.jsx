@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { getReferralAttribution } from '../services/referralAttribution.js';
+import { getReferralAttribution, clearReferralAttribution } from '../services/referralAttribution.js';
 import { Scissors, Activity, TrendingUp, Monitor, Play, Heart, MessageCircle, Bookmark, Zap, Target, Layers, UserCheck, Clock, Shield, UploadCloud, DownloadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Footer from './Footer.jsx';
@@ -203,6 +203,7 @@ export default function ClipEditingPage() {
         budget: price,
         referralDetails: getReferralAttribution()
       });
+      clearReferralAttribution();
       setStatus('query_sent');
     } catch (err) {
       setStatus('error');

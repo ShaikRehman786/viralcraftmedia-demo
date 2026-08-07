@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { getReferralAttribution } from '../services/referralAttribution.js';
+import { getReferralAttribution, clearReferralAttribution } from '../services/referralAttribution.js';
 import { 
   Code, Globe, Zap, Shield, Clock, Users, Target, Monitor, CheckCircle2
 } from 'lucide-react';
@@ -107,6 +107,7 @@ export default function WebDevelopmentPage() {
         budget: budget ? Number(budget) : 0,
         referralDetails: getReferralAttribution()
       });
+      clearReferralAttribution();
       setStatus('query_sent');
     } catch (err) {
       setStatus('error');

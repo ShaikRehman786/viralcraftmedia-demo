@@ -15,7 +15,8 @@ import {
   Send,
   DollarSign,
   Globe,
-  User
+  User,
+  Clock
 } from 'lucide-react';
 
 const STATUS_BADGES = {
@@ -120,8 +121,8 @@ export default function EnquiriesPage({
           <div className="flex-col gap-3">
             {enquiries.map(enq => (
               <div key={enq._id} className="data-card">
-                <div className="data-card-header">
-                  <div className="flex-row gap-2 items-center">
+                <div className="data-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <div className="flex-row gap-2 items-center flex-wrap">
                     <span className="text-xs text-muted font-semibold font-mono">{enq.enquiryId}</span>
                     <span className={`badge ${STATUS_BADGES[enq.status] || 'badge-gray'}`}>
                       {enq.status?.replace(/_/g, ' ')}
@@ -132,12 +133,18 @@ export default function EnquiriesPage({
                       </span>
                     )}
                   </div>
-                  {enq.budget > 0 && (
-                    <span className="badge badge-success flex-row gap-1">
-                      <DollarSign size={10} />
-                      ₹{enq.budget}
+                  <div className="flex-row gap-2 items-center">
+                    <span className="text-xs text-muted flex-row gap-1 items-center" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      <Clock size={12} />
+                      {enq.createdAt ? new Date(enq.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                     </span>
-                  )}
+                    {enq.budget > 0 && (
+                      <span className="badge badge-success flex-row gap-1">
+                        <DollarSign size={10} />
+                        ₹{enq.budget}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-row gap-3 items-start">

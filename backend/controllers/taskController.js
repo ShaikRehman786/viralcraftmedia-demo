@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import User from '../models/User.js';
@@ -33,26 +34,33 @@ export const getProjects = async (req, res, next) => {
         .populate('suggestedEmployee', 'name email role status')
         .sort({ createdAt: -1 });
     } else if (req.user.role === 'EMPLOYEE') {
-      projects = await Project.find({ category: req.user.department || 'N/A', employees: req.user._id })
+      projects = await Project.find({
+        $or: [
+          { employees: req.user._id },
+          { assignedEmployee: req.user._id },
+          { 'assignments.employee': req.user._id },
+          { category: req.user.department || 'N/A' }
+        ]
+      })
         .populate('order')
         .populate('client')
         .populate('manager', 'name email')
+        .populate('employees', 'name email')
         .populate('assignments.employee', 'name email')
         .populate('suggestedEmployee', 'name email role status')
         .sort({ createdAt: -1 });
     } else {
       // Role is client, match by phone
-      projects = await Project.find()
-        .populate({
-          path: 'client',
-          match: { phone: req.user.phone }
-        })
-        .populate('order')
-        .populate('suggestedEmployee', 'name email role status')
-        .sort({ createdAt: -1 });
-
-      // Filter out projects that did not match client criteria
-      projects = projects.filter(p => p.client !== null);
+      const client = await Client.findOne({ phone: req.user.phone }).select('_id');
+      if (client) {
+        projects = await Project.find({ client: client._id })
+          .populate('client')
+          .populate('order')
+          .populate('suggestedEmployee', 'name email role status')
+          .sort({ createdAt: -1 });
+      } else {
+        projects = [];
+      }
     }
 
     // Role-based sanitization of sensitive client & financial information
@@ -120,12 +128,14 @@ export const assignStaff = async (req, res, next) => {
     }
 
     if (managerId) project.manager = managerId;
-    if (employeeIds) project.employees = employeeIds;
+    if (employeeIds && Array.isArray(employeeIds)) {
+      project.employees = employeeIds.filter(e => e && mongoose.Types.ObjectId.isValid(e));
+    }
     project.status = 'in_progress';
 
     // Reset single-employee acceptance if the currently assigned editor is changed
     if (employeeIds && employeeIds.length > 0) {
-      if (project.employeeId && !employeeIds.some(id => id.toString() === project.employeeId.toString())) {
+      if (project.employeeId && !employeeIds.some(id => id && id.toString() === project.employeeId.toString())) {
         project.assignedEmployee = null;
         project.employeeId = null;
         project.assignedEmployeeName = '';
@@ -152,7 +162,9 @@ export const assignStaff = async (req, res, next) => {
     const newAssignments = [];
     
     for (const empId of (employeeIds || [])) {
-      const existing = currentAssignments.find(a => a.employee?.toString() === empId.toString());
+      if (!empId) continue;
+      const empIdStr = empId.toString ? empId.toString() : String(empId);
+      const existing = currentAssignments.find(a => a.employee?.toString() === empIdStr);
       if (existing) {
         newAssignments.push(existing);
       } else {
@@ -197,14 +209,14 @@ export const getTasks = async (req, res, next) => {
       query.assignedTo = req.user._id;
     } else if (req.user.role === 'CLIENT') {
       // Find client projects first
-      const clientProjects = await Project.find()
-        .populate({
-          path: 'client',
-          match: { phone: req.user.phone }
-        });
-      
-      const validProjectIds = clientProjects.filter(p => p.client !== null).map(p => p._id);
-      query.project = { $in: validProjectIds };
+      const client = await Client.findOne({ phone: req.user.phone }).select('_id');
+      if (client) {
+        const clientProjects = await Project.find({ client: client._id }).select('_id');
+        const validProjectIds = clientProjects.map(p => p._id);
+        query.project = { $in: validProjectIds };
+      } else {
+        query.project = { $in: [] };
+      }
     }
 
     const tasks = await Task.find(query)
@@ -296,7 +308,7 @@ export const submitTask = async (req, res, next) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    if (task.assignedTo.toString() !== req.user._id.toString() && req.user.role !== 'SUPER_ADMIN') {
+    if (task.assignedTo && task.assignedTo.toString() !== req.user._id.toString() && req.user.role !== 'SUPER_ADMIN') {
       return res.status(403).json({ error: 'You are not assigned to this task.' });
     }
 
@@ -505,7 +517,7 @@ export const getProjectChat = async (req, res, next) => {
     // Verify user has access to this project's chat
     const isAdmin = req.user.role === 'SUPER_ADMIN';
     const isManager = req.user.role === 'MANAGER' && project.manager?.toString() === req.user._id.toString();
-    const isAssignedEmployee = project.employees?.some(e => e.toString() === req.user._id.toString());
+    const isAssignedEmployee = project.employees?.some(e => e && e.toString() === req.user._id.toString());
     
     if (!isAdmin && !isManager && !isAssignedEmployee) {
       return res.status(403).json({ error: 'You do not have access to this project chat.' });
@@ -543,7 +555,7 @@ export const postProjectChat = async (req, res, next) => {
     // Verify user has access to this project's chat
     const isAdmin = req.user.role === 'SUPER_ADMIN';
     const isManager = req.user.role === 'MANAGER' && project.manager?.toString() === req.user._id.toString();
-    const isAssignedEmployee = project.employees?.some(e => e.toString() === req.user._id.toString());
+    const isAssignedEmployee = project.employees?.some(e => e && e.toString() === req.user._id.toString());
     
     if (!isAdmin && !isManager && !isAssignedEmployee) {
       return res.status(403).json({ error: 'You do not have access to this project chat.' });
@@ -563,12 +575,14 @@ export const postProjectChat = async (req, res, next) => {
     if (ioDispatcher) {
       // Send to manager
       if (project.manager) {
-        ioDispatcher(project.manager.toString(), 'chat_message', chatMsg);
+        ioDispatcher(project.manager.toString ? project.manager.toString() : String(project.manager), 'chat_message', chatMsg);
       }
       // Send to editors
       if (project.employees && project.employees.length > 0) {
         project.employees.forEach(empId => {
-          ioDispatcher(empId.toString(), 'chat_message', chatMsg);
+          if (empId) {
+            ioDispatcher(empId.toString ? empId.toString() : String(empId), 'chat_message', chatMsg);
+          }
         });
       }
     }
@@ -998,7 +1012,7 @@ export const acceptProjectAssignment = async (req, res, next) => {
     }
 
     const isSuggested = project.suggestedEmployee?.toString() === user._id.toString();
-    const isAssigned = project.employees?.some(id => id.toString() === user._id.toString());
+    const isAssigned = project.employees?.some(id => id && id.toString() === user._id.toString());
 
     if (!isSuggested && !isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
       return res.status(403).json({ error: 'You are not authorized to accept this project assignment.' });
@@ -1083,4 +1097,319 @@ export const acceptProjectAssignment = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * Creates a new project
+ * Route: POST /api/projects
+ */
+export const createProject = async (req, res, next) => {
+  try {
+    const { name, description, client, category, priority, estimatedCompletion, manager, employees, status, source } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+
+    const projectData = {
+      name: name.trim(),
+      description: description ? String(description).trim() : '',
+      category: category || 'Short Form Editing',
+      priority: priority || 'medium',
+      status: status || 'pending',
+      source: source || 'Manual',
+      createdBy: req.user?._id || null
+    };
+
+    if (estimatedCompletion) projectData.estimatedCompletion = new Date(estimatedCompletion);
+    
+    // Safely sanitize relational ID fields: filter out empty strings "", null, undefined, or invalid ObjectIds
+    if (client && mongoose.Types.ObjectId.isValid(client)) {
+      projectData.client = client;
+    }
+    if (manager && mongoose.Types.ObjectId.isValid(manager)) {
+      projectData.manager = manager;
+    }
+    if (employees && Array.isArray(employees)) {
+      projectData.employees = employees.filter(e => e && mongoose.Types.ObjectId.isValid(e));
+    }
+
+    const project = await Project.create(projectData);
+
+    await project.populate([
+      { path: 'client' },
+      { path: 'manager', select: 'name email' },
+      { path: 'employees', select: 'name email' }
+    ]);
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'project-created', { projectId: project._id, name: project.name });
+      ioDispatcher(null, 'Project Created', { projectId: project._id, name: project.name });
+    }
+
+    await logEvent({
+      userId: req.user?._id || null,
+      userName: req.user?.name || 'Admin',
+      action: 'PROJECT_CREATE',
+      details: { projectId: project._id, name: project.name }
+    });
+
+    return res.status(201).json({ success: true, data: project });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Updates a project
+ * Route: PUT /api/projects/:id
+ */
+export const updateProject = async (req, res, next) => {
+  try {
+    const { name, description, client, category, priority, estimatedCompletion, manager, employees, status } = req.body;
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    if (name !== undefined && name !== null) project.name = String(name).trim();
+    if (description !== undefined) project.description = description ? String(description).trim() : '';
+    if (client !== undefined) project.client = (client && mongoose.Types.ObjectId.isValid(client)) ? client : null;
+    if (category !== undefined) project.category = category;
+    if (priority !== undefined) project.priority = priority;
+    if (status !== undefined) project.status = status;
+    if (estimatedCompletion !== undefined) project.estimatedCompletion = estimatedCompletion ? new Date(estimatedCompletion) : null;
+    if (manager !== undefined) project.manager = (manager && mongoose.Types.ObjectId.isValid(manager)) ? manager : null;
+    if (employees !== undefined && Array.isArray(employees)) {
+      project.employees = employees.filter(e => e && mongoose.Types.ObjectId.isValid(e));
+    }
+
+    if (status === 'completed' || status === 'approved') {
+      if (project.order) {
+        await Order.findByIdAndUpdate(project.order, { status: 'completed' }).catch(() => {});
+      }
+      if (project.referral?.isReferral && project.referral?.enquiryId) {
+        await ReferralBooking.findOneAndUpdate({ enquiry: project.referral.enquiryId }, { status: 'Completed' }).catch(() => {});
+      }
+    }
+
+    await project.save();
+
+    await project.populate([
+      { path: 'client' },
+      { path: 'manager', select: 'name email' },
+      { path: 'employees', select: 'name email' }
+    ]);
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'dashboard-update', { projectId: project._id, name: project.name });
+    }
+
+    await logEvent({
+      userId: req.user._id,
+      userName: req.user.name,
+      action: 'PROJECT_UPDATE',
+      details: { projectId: project._id, name: project.name, status: project.status }
+    });
+
+    return res.status(200).json({ success: true, data: project });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Deletes a project and its tasks
+ * Route: DELETE /api/projects/:id
+ */
+export const deleteProject = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    await Task.deleteMany({ project: project._id });
+    await project.deleteOne();
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'dashboard-update', { projectId: req.params.id });
+    }
+
+    return res.status(200).json({ success: true, message: 'Project and associated tasks deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Creates a new task
+ * Route: POST /api/tasks
+ */
+export const createTask = async (req, res, next) => {
+  try {
+    const { project, name, description, priority, deadline, assignedTo, assignedManager, status } = req.body;
+    if (!project || !name) {
+      return res.status(400).json({ error: 'Project ID and task name are required' });
+    }
+
+    const projDoc = await Project.findById(project);
+    if (!projDoc) {
+      return res.status(404).json({ error: 'Associated project not found' });
+    }
+
+    const taskData = {
+      project,
+      name,
+      description: description || '',
+      priority: priority || 'medium',
+      status: status || (assignedTo ? 'assigned' : 'pending'),
+      createdBy: req.user._id
+    };
+
+    if (deadline) taskData.deadline = new Date(deadline);
+    if (assignedTo) taskData.assignedTo = assignedTo;
+    if (assignedManager) taskData.assignedManager = assignedManager;
+
+    const task = await Task.create(taskData);
+    await task.populate([
+      { path: 'project' },
+      { path: 'assignedTo', select: 'name email phone' }
+    ]);
+
+    // Alert employee if assigned
+    if (assignedTo) {
+      const employee = await User.findById(assignedTo);
+      if (employee) {
+        const ioDispatcher = req.app.get('socketio_dispatch');
+        await notifyUser({
+          userId: assignedTo,
+          title: 'Task Assigned',
+          message: `You have been assigned task: "${task.name}"`,
+          type: 'info',
+          priority: 'high',
+          referenceId: task._id.toString(),
+          referenceModel: 'Task',
+          dispatcher: ioDispatcher
+        });
+
+        sendEmployeeTaskAlertEmail(employee.name, employee.email, task.name, task.deadline).catch(console.error);
+
+        if (employee.phone) {
+          const priorityStr = (task.priority || 'medium').charAt(0).toUpperCase() + (task.priority || 'medium').slice(1);
+          const deadlineStr = task.deadline ? new Date(task.deadline).toLocaleDateString([], { day: 'numeric', month: 'long' }) : 'N/A';
+          const wsMsgText = `New Task Assigned\n\nTask:\n${task.name}\n\nPriority:\n${priorityStr}\n\nDeadline:\n${deadlineStr}\n\nPlease login to ViralCraft Media.`;
+          whatsappService.sendMessage(employee.phone, wsMsgText).catch(err => {
+            console.error('Failed to send task assignment alert via WhatsApp:', err.message);
+          });
+        }
+      }
+    }
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'task-created', { taskId: task._id, name: task.name });
+      ioDispatcher(null, 'Task Created', { taskId: task._id, name: task.name });
+    }
+
+    return res.status(201).json({ success: true, data: task });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Updates a task
+ * Route: PUT /api/tasks/:id
+ */
+export const updateTask = async (req, res, next) => {
+  try {
+    const { name, description, priority, deadline, assignedTo, assignedManager, status, submissionUrl, feedback, actualHours, estimatedHours } = req.body;
+    const task = await Task.findById(req.params.id).populate('project');
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Role check: Employees can update their assigned tasks (status, submissionUrl, comments, hours)
+    if (req.user.role === 'EMPLOYEE') {
+      if (!task.assignedTo || task.assignedTo.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'You are only authorized to update tasks assigned to you.' });
+      }
+      if (status !== undefined) task.status = status;
+      if (submissionUrl !== undefined) task.submissionUrl = submissionUrl;
+      if (actualHours !== undefined) task.actualHours = actualHours;
+    } else {
+      // Super Admin or Manager can update all fields
+      if (name !== undefined) task.name = name;
+      if (description !== undefined) task.description = description;
+      if (priority !== undefined) task.priority = priority;
+      if (status !== undefined) task.status = status;
+      if (deadline !== undefined) task.deadline = deadline ? new Date(deadline) : null;
+      if (assignedTo !== undefined) task.assignedTo = assignedTo || null;
+      if (assignedManager !== undefined) task.assignedManager = assignedManager || null;
+      if (submissionUrl !== undefined) task.submissionUrl = submissionUrl;
+      if (feedback !== undefined) task.feedback = feedback;
+      if (actualHours !== undefined) task.actualHours = actualHours;
+      if (estimatedHours !== undefined) task.estimatedHours = estimatedHours;
+    }
+
+    if (status === 'completed' || status === 'approved') {
+      task.completedAt = new Date();
+    }
+
+    await task.save();
+    await task.populate([
+      { path: 'project' },
+      { path: 'assignedTo', select: 'name email' }
+    ]);
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'dashboard-update', { taskId: task._id, name: task.name, status: task.status });
+    }
+
+    return res.status(200).json({ success: true, data: task });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Deletes a task
+ * Route: DELETE /api/tasks/:id
+ */
+export const deleteTask = async (req, res, next) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    await task.deleteOne();
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'dashboard-update', { taskId: req.params.id });
+    }
+
+    return res.status(200).json({ success: true, message: 'Task deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Gets clients list for dropdowns
+ * Route: GET /api/projects/clients
+ */
+export const getClients = async (req, res, next) => {
+  try {
+    const clients = await Client.find().sort({ name: 1 }).lean();
+    return res.status(200).json({ success: true, data: clients });
+  } catch (err) {
+    next(err);
+  }
+};
+
 

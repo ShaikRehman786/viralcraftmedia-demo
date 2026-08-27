@@ -38,7 +38,7 @@ const projectSchema = new mongoose.Schema({
   },
   priority: {
     type: String,
-    enum: ['low', 'medium', 'high'],
+    enum: ['low', 'medium', 'high', 'urgent'],
     default: 'medium'
   },
   manager: {
@@ -148,6 +148,12 @@ const projectSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+projectSchema.index({ client: 1 });
+projectSchema.index({ manager: 1 });
+projectSchema.index({ employees: 1 });
+projectSchema.index({ assignedEmployee: 1 });
+projectSchema.index({ employeeId: 1 });
 
 const Project = mongoose.model('Project', projectSchema);
 export default Project;

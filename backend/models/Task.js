@@ -96,5 +96,10 @@ const taskSchema = new mongoose.Schema({
   timestamps: true
 });
 
+taskSchema.index({ project: 1 });
+taskSchema.index({ assignedTo: 1 });
+taskSchema.index({ assignedManager: 1 });
+taskSchema.index({ status: 1 });
+
 const Task = mongoose.model('Task', taskSchema);
 export default Task;

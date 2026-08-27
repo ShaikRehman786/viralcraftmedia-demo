@@ -193,21 +193,29 @@ export default function OverviewPage({
   const myProjects = useMemo(() => {
     if (!userId) return [];
     const seen = new Set();
-    return projects.filter(p => {
-      const isAssigned = p.employees?.some(e => (e._id || e)?.toString() === userId) ||
-        p.assignments?.some(a => (a.employee?._id || a.employee)?.toString() === userId) ||
-        p.employeeId?.toString() === userId ||
-        p.assignedEmployee?.toString() === userId;
+    return (projects || []).filter(p => {
+      if (!p || !p._id) return false;
+      const pIdStr = p._id.toString();
+      const isAssigned = (p.employees || []).some(e => {
+        const eid = e?._id || e;
+        return eid ? eid.toString() === userId : false;
+      }) ||
+        (p.assignments || []).some(a => {
+          const eid = a?.employee?._id || a?.employee;
+          return eid ? eid.toString() === userId : false;
+        }) ||
+        (p.employeeId ? p.employeeId.toString() === userId : false) ||
+        (p.assignedEmployee ? p.assignedEmployee.toString() === userId : false);
       if (!isAssigned) return false;
-      if (seen.has(p._id?.toString())) return false;
-      seen.add(p._id?.toString());
+      if (seen.has(pIdStr)) return false;
+      seen.add(pIdStr);
       return true;
     });
   }, [projects, userId]);
 
   const myTasks = useMemo(() => {
     if (!userId) return [];
-    return tasks.filter(t => t.assignedTo?._id?.toString() === userId || t.assignedTo?.toString() === userId);
+    return (tasks || []).filter(t => t && ((t.assignedTo?._id || t.assignedTo)?.toString() === userId));
   }, [tasks, userId]);
 
   const assignedCount = myProjects.length;
@@ -500,23 +508,32 @@ export default function OverviewPage({
     return previousPeriodProjects.reduce((acc, p) => acc + (p.order?.amount || 0), 0);
   }, [previousPeriodProjects]);
 
-  const growthPercent = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : (totalRevenue > 0 ? 100 : 0);
-  const growthPercentStr = `${growthPercent >= 0 ? '+' : ''}${growthPercent.toFixed(1)}%`;
-
-  const formattedRevenue = totalRevenue > 100000 ? `₹${(totalRevenue / 100000).toFixed(1)}L` : `₹${(totalRevenue / 1000).toFixed(0)}K`;
-  
-  const netProfitVal = totalRevenue * 0.7;
-  const formattedNetProfit = netProfitVal > 100000 ? `₹${(netProfitVal / 100000).toFixed(1)}L` : `₹${(netProfitVal / 1000).toFixed(0)}K`;
+  const formattedRevenue = totalRevenue > 0 ? (totalRevenue >= 100000 ? `₹${(totalRevenue / 100000).toFixed(1)}L` : `₹${totalRevenue.toLocaleString('en-IN')}`) : '₹0';
+  const formattedNetProfit = totalRevenue > 0 ? (totalRevenue >= 100000 ? `₹${(totalRevenue / 100000).toFixed(1)}L` : `₹${totalRevenue.toLocaleString('en-IN')}`) : '₹0';
 
   const outstandingSum = useMemo(() => {
     return filteredProjects
       .filter(p => p.status !== 'completed' && p.order?.amount)
-      .reduce((acc, p) => acc + p.order.amount, 0) * 0.4;
+      .reduce((acc, p) => acc + p.order.amount, 0);
   }, [filteredProjects]);
-  const formattedOutstanding = outstandingSum > 100000 ? `₹${(outstandingSum / 100000).toFixed(1)}L` : `₹${(outstandingSum / 1000).toFixed(0)}K`;
+  const formattedOutstanding = outstandingSum > 0 ? (outstandingSum >= 100000 ? `₹${(outstandingSum / 100000).toFixed(1)}L` : `₹${outstandingSum.toLocaleString('en-IN')}`) : '₹0';
 
   const averageDealValue = filteredProjects.length > 0 ? totalRevenue / filteredProjects.length : 0;
-  const formattedAverageDeal = averageDealValue > 100000 ? `₹${(averageDealValue / 100000).toFixed(1)}L` : `₹${(averageDealValue / 1000).toFixed(0)}K`;
+  const formattedAverageDeal = averageDealValue > 0 ? (averageDealValue >= 100000 ? `₹${(averageDealValue / 100000).toFixed(1)}L` : `₹${Math.round(averageDealValue).toLocaleString('en-IN')}`) : '₹0';
+  
+  const overdueTasksCount = useMemo(() => {
+    const now = new Date();
+    return tasks.filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'completed' && t.status !== 'approved').length;
+  }, [tasks]);
+
+  const projectsNeedingAttention = useMemo(() => {
+    const now = new Date();
+    return projects.filter(p => {
+      const isOverdue = p.estimatedCompletion && new Date(p.estimatedCompletion) < now && p.status !== 'completed';
+      const isHighPriority = p.priority === 'high' || p.priority === 'urgent';
+      return isOverdue || isHighPriority;
+    });
+  }, [projects]);
 
   const categoryRevenueMap = useMemo(() => {
     return filteredProjects.reduce((acc, p) => {
@@ -809,7 +826,7 @@ export default function OverviewPage({
                   </div>
                 </div>
 
-                {/* ROW 1: Executive KPI Summary (8-card ribbon) */}
+                {/* ROW 1: Executive KPI Summary (8-card ribbon - REAL DATABASE METRICS ONLY) */}
                 <div className="rev-kpi-ribbon">
                   <div className="rev-kpi-subcard">
                     <div className="rev-kpi-subcard-header">
@@ -818,10 +835,7 @@ export default function OverviewPage({
                     </div>
                     <span className="rev-kpi-subcard-value">{formattedRevenue}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">↑ 18.4%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
-                      </svg>
+                      <span className="rev-kpi-subcard-trend up">Live</span>
                     </div>
                   </div>
 
@@ -832,38 +846,18 @@ export default function OverviewPage({
                     </div>
                     <span className="rev-kpi-subcard-value">{formattedNetProfit}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">↑ 12.1%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--purple)" strokeWidth="2" />
-                      </svg>
+                      <span className="rev-kpi-subcard-trend up">Real Time</span>
                     </div>
                   </div>
 
                   <div className="rev-kpi-subcard">
                     <div className="rev-kpi-subcard-header">
-                      <span className="rev-kpi-subcard-label">Growth</span>
+                      <span className="rev-kpi-subcard-label">Paid / Collected</span>
                       <TrendingUp size={14} className="text-success" />
                     </div>
-                    <span className="rev-kpi-subcard-value">+18.4%</span>
+                    <span className="rev-kpi-subcard-value">{formattedRevenue}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">↑ 2.4%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--success)" strokeWidth="2" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="rev-kpi-subcard">
-                    <div className="rev-kpi-subcard-header">
-                      <span className="rev-kpi-subcard-label">Forecast</span>
-                      <TrendingUp size={14} className="text-info" />
-                    </div>
-                    <span className="rev-kpi-subcard-value">₹5.8L</span>
-                    <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">↑ 22%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--info)" strokeWidth="2" />
-                      </svg>
+                      <span className="rev-kpi-subcard-trend up">Collected</span>
                     </div>
                   </div>
 
@@ -874,38 +868,7 @@ export default function OverviewPage({
                     </div>
                     <span className="rev-kpi-subcard-value">{formattedOutstanding}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend down">↓ 4.2%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,5 Q15,25 30,10 T60,25 T90,8" fill="none" stroke="var(--warning)" strokeWidth="2" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="rev-kpi-subcard">
-                    <div className="rev-kpi-subcard-header">
-                      <span className="rev-kpi-subcard-label">Collection Rate</span>
-                      <CheckSquare size={14} className="text-success" />
-                    </div>
-                    <span className="rev-kpi-subcard-value">94.2%</span>
-                    <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">↑ 1.1%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,20 Q20,10 40,20 T80,10 T100,15" fill="none" stroke="var(--success)" strokeWidth="2" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="rev-kpi-subcard">
-                    <div className="rev-kpi-subcard-header">
-                      <span className="rev-kpi-subcard-label">Target Achievement</span>
-                      <Sparkles size={14} className="text-accent" />
-                    </div>
-                    <span className="rev-kpi-subcard-value">92.4%</span>
-                    <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">↑ 1.8%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,25 Q15,5 30,20 T60,10 T90,22" fill="none" stroke="var(--accent)" strokeWidth="2" />
-                      </svg>
+                      <span className="rev-kpi-subcard-trend down">Unbilled</span>
                     </div>
                   </div>
 
@@ -916,10 +879,40 @@ export default function OverviewPage({
                     </div>
                     <span className="rev-kpi-subcard-value">{formattedAverageDeal}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">↑ 5.4%</span>
-                      <svg viewBox="0 0 100 30" width="40" height="12" style={{ overflow: 'visible' }}>
-                        <path d="M0,10 Q20,25 40,5 T80,18 T100,5" fill="none" stroke="var(--info)" strokeWidth="2" />
-                      </svg>
+                      <span className="rev-kpi-subcard-trend up">Calculated</span>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Active Projects</span>
+                      <ClipboardList size={14} className="text-info" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">{activeProjects.length}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">In Production</span>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Pending Tasks</span>
+                      <CheckSquare size={14} className="text-accent" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">{tasks.filter(t => t.status !== 'completed' && t.status !== 'approved').length}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend up">Assigned</span>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard">
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Overdue Tasks</span>
+                      <Clock size={14} className="text-warning" />
+                    </div>
+                    <span className="rev-kpi-subcard-value">{overdueTasksCount}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend down">Requires Action</span>
                     </div>
                   </div>
                 </div>
@@ -935,26 +928,16 @@ export default function OverviewPage({
                         <span className="rev-panel-insight-val" style={{ fontSize: '11px' }}>{bestCategory}</span>
                       </div>
                       <div className="rev-panel-insight-item">
-                        <span className="rev-panel-insight-label">Health Score</span>
-                        <span className="rev-panel-insight-val" style={{ color: 'var(--success)' }}>94 / 100</span>
+                        <span className="rev-panel-insight-label">Active Projects</span>
+                        <span className="rev-panel-insight-val" style={{ color: 'var(--accent)' }}>{activeProjects.length} active</span>
                       </div>
                       <div className="rev-panel-insight-item">
                         <span className="rev-panel-insight-label">Best Month</span>
                         <span className="rev-panel-insight-val">{highestMonth}</span>
                       </div>
                       <div className="rev-panel-insight-item">
-                        <span className="rev-panel-insight-label">Worst Month</span>
-                        <span className="rev-panel-insight-val">Jan (₹0k)</span>
-                      </div>
-                      <div className="rev-panel-insight-item">
-                        <span className="rev-panel-insight-label">Forecast Accuracy</span>
-                        <span className="rev-panel-insight-val">96.8%</span>
-                      </div>
-                      <div className="progress-ring-container">
-                        <div className="progress-ring-circle">92%</div>
-                      </div>
-                      <div className="text-center" style={{ fontSize: '12px', color: 'var(--gray-500)', fontWeight: 600 }}>
-                        Billing Pipeline Target
+                        <span className="rev-panel-insight-label">Completed Projects</span>
+                        <span className="rev-panel-insight-val" style={{ color: 'var(--success)' }}>{projects.filter(p => p.status === 'completed').length} completed</span>
                       </div>
                     </div>
                   </div>
@@ -999,20 +982,22 @@ export default function OverviewPage({
                       <div className="rev-mini-card">
                         <div className="rev-mini-card-left">
                           <span className="rev-mini-card-label">Revenue Today</span>
-                          <span className="rev-mini-card-val">₹18,500</span>
+                          <span className="rev-mini-card-val">{analytics?.revenueToday > 0 ? `₹${analytics.revenueToday.toLocaleString('en-IN')}` : '₹0'}</span>
                         </div>
                         <Sparkles size={14} className="text-accent" />
                       </div>
                       <div className="rev-mini-card">
                         <div className="rev-mini-card-left">
                           <span className="rev-mini-card-label">This Week</span>
-                          <span className="rev-mini-card-val">₹64,000</span>
+                          <span className="rev-mini-card-val">
+                            {filteredProjects.length > 0 ? `₹${filteredProjects.reduce((s, p) => s + (p.order?.amount || 0), 0).toLocaleString('en-IN')}` : '₹0'}
+                          </span>
                         </div>
                         <TrendingUp size={14} className="text-success" />
                       </div>
                       <div className="rev-mini-card">
                         <div className="rev-mini-card-left">
-                          <span className="rev-mini-card-label">Pending Invoices</span>
+                          <span className="rev-mini-card-label">Pending Reviews</span>
                           <span className="rev-mini-card-val">{projects.filter(p => p.status === 'review').length} billing</span>
                         </div>
                         <Clock size={14} className="text-warning" />
@@ -1020,14 +1005,18 @@ export default function OverviewPage({
                       <div className="rev-mini-card">
                         <div className="rev-mini-card-left">
                           <span className="rev-mini-card-label">Top Customer</span>
-                          <span className="rev-mini-card-val" style={{ fontSize: '12px' }}>ViralCraft Client</span>
+                          <span className="rev-mini-card-val" style={{ fontSize: '12px' }}>
+                            {projects.find(p => p.client?.name)?.client?.name || 'No customer data'}
+                          </span>
                         </div>
                         <Users size={14} className="text-purple" />
                       </div>
                       <div className="rev-mini-card">
                         <div className="rev-mini-card-left">
                           <span className="rev-mini-card-label">Operations Status</span>
-                          <span className="rev-mini-card-val" style={{ color: 'var(--success)', fontSize: '13px' }}>Optimal (A+)</span>
+                          <span className="rev-mini-card-val" style={{ color: 'var(--success)', fontSize: '13px' }}>
+                            {projects.length > 0 ? 'Active' : 'Idle'}
+                          </span>
                         </div>
                         <Sparkles size={14} className="text-success" />
                       </div>

@@ -2,12 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import { config } from './config/env.js';
 import routes from './routes/index.js';
 import { preventMongoInjection, sanitizeObject, validateCsrfToken } from './middleware/validate.js';
 import errorHandler from './middleware/error.js';
 
 const app = express();
+app.use(compression());
 
 // Security Headers via Helmet
 app.use(helmet({

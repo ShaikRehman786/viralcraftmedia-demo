@@ -257,19 +257,20 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
         });
         for (const mgr of managerUsers) {
           managersFound.push(mgr);
-          if (!recipients.has(mgr._id.toString())) {
+          if (mgr && mgr._id && !recipients.has(mgr._id.toString())) {
             recipients.set(mgr._id.toString(), { user: mgr, isManager: true });
           }
         }
-        if (project.manager && !recipients.has(project.manager._id.toString())) {
+        if (project.manager && project.manager._id && !recipients.has(project.manager._id.toString())) {
           managersFound.push(project.manager);
           recipients.set(project.manager._id.toString(), { user: project.manager, isManager: true });
         }
       } else {
         const matchingEmployees = (project.employees || []).filter(emp => 
-          emp.department && emp.department.toLowerCase() === dept.toLowerCase()
+          emp && emp.department && emp.department.toLowerCase() === dept.toLowerCase()
         );
         for (const emp of matchingEmployees) {
+          if (!emp || !emp._id) continue;
           employeesFound.push(emp);
           if (!recipients.has(emp._id.toString())) {
             recipients.set(emp._id.toString(), { user: emp, isManager: false });
@@ -281,8 +282,8 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
     console.log('\n===== PROJECT ASSIGNMENT NOTIFICATION DEBUG =====');
     console.log(`Project: ${project.name}`);
     console.log(`Selected Departments:`, depts);
-    console.log(`Assigned Manager IDs:`, project.manager ? [project.manager._id.toString()] : []);
-    console.log(`Assigned Employee IDs:`, (project.employees || []).map(e => e._id.toString()));
+    console.log(`Assigned Manager IDs:`, (project.manager && project.manager._id) ? [project.manager._id.toString()] : []);
+    console.log(`Assigned Employee IDs:`, (project.employees || []).filter(e => e && e._id).map(e => e._id.toString()));
     console.log(`Database query used: findById(projectId).populate('client').populate('manager').populate('employees')`);
     console.log(`Number of Managers found:`, managersFound.length);
     managersFound.forEach(m => console.log(`  Manager: ${m.name}, role=${m.role}, department=${m.department}, phone=${m.phone}, _id=${m._id}`));

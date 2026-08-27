@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
-import LoginPage from './components/LoginPage.jsx';
-import DashboardPage from './components/DashboardPage.jsx';
-import AcceptInvitationPage from './components/AcceptInvitationPage.jsx';
-import ResetPasswordPage from './components/ResetPasswordPage.jsx';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import AnimatedCounter from './components/shared/AnimatedCounter.jsx';
 import { clientTestimonials } from './data/clientTestimonials.js';
-import PartnerLoginPage from './components/PartnerLoginPage.jsx';
-import PartnerDashboardPage from './components/PartnerDashboardPage.jsx';
-import ReferralRedirect from './components/ReferralRedirect.jsx';
 import { getReferralAttribution, clearReferralAttribution } from './services/referralAttribution.js';
 import CRMGlobalLoader from './components/shared/CRMGlobalLoader.jsx';
 import { LoadingProvider } from './context/LoadingContext.jsx';
+
+const LoginPage = React.lazy(() => import('./components/LoginPage.jsx'));
+const DashboardPage = React.lazy(() => import('./components/DashboardPage.jsx'));
+const AcceptInvitationPage = React.lazy(() => import('./components/AcceptInvitationPage.jsx'));
+const ResetPasswordPage = React.lazy(() => import('./components/ResetPasswordPage.jsx'));
+const PartnerLoginPage = React.lazy(() => import('./components/PartnerLoginPage.jsx'));
+const PartnerDashboardPage = React.lazy(() => import('./components/PartnerDashboardPage.jsx'));
+const ReferralRedirect = React.lazy(() => import('./components/ReferralRedirect.jsx'));
+const BackupPortalPage = React.lazy(() => import('./components/BackupPortalPage.jsx'));
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -1220,7 +1222,6 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
 
 import axios from 'axios';
 import { Navigate, Link } from 'react-router-dom';
-import BackupPortalPage from './components/BackupPortalPage.jsx';
 
 export const AuthContext = createContext(null);
 
@@ -1340,95 +1341,97 @@ export default function App() {
     <PartnerAuthProvider>
     <LoadingProvider>
     <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/partner/login" element={<PartnerLoginPage />} />
-        <Route path="/r/:referralCode" element={<ReferralRedirect />} />
-        <Route 
-          path="/partner/*" 
-          element={
-            <PartnerProtectedRoute>
-              <PartnerDashboardPage />
-            </PartnerProtectedRoute>
-          } 
-        />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<AcceptInvitationPage />} />
-        <Route path="/accept-invitation/:token" element={<AcceptInvitationPage />} />
-        <Route path="/invite/:token" element={<AcceptInvitationPage />} />
-        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-        <Route path="/services/clip-editing" element={
-          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Clip Editing..." />}>
-            <ClipEditingPage />
-          </React.Suspense>
-        } />
-        <Route path="/services/podcast-editing" element={
-          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Podcast Editing..." />}>
-            <PodcastEditingPage />
-          </React.Suspense>
-        } />
-        <Route path="/services/social-media-marketing" element={
-          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Marketing..." />}>
-            <MarketingPage />
-          </React.Suspense>
-        } />
-        <Route path="/services/web-design-development" element={
-          <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Web Engineering..." />}>
-            <WebDevelopmentPage />
-          </React.Suspense>
-        } />
-        <Route path="/services/web-development" element={<Navigate to="/services/web-design-development" replace />} />
-        <Route path="/services/branding" element={<Navigate to="/" replace />} />
-        <Route path="/services/real-estate-editing" element={<Navigate to="/" replace />} />
-        <Route 
-          path="/backup/*" 
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'BACKUP_ADMIN', 'backup_admin']}>
-              <BackupPortalPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/dashboard/*" 
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin/*" 
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
-              <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/manager/*" 
-          element={
-            <ProtectedRoute allowedRoles={['MANAGER']}>
-              <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/employee/*" 
-          element={
-            <ProtectedRoute allowedRoles={['EMPLOYEE']}>
-              <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/client/*" 
-          element={
-            <ProtectedRoute allowedRoles={['CLIENT']}>
-              <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-      </Routes>
+      <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading page..." />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/partner/login" element={<PartnerLoginPage />} />
+          <Route path="/r/:referralCode" element={<ReferralRedirect />} />
+          <Route 
+            path="/partner/*" 
+            element={
+              <PartnerProtectedRoute>
+                <PartnerDashboardPage />
+              </PartnerProtectedRoute>
+            } 
+          />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<AcceptInvitationPage />} />
+          <Route path="/accept-invitation/:token" element={<AcceptInvitationPage />} />
+          <Route path="/invite/:token" element={<AcceptInvitationPage />} />
+          <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+          <Route path="/services/clip-editing" element={
+            <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Clip Editing..." />}>
+              <ClipEditingPage />
+            </React.Suspense>
+          } />
+          <Route path="/services/podcast-editing" element={
+            <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Podcast Editing..." />}>
+              <PodcastEditingPage />
+            </React.Suspense>
+          } />
+          <Route path="/services/social-media-marketing" element={
+            <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Marketing..." />}>
+              <MarketingPage />
+            </React.Suspense>
+          } />
+          <Route path="/services/web-design-development" element={
+            <React.Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Web Engineering..." />}>
+              <WebDevelopmentPage />
+            </React.Suspense>
+          } />
+          <Route path="/services/web-development" element={<Navigate to="/services/web-design-development" replace />} />
+          <Route path="/services/branding" element={<Navigate to="/" replace />} />
+          <Route path="/services/real-estate-editing" element={<Navigate to="/" replace />} />
+          <Route 
+            path="/backup/*" 
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'BACKUP_ADMIN', 'backup_admin']}>
+                <BackupPortalPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard/*" 
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/*" 
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/manager/*" 
+            element={
+              <ProtectedRoute allowedRoles={['MANAGER']}>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/employee/*" 
+            element={
+              <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/client/*" 
+            element={
+              <ProtectedRoute allowedRoles={['CLIENT']}>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+      </React.Suspense>
     </Router>
     </LoadingProvider>
     </PartnerAuthProvider>

@@ -1264,15 +1264,16 @@ export default function ReferralManagementPage({ user, addToast }) {
             <div className="dialog-header">
               <h2>{editPartner ? 'Edit Referral Partner' : 'Register New Partner'}</h2>
               <button 
+                type="button"
                 onClick={() => setShowPartnerModal(false)}
-                className="btn btn-ghost btn-icon"
+                className="dialog-close-btn"
                 aria-label="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handlePartnerSubmit}>
+            <form onSubmit={handlePartnerSubmit} className="dialog-form">
               <div className="dialog-body">
                 <div className="modal-form-grid">
                   <div className="form-group">
@@ -1380,15 +1381,16 @@ export default function ReferralManagementPage({ user, addToast }) {
             <div className="dialog-header">
               <h2>Reset Partner Password</h2>
               <button 
+                type="button"
                 onClick={() => setShowResetPasswordModal(false)} 
-                className="btn btn-ghost btn-icon"
+                className="dialog-close-btn"
                 aria-label="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
             
-            <form onSubmit={handleResetPasswordSubmit}>
+            <form onSubmit={handleResetPasswordSubmit} className="dialog-form">
               <div className="dialog-body">
                 <p style={{ fontSize: '0.8125rem', color: 'var(--gray-600)', margin: 0, lineHeight: 1.5 }}>
                   Specify a new password for <strong>{selectedPartnerForReset?.agencyName}</strong>. They will receive an email notification alerting them of the credentials reset.
@@ -1432,15 +1434,16 @@ export default function ReferralManagementPage({ user, addToast }) {
             <div className="dialog-header">
               <h2>{editCampaign ? 'Edit Referral Campaign' : 'Generate Referral Link Campaign'}</h2>
               <button 
+                type="button"
                 onClick={() => setShowCampaignModal(false)}
-                className="btn btn-ghost btn-icon"
+                className="dialog-close-btn"
                 aria-label="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCampaignSubmit}>
+            <form onSubmit={handleCampaignSubmit} className="dialog-form">
               <div className="dialog-body">
                 <div className="form-group">
                   <label className="form-label">Campaign Name *</label>
@@ -1451,102 +1454,51 @@ export default function ReferralManagementPage({ user, addToast }) {
                   />
                 </div>
 
-                <div className="form-row mt-3">
-                  <div className="form-group">
-                    <label className="form-label">Partner Agency *</label>
-                    <select
-                      required value={selectedPartnerId} onChange={e => setSelectedPartnerId(e.target.value)}
-                      disabled={!!editCampaign}
-                      className="select"
-                    >
-                      <option value="">Select a Partner</option>
-                      {partners.map(p => (
-                        <option key={p._id} value={p._id}>{p.agencyName} ({p.ownerName})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Campaign Validity *</label>
-                    <select
-                      value={validityDays} onChange={e => setValidityDays(Number(e.target.value))}
-                      disabled={!!editCampaign}
-                      className="select"
-                    >
-                      <option value={30}>30 Days</option>
-                      <option value={60}>60 Days</option>
-                      <option value={90}>90 Days</option>
-                      <option value={120}>120 Days</option>
-                      <option value={0}>Custom Expiry Date</option>
-                    </select>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Referral Partner *</label>
+                  <select
+                    required value={selectedPartnerId} onChange={e => setSelectedPartnerId(e.target.value)}
+                    className="select"
+                  >
+                    <option value="">Select Partner Agency</option>
+                    {partners.filter(p => p.status === 'ACTIVE').map(p => (
+                      <option key={p._id} value={p._id}>{p.agencyName} ({p.ownerName})</option>
+                    ))}
+                  </select>
                 </div>
 
-                {validityDays === 0 && (
-                  <div className="form-group mt-3">
-                    <label className="form-label">Custom Expiry Date *</label>
-                    <input
-                      type="date" required placeholder="Select date"
-                      value={customExpiryDate} onChange={e => setCustomExpiryDate(e.target.value)}
-                      disabled={!!editCampaign}
-                      className="input"
-                    />
-                  </div>
-                )}
-
-                <div className="form-row mt-3">
-                  <div className="form-group">
-                    <label className="form-label">Campaign Service *</label>
-                    <select
-                      required value={selectedServiceId} onChange={e => setSelectedServiceId(e.target.value)}
-                      className="select"
-                    >
-                      {PRODUCTION_SERVICES.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {editCampaign && (
-                    <div className="form-group">
-                      <label className="form-label">Status</label>
-                      <select
-                        value={campaignStatus} onChange={e => setCampaignStatus(e.target.value)}
-                        className="select"
-                      >
-                        <option value="ACTIVE">ACTIVE</option>
-                        <option value="INACTIVE">INACTIVE</option>
-                        <option value="EXPIRED">EXPIRED</option>
-                      </select>
-                    </div>
-                  )}
+                <div className="form-group">
+                  <label className="form-label">Referral Target Service *</label>
+                  <select
+                    required
+                    value={selectedServiceId}
+                    onChange={e => setSelectedServiceId(e.target.value)}
+                    className="select"
+                  >
+                    {PRODUCTION_SERVICES.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="form-row mt-3">
+                <div className="grid-cols-2 gap-3" style={{ display: 'grid' }}>
                   <div className="form-group">
-                    <label className="form-label">Min Commission (%) *</label>
+                    <label className="form-label">Min Commission %</label>
                     <input
-                      type="number" required placeholder="5" min="0" max="100"
+                      type="number" min="0" max="100" placeholder="e.g. 5"
                       value={minPercentage} onChange={e => setMinPercentage(e.target.value)}
                       className="input"
                     />
                   </div>
+
                   <div className="form-group">
-                    <label className="form-label">Max Commission (%) *</label>
+                    <label className="form-label">Max Commission %</label>
                     <input
-                      type="number" required placeholder="20" min="0" max="100"
+                      type="number" min="0" max="100" placeholder="e.g. 15"
                       value={maxPercentage} onChange={e => setMaxPercentage(e.target.value)}
                       className="input"
                     />
                   </div>
-                </div>
-
-                <div className="form-group mt-3">
-                  <label className="form-label">Campaign Notes (e.g. Terms)</label>
-                  <textarea
-                    rows="2" placeholder="Enter campaign scope or special terms"
-                    value={campaignNotes} onChange={e => setCampaignNotes(e.target.value)}
-                    className="textarea"
-                    style={{ resize: 'none' }}
-                  />
                 </div>
               </div>
 
@@ -1562,7 +1514,7 @@ export default function ReferralManagementPage({ user, addToast }) {
                   type="submit" disabled={campaignActionLoading}
                   className="btn btn-primary"
                 >
-                  {campaignActionLoading ? <Loader2 size={14} className="spinner" /> : editCampaign ? 'Save Changes' : 'Generate Link'}
+                  {campaignActionLoading ? <Loader2 size={14} className="spinner" /> : editCampaign ? 'Save Campaign' : 'Generate Link'}
                 </button>
               </div>
             </form>
@@ -1576,12 +1528,12 @@ export default function ReferralManagementPage({ user, addToast }) {
           <div className="dialog" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
             <div className="dialog-header">
               <h2>Referral Booking Details & Commission</h2>
-              <button onClick={() => setShowCommissionModal(false)} className="btn btn-ghost btn-icon" aria-label="Close modal">
+              <button type="button" onClick={() => setShowCommissionModal(false)} className="dialog-close-btn" aria-label="Close modal">
                 <X size={18} />
               </button>
             </div>
             
-            <form onSubmit={handleUpdateCommissionDetails}>
+            <form onSubmit={handleUpdateCommissionDetails} className="dialog-form">
               <div className="dialog-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                 
                 {/* 1. Client & Partner Metadata Details */}
@@ -1804,12 +1756,12 @@ export default function ReferralManagementPage({ user, addToast }) {
           <div className="dialog" onClick={e => e.stopPropagation()}>
             <div className="dialog-header">
               <h2>Mark Payout as Settled</h2>
-              <button onClick={() => setShowPaymentModal(false)} className="btn btn-ghost btn-icon">
+              <button type="button" onClick={() => setShowPaymentModal(false)} className="dialog-close-btn" aria-label="Close modal">
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handlePayoutSubmit}>
+            <form onSubmit={handlePayoutSubmit} className="dialog-form">
               <div className="dialog-body">
                 <div className="form-group">
                   <label className="form-label">Payment Date *</label>

@@ -13,6 +13,9 @@ export default defineConfig({
         ws: true,
       },
     },
+    watch: {
+      ignored: ['**/backend/**']
+    }
   },
   build: {
     sourcemap: false,

@@ -201,10 +201,7 @@ export default function PartnerDashboardPage() {
   // Initialize workspace view
   const initDashboard = async () => {
     setLoading(true);
-    const resolvedPartner = await loadProfile();
-    if (resolvedPartner) {
-      await loadDashboardData();
-    }
+    await loadProfile();
     setLoading(false);
   };
 
@@ -212,12 +209,13 @@ export default function PartnerDashboardPage() {
     initDashboard();
   }, []);
 
-  // Fetch list data on active tab changes
+  // Fetch list data on active tab changes (avoiding duplicate fetch on initial mount)
   useEffect(() => {
+    if (!partner) return;
     if (activeTab === 'campaigns') loadCampaigns();
     else if (activeTab === 'commissions') loadCommissions();
     else if (activeTab === 'dashboard') loadDashboardData();
-  }, [activeTab]);
+  }, [activeTab, partner]);
 
   // Connect socket.io client to listen for real-time changes
   useEffect(() => {

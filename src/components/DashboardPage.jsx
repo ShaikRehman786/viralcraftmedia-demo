@@ -205,22 +205,40 @@ export default function DashboardPage() {
     }
   }, [user]);
 
-  useEffect(() => {
+  const refreshAllData = useCallback(async (signal) => {
     if (!user) return;
+    const opts = signal ? { signal } : {};
 
-    const controller = new AbortController();
+    // 1. Prepare independent parallel API requests
+    const promises = {
+      notifications: axios.get('/api/notifications', opts),
+      projects: axios.get('/api/projects', opts),
+      tasks: axios.get('/api/tasks', opts)
+    };
 
-    const loadData = async () => {
-      try {
-        // Load Notifications
-        const notifRes = await axios.get('/api/notifications', { signal: controller.signal });
-        setNotifications(notifRes.data.data);
-        setUnreadCount(notifRes.data.unreadCount);
+    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'MANAGER';
+    if (isAdmin) {
+      promises.analytics = axios.get('/api/analytics/dashboard', opts);
+      promises.staff = axios.get('/api/auth/staff', opts);
+    }
 
-        // Load Projects
-        const projRes = await axios.get('/api/projects', { signal: controller.signal });
-        const rawProjects = projRes.data.data;
-        // Employee Data Security: Strip order details but keep client name for display
+    try {
+      // 2. Fetch all CRM module datasets in parallel
+      const keys = Object.keys(promises);
+      const results = await Promise.all(keys.map(k => promises[k]));
+      
+      const dataMap = {};
+      keys.forEach((k, idx) => {
+        dataMap[k] = results[idx].data;
+      });
+
+      if (dataMap.notifications) {
+        setNotifications(dataMap.notifications.data);
+        setUnreadCount(dataMap.notifications.unreadCount);
+      }
+
+      if (dataMap.projects) {
+        const rawProjects = dataMap.projects.data;
         if (user.role === 'EMPLOYEE') {
           setProjects(rawProjects.map(p => ({
             _id: p._id,
@@ -253,11 +271,10 @@ export default function DashboardPage() {
         } else {
           setProjects(rawProjects);
         }
+      }
 
-        // Load Tasks
-        const taskRes = await axios.get('/api/tasks', { signal: controller.signal });
-        const rawTasks = taskRes.data.data;
-        // Employee Data Security: Strip sensitive fields for employees
+      if (dataMap.tasks) {
+        const rawTasks = dataMap.tasks.data;
         if (user.role === 'EMPLOYEE') {
           setTasks(rawTasks.map(t => ({
             ...t,
@@ -275,48 +292,52 @@ export default function DashboardPage() {
         } else {
           setTasks(rawTasks);
         }
-
-        // Role-specific lookups
-        if (user.role === 'SUPER_ADMIN' || user.role === 'MANAGER') {
-          // Load Analytics
-          const analRes = await axios.get('/api/analytics/dashboard', { signal: controller.signal });
-          setAnalytics(analRes.data.stats);
-
-          // Load Staff list
-          const staffRes = await axios.get('/api/auth/staff', { signal: controller.signal });
-          setStaff(staffRes.data.data);
-
-          // Load Calendar
-          const calRes = await axios.get('/api/calendar', { signal: controller.signal });
-          setCalendarEvents(calRes.data.data);
-        }
-
-        if (user.role === 'SUPER_ADMIN') {
-          // Load audit logs
-          const logRes = await axios.get('/api/logs?limit=1000', { signal: controller.signal });
-          setLogs(logRes.data.data);
-
-          // Load TeamLogger metrics
-          const actRes = await axios.get('/api/teamlogger/activity', { signal: controller.signal });
-          setTeamActivity(actRes.data.data);
-
-          // Load TeamLogger screenshots
-          const scRes = await axios.get('/api/teamlogger/screenshots', { signal: controller.signal });
-          setTeamScreenshots(scRes.data.data);
-        }
-      } catch (err) {
-        if (axios.isCancel(err)) {
-          return;
-        }
-        // dashboard load error handled silently
-      } finally {
-        if (!controller.signal.aborted) {
-          setDataLoaded(true);
-        }
       }
-    };
 
-    loadData();
+      if (dataMap.analytics) {
+        setAnalytics(dataMap.analytics.stats);
+      }
+
+      if (dataMap.staff) {
+        setStaff(dataMap.staff.data);
+      }
+
+      setDataLoaded(true);
+    } catch (err) {
+      if (axios.isCancel(err)) return;
+      console.error('Error refreshing CRM dashboard data in parallel:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    refreshAllData(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [refreshAllData]);
+
+  // Dynamic tab fetches: fetch logs and calendar events only when specific tabs are active
+  useEffect(() => {
+    if (!user) return;
+    if (activeTab === 'logs' && user.role === 'SUPER_ADMIN') {
+      axios.get('/api/logs?limit=1000')
+        .then(res => setLogs(res.data.data))
+        .catch(console.error);
+    }
+  }, [activeTab, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (activeTab === 'calendar' && (user.role === 'SUPER_ADMIN' || user.role === 'MANAGER')) {
+      axios.get('/api/calendar')
+        .then(res => setCalendarEvents(res.data.data))
+        .catch(console.error);
+    }
+  }, [activeTab, user]);
+
+  useEffect(() => {
+    if (!user) return;
 
     // Establish WebSocket listener
     const socket = io(getSocketUrl(), {
@@ -328,27 +349,27 @@ export default function DashboardPage() {
 
     // Listen to real-time events
     socket.on('Project Created', () => {
-      loadData();
+      refreshAllData();
     });
 
     socket.on('project-created', () => {
-      loadData();
+      refreshAllData();
     });
 
     socket.on('Task Created', () => {
-      loadData();
+      refreshAllData();
     });
 
     socket.on('task-created', () => {
-      loadData();
+      refreshAllData();
     });
 
     socket.on('Dashboard Updated', () => {
-      loadData();
+      refreshAllData();
     });
 
     socket.on('dashboard-update', () => {
-      loadData();
+      refreshAllData();
     });
 
     socket.on('new_notification', (notification) => {
@@ -388,7 +409,6 @@ export default function DashboardPage() {
     }
     
     return () => {
-      controller.abort();
       socket.disconnect();
     };
   }, [user]);
@@ -900,20 +920,29 @@ export default function DashboardPage() {
     }
   };
 
-  const loadEnquiries = async () => {
+  const [debouncedEnqSearch, setDebouncedEnqSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedEnqSearch(enqSearch);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [enqSearch]);
+
+  const loadEnquiries = useCallback(async () => {
     try {
-      const res = await axios.get(`/api/enquiries?search=${enqSearch}&status=${enqStatusFilter}&category=${enqCategoryFilter}&referral=${enqReferralFilter}`);
+      const res = await axios.get(`/api/enquiries?search=${debouncedEnqSearch}&status=${enqStatusFilter}&category=${enqCategoryFilter}&referral=${enqReferralFilter}`);
       setEnquiries(res.data.data);
     } catch (err) {
       // enquiry load failed silently
     }
-  };
+  }, [debouncedEnqSearch, enqStatusFilter, enqCategoryFilter, enqReferralFilter]);
 
   useEffect(() => {
     if (user && (user.role === 'SUPER_ADMIN' || user.role === 'MANAGER')) {
       loadEnquiries();
     }
-  }, [user, enqSearch, enqStatusFilter, enqCategoryFilter, enqReferralFilter]);
+  }, [user, loadEnquiries]);
 
   const handleAssignManager = async (enquiryId, managerId) => {
     try {
@@ -1083,7 +1112,7 @@ export default function DashboardPage() {
           )}
           <div className="app-content">
             {(activeTab === 'overview' || !activeTab) && (
-              <OverviewPage user={user} analytics={analytics} projects={projects} tasks={tasks} notifications={notifications} staff={staff} teamActivity={teamActivity} formatTimeAgo={formatTimeAgo} loading={!dataLoaded} />
+              <OverviewPage user={user} analytics={analytics} projects={projects} tasks={tasks} notifications={notifications} staff={staff} teamActivity={teamActivity} formatTimeAgo={formatTimeAgo} loading={!dataLoaded} onRefreshData={refreshAllData} />
             )}
             {activeTab === 'projects' && (
               <ProjectsPage
@@ -1091,6 +1120,7 @@ export default function DashboardPage() {
                 projects={projects}
                 tasks={tasks}
                 staff={staff}
+                onRefreshData={refreshAllData}
                 selectedCategoryFilter={selectedCategoryFilter}
                 setSelectedCategoryFilter={setSelectedCategoryFilter}
                 projectSearch={projectSearch}
@@ -1265,11 +1295,11 @@ export default function DashboardPage() {
           <div className="dialog" onClick={e => e.stopPropagation()}>
             <div className="dialog-header">
               <h2>{calEventId ? 'Edit Event' : 'New Event'}</h2>
-              <button className="btn btn-ghost btn-icon calendar-close-btn" onClick={() => setShowCalendarModal(false)}>
+              <button type="button" className="dialog-close-btn" onClick={() => setShowCalendarModal(false)} aria-label="Close modal">
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleCalendarEventSubmit}>
+            <form onSubmit={handleCalendarEventSubmit} className="dialog-form">
               <div className="dialog-body">
                 <div className="form-group">
                   <label className="form-label">Title *</label>

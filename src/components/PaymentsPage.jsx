@@ -83,7 +83,7 @@ export default function PaymentsPage({ user, projects, triggerDownload }) {
           </div>
           <div className="kpi-content">
             <div className="kpi-label">Total Revenue</div>
-            <div className="kpi-value">₹{totalRevenue.toLocaleString()}</div>
+            <div className="kpi-value">₹{totalRevenue.toLocaleString('en-IN')}</div>
             <div className="kpi-trend up">
               <TrendingUp size={12} />
               <span>Lifetime earnings</span>
@@ -142,10 +142,10 @@ export default function PaymentsPage({ user, projects, triggerDownload }) {
           </div>
           <span className="badge badge-success flex-row gap-1">
             <TrendingUp size={12} />
-            ₹{totalRevenue.toLocaleString()} total
+            ₹{totalRevenue.toLocaleString('en-IN')} total
           </span>
         </div>
-        <div className="card-body h-300">
+        <div className="card-body h-300" style={{ position: 'relative' }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
@@ -163,11 +163,17 @@ export default function PaymentsPage({ user, projects, triggerDownload }) {
                   boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
                   background: 'var(--white)'
                 }}
-                formatter={(value) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Revenue']}
               />
               <Area type="monotone" dataKey="revenue" stroke="#10B981" fillOpacity={1} fill="url(#paymentsRevenueGrad)" strokeWidth={2.5} />
             </AreaChart>
           </ResponsiveContainer>
+          {chartData.every(d => d.revenue === 0) && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+              <BarChart3 size={32} style={{ color: 'var(--text-muted)', opacity: 0.3, marginBottom: '0.5rem' }} />
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No revenue data recorded yet</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -218,7 +224,7 @@ export default function PaymentsPage({ user, projects, triggerDownload }) {
                 </div>
                 <div className="flex-col items-end gap-2">
                   <div className="kpi-value text-sm">
-                    ₹{order.amount?.toLocaleString() || '0'}
+                    ₹{(order.amount || 0).toLocaleString('en-IN')}
                   </div>
                   {hasInvoice ? (
                     <button

@@ -86,7 +86,15 @@ const startServer = async () => {
     });
 
     // Expose WebSocket dispatcher helper in Express app context
+    // Controllers broadcast global refresh events by passing `null` as the target
+    // user. Guard against null/undefined so those broadcasts no longer throw after
+    // the underlying database write has already succeeded.
     app.set('socketio_dispatch', (userId, eventType, payload) => {
+      if (!userId) {
+        io.emit(eventType, payload);
+        console.log(`Broadcasted real-time WebSocket '${eventType}' event to all connected users`);
+        return;
+      }
       const socketId = activeClients.get(userId.toString());
       if (socketId) {
         io.to(socketId).emit(eventType, payload);

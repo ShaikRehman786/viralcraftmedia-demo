@@ -1029,9 +1029,9 @@ export default function StaffPage({
           <div className="dialog" onClick={e => e.stopPropagation()}>
             <div className="dialog-header">
               <h2>Update Role — {roleUpdateUser.name}</h2>
-              <button onClick={() => setRoleUpdateUser(null)} className="btn btn-ghost btn-icon"><X size={16} /></button>
+              <button type="button" onClick={() => setRoleUpdateUser(null)} className="dialog-close-btn" aria-label="Close modal"><X size={16} /></button>
             </div>
-            <form onSubmit={handleRoleUpdate}>
+            <form onSubmit={handleRoleUpdate} className="dialog-form">
               <div className="dialog-body">
                 <div className="form-group">
                   <label className="form-label">New System Role</label>
@@ -1059,9 +1059,9 @@ export default function StaffPage({
           <div className="dialog" onClick={e => e.stopPropagation()}>
             <div className="dialog-header">
               <h2>Invite Employee</h2>
-              <button onClick={() => setShowInviteModal(false)} className="btn btn-ghost btn-icon"><X size={16} /></button>
+              <button type="button" onClick={() => setShowInviteModal(false)} className="dialog-close-btn" aria-label="Close modal"><X size={16} /></button>
             </div>
-            <form onSubmit={handleInviteUserSubmit}>
+            <form onSubmit={handleInviteUserSubmit} className="dialog-form">
               <div className="dialog-body">
                 <div className="form-group">
                   <label className="form-label">Full Name</label>

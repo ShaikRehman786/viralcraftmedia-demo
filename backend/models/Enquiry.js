@@ -77,6 +77,8 @@ const enquirySchema = new mongoose.Schema({
 
 // Index for the referral lead filter used by the CRM Enquiries page
 enquirySchema.index({ 'referral.isReferral': 1, createdAt: -1 });
+enquirySchema.index({ assignedManager: 1 });
+enquirySchema.index({ status: 1 });
 
 const Enquiry = mongoose.model('Enquiry', enquirySchema);
 export default Enquiry;

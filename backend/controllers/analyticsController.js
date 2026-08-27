@@ -58,24 +58,66 @@ export const getDashboardStats = async (req, res, next) => {
     const rawCsat = approvedTasks > 0 ? 5.0 - ((rejectedTasks / approvedTasks) * 0.5) : 4.8;
     const customerSatisfaction = Math.max(3.8, Math.min(5.0, rawCsat)).toFixed(1);
 
-    // 8. Editor / Employee Productivity Metrics (Leaderboard stats)
+    // 8. Editor / Employee Productivity Metrics (Leaderboard stats) using Aggregation
     const editors = await User.find({ role: 'EMPLOYEE', status: 'active' }).select('name email department').lean();
-    const employeeProductivity = [];
-    for (const ed of editors) {
-      const totalTasks = await Task.countDocuments({ assignedTo: ed._id });
-      const approvedTasksCount = await Task.countDocuments({ assignedTo: ed._id, status: 'approved' });
-      const rejectedTasksCount = await Task.countDocuments({ assignedTo: ed._id, status: 'rejected' });
-      
-      // Calculate average approval speed
-      const userApprovedTasks = await Task.find({ assignedTo: ed._id, status: 'approved' }).select('createdAt updatedAt').lean();
-      let elapsedTotalMs = 0;
-      for (const t of userApprovedTasks) {
-        if (t.updatedAt && t.createdAt) {
-          elapsedTotalMs += t.updatedAt.getTime() - t.createdAt.getTime();
+    
+    const taskStats = await Task.aggregate([
+      {
+        $group: {
+          _id: "$assignedTo",
+          totalTasks: { $sum: 1 },
+          approvedTasksCount: {
+            $sum: { $cond: [{ $eq: ["$status", "approved"] }, 1, 0] }
+          },
+          rejectedTasksCount: {
+            $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] }
+          },
+          currentWorkload: {
+            $sum: { $cond: [{ $in: ["$status", ["assigned", "in_progress"]] }, 1, 0] }
+          },
+          approvedTasks: {
+            $push: {
+              $cond: [
+                { $eq: ["$status", "approved"] },
+                { createdAt: "$createdAt", updatedAt: "$updatedAt" },
+                "$$REMOVE"
+              ]
+            }
+          }
         }
       }
-      const avgSpeedHours = userApprovedTasks.length > 0 
-        ? Math.round(elapsedTotalMs / (userApprovedTasks.length * 1000 * 60 * 60))
+    ]);
+
+    const taskStatsMap = {};
+    taskStats.forEach(stat => {
+      if (stat._id) {
+        taskStatsMap[stat._id.toString()] = stat;
+      }
+    });
+
+    const employeeProductivity = [];
+    for (const ed of editors) {
+      const edIdStr = ed._id.toString();
+      const stats = taskStatsMap[edIdStr] || {
+        totalTasks: 0,
+        approvedTasksCount: 0,
+        rejectedTasksCount: 0,
+        currentWorkload: 0,
+        approvedTasks: []
+      };
+
+      const totalTasks = stats.totalTasks;
+      const approvedTasksCount = stats.approvedTasksCount;
+      const rejectedTasksCount = stats.rejectedTasksCount;
+
+      let elapsedTotalMs = 0;
+      for (const t of stats.approvedTasks || []) {
+        if (t.updatedAt && t.createdAt) {
+          elapsedTotalMs += new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime();
+        }
+      }
+      const avgSpeedHours = approvedTasksCount > 0 
+        ? Math.round(elapsedTotalMs / (approvedTasksCount * 1000 * 60 * 60))
         : 24;
 
       employeeProductivity.push({
@@ -84,34 +126,72 @@ export const getDashboardStats = async (req, res, next) => {
         email: ed.email,
         department: ed.department || 'General',
         completedTasks: approvedTasksCount,
-        hoursWorked: approvedTasksCount * 4, // estimate 4h per approved reel
+        hoursWorked: approvedTasksCount * 4,
         averageDeliveryTime: `${avgSpeedHours}h`,
         projectsFinished: approvedTasksCount,
         projectsPending: totalTasks - approvedTasksCount,
         approvalRate: totalTasks > 0 ? Math.round((approvedTasksCount / totalTasks) * 100) : 100,
         rejectionRate: totalTasks > 0 ? Math.round((rejectedTasksCount / totalTasks) * 100) : 0,
-        currentWorkload: await Task.countDocuments({ assignedTo: ed._id, status: { $in: ['assigned', 'in_progress'] } })
+        currentWorkload: stats.currentWorkload
       });
     }
 
     // Sort leaderboard by completed tasks descending
     employeeProductivity.sort((a, b) => b.completedTasks - a.completedTasks);
 
-    // 9. Manager Productivity metrics
+    // 9. Manager Productivity metrics using Aggregation
     const managers = await User.find({ role: 'MANAGER', status: 'active' }).select('name').lean();
+    
+    // Project counts by manager
+    const projectStats = await Project.aggregate([
+      {
+        $group: {
+          _id: "$manager",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    const projectStatsMap = {};
+    projectStats.forEach(s => {
+      if (s._id) projectStatsMap[s._id.toString()] = s.count;
+    });
+
+    // Task counts by assignedManager
+    const managerTaskStats = await Task.aggregate([
+      {
+        $group: {
+          _id: "$assignedManager",
+          approvedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "approved"] }, 1, 0] }
+          },
+          rejectedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+    const managerTaskStatsMap = {};
+    managerTaskStats.forEach(s => {
+      if (s._id) {
+        managerTaskStatsMap[s._id.toString()] = s;
+      }
+    });
+
+    const totalPendingReviews = await Task.countDocuments({ status: 'submitted' });
+
     const managerProductivity = [];
     for (const m of managers) {
-      const managedCount = await Project.countDocuments({ manager: m._id });
-      const approvedTasksCount = await Task.countDocuments({ assignedManager: m._id, status: 'approved' });
-      const rejectedTasksCount = await Task.countDocuments({ assignedManager: m._id, status: 'rejected' });
-      const totalReviews = approvedTasksCount + rejectedTasksCount;
+      const mIdStr = m._id.toString();
+      const managedCount = projectStatsMap[mIdStr] || 0;
+      const stats = managerTaskStatsMap[mIdStr] || { approvedCount: 0, rejectedCount: 0 };
+      const totalReviews = stats.approvedCount + stats.rejectedCount;
 
       managerProductivity.push({
         id: m._id,
         name: m.name,
         projectsManaged: managedCount,
-        reworkRate: totalReviews > 0 ? Math.round((rejectedTasksCount / totalReviews) * 100) : 0,
-        pendingReviews: await Task.countDocuments({ status: 'submitted' })
+        reworkRate: totalReviews > 0 ? Math.round((stats.rejectedCount / totalReviews) * 100) : 0,
+        pendingReviews: totalPendingReviews
       });
     }
 

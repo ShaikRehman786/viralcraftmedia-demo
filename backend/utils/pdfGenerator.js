@@ -1,8 +1,32 @@
+import fs from 'fs';
+import path from 'path';
 import { jsPDF } from 'jspdf';
 // We will use the native global fetch API in Node.js instead of external packages
 
 let cachedRegularBase64 = null;
 let cachedMediumBase64 = null;
+let cachedLogoBase64 = null;
+
+function getLogoBase64() {
+  if (cachedLogoBase64) return cachedLogoBase64;
+  try {
+    const candidatePaths = [
+      path.resolve(process.cwd(), 'public', 'logoooooooooo.png'),
+      path.resolve(process.cwd(), '..', 'public', 'logoooooooooo.png'),
+      path.resolve('public', 'logoooooooooo.png'),
+      path.resolve('dist', 'logoooooooooo.png')
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        cachedLogoBase64 = `data:image/png;base64,${fs.readFileSync(p).toString('base64')}`;
+        return cachedLogoBase64;
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+  return null;
+}
 
 async function loadFonts() {
   if (cachedRegularBase64 && cachedMediumBase64) {
@@ -69,16 +93,28 @@ export async function generateInvoicePdf({
 
   const currencySymbol = fontLoaded ? '₹' : 'INR ';
 
-  // Invoice Layout Drawing (matching existing verify-payment.js style exactly)
-  doc.setFontSize(18);
-  doc.setFont(fontLoaded ? 'Roboto' : 'helvetica', 'bold');
-  doc.setTextColor(255, 106, 0); // brand color #FF6A00
-  doc.text("Viral Craft Media", 15, 22);
+  // Invoice Header & Logo Drawing with official VCM current website logo
+  const logoData = getLogoBase64();
+  if (logoData) {
+    try {
+      doc.addImage(logoData, 'PNG', 15, 12, 42, 12);
+    } catch (e) {
+      doc.setFontSize(18);
+      doc.setFont(fontLoaded ? 'Roboto' : 'helvetica', 'bold');
+      doc.setTextColor(255, 106, 0); // brand color #FF6A00
+      doc.text("Viral Craft Media", 15, 22);
+    }
+  } else {
+    doc.setFontSize(18);
+    doc.setFont(fontLoaded ? 'Roboto' : 'helvetica', 'bold');
+    doc.setTextColor(255, 106, 0); // brand color #FF6A00
+    doc.text("Viral Craft Media", 15, 22);
+  }
 
   doc.setFontSize(8);
   doc.setFont(fontLoaded ? 'Roboto' : 'helvetica', 'normal');
   doc.setTextColor(107, 114, 128);
-  doc.text("PREMIUM VIDEO CLIPPING SERVICE", 15, 26);
+  doc.text("PREMIUM VIDEO CLIPPING SERVICE", 15, 28);
 
   doc.setFontSize(22);
   doc.setFont(fontLoaded ? 'Roboto' : 'helvetica', 'bold');

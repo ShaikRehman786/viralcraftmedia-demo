@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import axios from 'axios';
 import {
   Search, Menu, LayoutDashboard, ClipboardList,
   CalendarDays, Users, ShieldCheck, UserPlus,
-  MessageCircle, Receipt, Bell, Plus, Download, ArrowRight
+  MessageCircle, Receipt, Bell, Plus, Download, ArrowRight, LogOut
 } from 'lucide-react';
 import NotificationBell from './NotificationBell.jsx';
 
@@ -55,6 +56,15 @@ function canAccess(pageId, role) {
 }
 
 export default function TopBar({ user, unreadCount, notifications, sidebarOpen, setSidebarOpen, activeTab, onNavigate, onMarkRead, onMarkAllRead }) {
+  const handleLogout = async () => {
+    try {
+      await axios.post('/api/auth/logout');
+      window.location.href = '/';
+    } catch (err) {
+      window.location.href = '/';
+    }
+  };
+
   const getTabLabel = (tabId) => {
     if (tabId === 'overview') {
       if (user?.role === 'EMPLOYEE') return 'My Dashboard';
@@ -196,9 +206,19 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
             onNavigateToCenter={() => onNavigate?.('notification-center')}
           />
 
-          <div className="avatar avatar-sm">
+          <div className="avatar avatar-sm" title={user?.name || 'User'}>
             {getInitials(user?.name || 'U')}
           </div>
+
+          <button
+            onClick={handleLogout}
+            className="btn btn-ghost btn-sm"
+            style={{ color: 'var(--error, #dc2626)', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 10px', fontSize: '0.8rem', flexShrink: 0 }}
+            title="Logout"
+          >
+            <LogOut size={15} />
+            <span>Logout</span>
+          </button>
         </div>
       </header>
 

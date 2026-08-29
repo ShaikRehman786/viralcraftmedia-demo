@@ -275,8 +275,9 @@ export default function PartnerDashboardPage() {
         {/* Unified Light-Theme CRM Sidebar */}
         <aside className={`app-sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
           <div>
-            <div className="sidebar-logo">
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 850, margin: 0, color: '#FFF', letterSpacing: '-0.5px' }}>
+            <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src="/logoooooooooo.png" alt="ViralCraft Media" style={{ height: '28px' }} />
+              <h2 style={{ fontSize: '1.05rem', fontWeight: 850, margin: 0, color: '#FFF', letterSpacing: '-0.5px' }}>
                 ViralCraft<span style={{ color: 'var(--accent)' }}>Partner</span>
               </h2>
             </div>
@@ -365,8 +366,17 @@ export default function PartnerDashboardPage() {
                 </span>
               </div>
             </div>
-            <div className="header-right">
-              <div className="badge badge-success">Active Partner</div>
+            <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div className="badge badge-success hide-on-mobile">Active Partner</div>
+              <button
+                onClick={handleLogout}
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--error, #dc2626)', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 10px', fontSize: '0.8rem' }}
+                title="Logout"
+              >
+                <LogOut size={15} />
+                <span>Logout</span>
+              </button>
             </div>
           </header>
 

@@ -275,12 +275,29 @@ export const recordBackupEntry = async ({
     const prevRecordCount = await BackupRecord.countDocuments({ collectionName, documentId: docIdStr });
     const restoreVersion = prevRecordCount + 1;
 
+    // For DELETE or UPDATE operations where previousData is missing, look up the last known state from BackupRecord
+    let effectivePreviousData = previousData;
+    if ((operation === 'DELETE' || operation === 'UPDATE') && !effectivePreviousData) {
+      const lastKnown = await BackupRecord.findOne({
+        collectionName,
+        documentId: docIdStr,
+        $or: [
+          { currentData: { $ne: null } },
+          { previousData: { $ne: null } }
+        ]
+      }).sort({ timestamp: -1 }).lean();
+
+      if (lastKnown) {
+        effectivePreviousData = lastKnown.currentData || lastKnown.previousData;
+      }
+    }
+
     // Compute changed fields if not provided
     const finalChangedFields = (changedFields && changedFields.length > 0)
       ? changedFields
-      : computeDiff(previousData, currentData);
+      : computeDiff(effectivePreviousData, currentData);
 
-    const sanitizedPrevious = sanitizeData(previousData);
+    const sanitizedPrevious = sanitizeData(effectivePreviousData);
     const sanitizedCurrent = sanitizeData(currentData);
 
     const payloadString = JSON.stringify({ previousData: sanitizedPrevious, currentData: sanitizedCurrent });
@@ -426,7 +443,10 @@ export const startChangeStreamWatcher = async () => {
       console.warn('[CHANGE STREAM] Token lookup warning:', e.message);
     }
 
-    const options = { fullDocument: 'updateLookup' };
+    const options = { 
+      fullDocument: 'updateLookup',
+      fullDocumentBeforeChange: 'whenAvailable'
+    };
     if (resumeTokenDoc && resumeTokenDoc.resumeToken) {
       options.resumeAfter = resumeTokenDoc.resumeToken;
       console.log('[CHANGE STREAM] Resuming watch from token timestamp:', resumeTokenDoc.lastEventTime);
@@ -461,7 +481,7 @@ export const startChangeStreamWatcher = async () => {
         }
 
         let operation = 'UPDATE';
-        let previousData = null;
+        let previousData = change.fullDocumentBeforeChange || null;
         let currentData = change.fullDocument || null;
         let changedFields = [];
 

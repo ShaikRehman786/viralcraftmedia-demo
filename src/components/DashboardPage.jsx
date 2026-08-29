@@ -111,7 +111,7 @@ export default function DashboardPage() {
   const [roleUpdateVal, setRoleUpdateVal] = useState('CLIENT');
 
   // Category Filtering, Search & Export States
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Short Form Editing');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   const [projectSearch, setProjectSearch] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState('all');
   const [projectPriorityFilter, setProjectPriorityFilter] = useState('all');
@@ -238,7 +238,9 @@ export default function DashboardPage() {
       }
 
       if (dataMap.projects) {
-        const rawProjects = dataMap.projects.data;
+        const rawProjects = Array.isArray(dataMap.projects?.data)
+          ? dataMap.projects.data
+          : (Array.isArray(dataMap.projects) ? dataMap.projects : (Array.isArray(dataMap.projects?.projects) ? dataMap.projects.projects : []));
         if (user.role === 'EMPLOYEE') {
           setProjects(rawProjects.map(p => ({
             _id: p._id,
@@ -274,12 +276,15 @@ export default function DashboardPage() {
       }
 
       if (dataMap.tasks) {
-        const rawTasks = dataMap.tasks.data;
+        const rawTasks = Array.isArray(dataMap.tasks?.data)
+          ? dataMap.tasks.data
+          : (Array.isArray(dataMap.tasks) ? dataMap.tasks : []);
         if (user.role === 'EMPLOYEE') {
           setTasks(rawTasks.map(t => ({
             ...t,
             project: t.project ? { 
-              _id: t.project._id,
+              _id: t.project._id || t.project,
+              name: t.project.name || '',
               department: t.project.department,
               category: t.project.category,
               status: t.project.status,
@@ -301,11 +306,11 @@ export default function DashboardPage() {
       if (dataMap.staff) {
         setStaff(dataMap.staff.data);
       }
-
-      setDataLoaded(true);
     } catch (err) {
       if (axios.isCancel(err)) return;
       console.error('Error refreshing CRM dashboard data in parallel:', err);
+    } finally {
+      setDataLoaded(true);
     }
   }, [user]);
 
@@ -863,12 +868,14 @@ export default function DashboardPage() {
   };
 
   const handleExportCSV = () => {
+    const isAllCat = !selectedCategoryFilter || selectedCategoryFilter.toLowerCase() === 'all';
     const filtered = projects.filter(p => {
-      const matchesCategory = (p.category || 'Short Form Editing') === selectedCategoryFilter;
-      const matchesSearch = p.name.toLowerCase().includes(projectSearch.toLowerCase()) || 
+      if (!p) return false;
+      const matchesCategory = isAllCat || (p.category || 'Short Form Editing') === selectedCategoryFilter || p.category === selectedCategoryFilter;
+      const matchesSearch = !projectSearch || (p.name || '').toLowerCase().includes(projectSearch.toLowerCase()) || 
                             (p.client?.name || '').toLowerCase().includes(projectSearch.toLowerCase());
-      const matchesStatus = projectStatusFilter === 'all' || p.status === projectStatusFilter;
-      const matchesPriority = projectPriorityFilter === 'all' || p.priority === projectPriorityFilter;
+      const matchesStatus = !projectStatusFilter || projectStatusFilter === 'all' || p.status === projectStatusFilter;
+      const matchesPriority = !projectPriorityFilter || projectPriorityFilter === 'all' || p.priority === projectPriorityFilter;
       return matchesCategory && matchesSearch && matchesStatus && matchesPriority;
     });
     
@@ -1045,7 +1052,7 @@ export default function DashboardPage() {
       <div className="loading-screen">
         <div className="loading-content">
           <Clock className="spinner" size={24} color="var(--accent)" />
-          <p className="loading-text">Verifying security credentials...</p>
+          <p className="loading-text">Please wait, loading...</p>
         </div>
       </div>
     );

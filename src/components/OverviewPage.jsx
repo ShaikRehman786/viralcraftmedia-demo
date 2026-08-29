@@ -119,7 +119,8 @@ export default function OverviewPage({
   teamActivity,
   formatTimeAgo,
   onViewAll,
-  loading
+  loading,
+  onRefreshData
 }) {
   const [acceptingId, setAcceptingId] = useState(null);
   const [localAccepted, setLocalAccepted] = useState({});
@@ -188,42 +189,70 @@ export default function OverviewPage({
 
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const userId = user?._id?.toString();
+  const userId = (user?._id || user?.id || user)?.toString();
 
   const myProjects = useMemo(() => {
+    if (!projects || !Array.isArray(projects)) return [];
+    if (user?.role === 'EMPLOYEE') {
+      return projects;
+    }
     if (!userId) return [];
     const seen = new Set();
-    return (projects || []).filter(p => {
+    const taskProjectIds = new Set(
+      (tasks || [])
+        .filter(t => {
+          if (!t) return false;
+          const assignedId = (t.assignedTo?._id || t.assignedTo?.id || t.assignedTo)?.toString();
+          return assignedId && assignedId === userId;
+        })
+        .map(t => (t.project?._id || t.project?.id || t.project)?.toString())
+        .filter(Boolean)
+    );
+
+    return projects.filter(p => {
       if (!p || !p._id) return false;
-      const pIdStr = p._id.toString();
-      const isAssigned = (p.employees || []).some(e => {
-        const eid = e?._id || e;
-        return eid ? eid.toString() === userId : false;
-      }) ||
-        (p.assignments || []).some(a => {
-          const eid = a?.employee?._id || a?.employee;
-          return eid ? eid.toString() === userId : false;
+      const pIdStr = (p._id || p.id)?.toString();
+      const isAssigned = taskProjectIds.has(pIdStr) ||
+        (p.employees || []).some(e => {
+          const eid = (e?._id || e?.id || e)?.toString();
+          return eid && eid === userId;
         }) ||
-        (p.employeeId ? p.employeeId.toString() === userId : false) ||
-        (p.assignedEmployee ? p.assignedEmployee.toString() === userId : false);
+        (p.assignments || []).some(a => {
+          const eid = (a?.employee?._id || a?.employee?.id || a?.employee)?.toString();
+          return eid && eid === userId;
+        }) ||
+        (p.employeeId ? (p.employeeId?._id || p.employeeId?.id || p.employeeId)?.toString() === userId : false) ||
+        (p.assignedEmployee ? (p.assignedEmployee?._id || p.assignedEmployee?.id || p.assignedEmployee)?.toString() === userId : false);
       if (!isAssigned) return false;
       if (seen.has(pIdStr)) return false;
       seen.add(pIdStr);
       return true;
     });
-  }, [projects, userId]);
+  }, [projects, tasks, userId, user]);
 
   const myTasks = useMemo(() => {
+    if (!tasks || !Array.isArray(tasks)) return [];
+    if (user?.role === 'EMPLOYEE') {
+      return tasks;
+    }
     if (!userId) return [];
-    return (tasks || []).filter(t => t && ((t.assignedTo?._id || t.assignedTo)?.toString() === userId));
-  }, [tasks, userId]);
+    return tasks.filter(t => {
+      if (!t) return false;
+      const assignedId = (t.assignedTo?._id || t.assignedTo?.id || t.assignedTo)?.toString();
+      return assignedId && assignedId === userId;
+    });
+  }, [tasks, userId, user]);
 
   const assignedCount = myProjects.length;
-  const acceptedCount = myProjects.filter(p =>
-    p.assignmentStatus === 'Accepted' &&
-    (p.employeeId?.toString() === userId || p.assignedEmployee?.toString() === userId)
-  ).length;
-  const completedCount = myProjects.filter(p => p.status === 'completed').length;
+  const acceptedCount = myProjects.filter(p => {
+    const isAccepted = p.assignmentStatus === 'Accepted' ||
+      (p.assignments || []).some(a => {
+        const aId = (a?.employee?._id || a?.employee?.id || a?.employee)?.toString();
+        return (!aId || aId === userId) && (a.accepted || a.status === 'Accepted');
+      });
+    return isAccepted || localAccepted[p._id] === 'Accepted';
+  }).length;
+  const completedCount = myProjects.filter(p => p.status === 'completed' || p.status === 'approved').length;
   const pendingTasksCount = myTasks.filter(t =>
     !['completed', 'approved'].includes(t.status)
   ).length;
@@ -291,23 +320,63 @@ export default function OverviewPage({
   const recentProjects = [...projects].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
   const recentNotifications = [...(notifications || [])].slice(0, 5);
 
-  const isLoading = loading !== undefined ? loading : (!projects || projects.length === 0);
+  const isLoading = loading !== undefined ? loading : false;
 
   const handleAcceptProject = useCallback(async (projectId) => {
     setAcceptingId(projectId);
     try {
       const res = await axios.post(`/api/projects/${projectId}/accept`);
       const updated = res.data.data;
-      setLocalAccepted(prev => ({ ...prev, [projectId]: true }));
+      setLocalAccepted(prev => ({ ...prev, [projectId]: 'Accepted' }));
       if (updated.acceptedAt) {
         setLocalAccepted(prev => ({ ...prev, [`${projectId}_at`]: updated.acceptedAt }));
       }
+      if (onRefreshData) onRefreshData();
     } catch (err) {
-      // Accept failed — UI state reverts via finally block
+      console.error(err);
     } finally {
       setAcceptingId(null);
     }
-  }, []);
+  }, [onRefreshData]);
+
+  const handleRejectProject = useCallback(async (projectId) => {
+    setAcceptingId(projectId);
+    try {
+      await axios.post(`/api/projects/${projectId}/reject`);
+      setLocalAccepted(prev => ({ ...prev, [projectId]: 'Rejected' }));
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAcceptingId(null);
+    }
+  }, [onRefreshData]);
+
+  const handleAcceptTask = useCallback(async (taskId) => {
+    setAcceptingId(taskId);
+    try {
+      await axios.post(`/api/tasks/${taskId}/accept`);
+      setLocalAccepted(prev => ({ ...prev, [taskId]: 'accepted' }));
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAcceptingId(null);
+    }
+  }, [onRefreshData]);
+
+  const handleRejectTask = useCallback(async (taskId) => {
+    setAcceptingId(taskId);
+    try {
+      await axios.post(`/api/tasks/${taskId}/reject`);
+      setLocalAccepted(prev => ({ ...prev, [taskId]: 'rejected' }));
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAcceptingId(null);
+    }
+  }, [onRefreshData]);
 
   if (!user) return null;
 
@@ -415,9 +484,59 @@ export default function OverviewPage({
               {project.description.length > 100 ? project.description.slice(0, 100) + '...' : project.description}
             </div>
           )}
+          {(() => {
+            const myProjTasks = (tasks || []).filter(t => {
+              if (!t) return false;
+              const tProjId = (t.project?._id || t.project?.id || t.project)?.toString();
+              const assignedId = (t.assignedTo?._id || t.assignedTo?.id || t.assignedTo)?.toString();
+              const isAssigned = assignedId && assignedId === userId;
+              return tProjId === (project._id || project.id)?.toString() && isAssigned;
+            });
+
+            if (myProjTasks.length === 0) return null;
+
+            return (
+              <div className="emp-project-tasks-list" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="emp-detail-label" style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--gray-400)' }}>
+                  Assigned Tasks ({myProjTasks.length})
+                </span>
+                {myProjTasks.map(t => (
+                  <div key={t._id || t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--gray-50, #f9fafb)', borderRadius: 8, border: '1px solid var(--gray-200, #e5e7eb)', fontSize: '0.8rem' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--gray-800, #1f2937)' }}>{t.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className={getPriorityBadge(t.priority)}>{t.priority}</span>
+                      {localAccepted[t._id] === 'accepted' || (!localAccepted[t._id] && (t.status === 'accepted' || t.status === 'in_progress' || t.status === 'completed' || t.status === 'approved' || t.status === 'submitted')) ? (
+                        <span className="badge badge-success">Accepted</span>
+                      ) : localAccepted[t._id] === 'rejected' || (!localAccepted[t._id] && t.status === 'rejected') ? (
+                        <span className="badge badge-error">Rejected</span>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button
+                            className="btn btn-accent btn-xs"
+                            onClick={() => handleAcceptTask(t._id)}
+                            disabled={acceptingId === t._id}
+                          >
+                            Accept
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-xs"
+                            style={{ color: 'var(--error, #dc2626)', border: '1px solid var(--gray-200, #e5e7eb)' }}
+                            onClick={() => handleRejectTask(t._id)}
+                            disabled={acceptingId === t._id}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
         <div className="emp-project-card-footer">
-          {isAccepted || localAccepted[project._id] ? (
+          {localAccepted[project._id] === 'Accepted' || (!localAccepted[project._id] && (project.assignmentStatus === 'Accepted' || isAccepted)) ? (
             <div className="emp-project-accepted-badge">
               <UserCheck size={14} />
               <span>Accepted</span>
@@ -425,32 +544,47 @@ export default function OverviewPage({
                 <span className="emp-accepted-date">{formatDate(project.acceptedAt)}</span>
               )}
             </div>
-          ) : isPending ? (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => handleAcceptProject(project._id)}
-              disabled={acceptingId === project._id}
-            >
-              {acceptingId === project._id ? (
-                <><span className="spinner-sm" /> Accepting...</>
-              ) : (
-                <><UserCheck size={14} /> Accept Project</>
-              )}
-            </button>
-          ) : null}
+          ) : localAccepted[project._id] === 'Rejected' || (!localAccepted[project._id] && project.assignmentStatus === 'Rejected') ? (
+            <div className="emp-project-accepted-badge" style={{ background: '#fee2e2', color: '#dc2626' }}>
+              <span>Rejected</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => handleAcceptProject(project._id)}
+                disabled={acceptingId === project._id}
+              >
+                {acceptingId === project._id ? (
+                  <><span className="spinner-sm" /> Accepting...</>
+                ) : (
+                  <><UserCheck size={14} /> Accept</>
+                )}
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--error, #dc2626)', border: '1px solid var(--gray-200, #e5e7eb)' }}
+                onClick={() => handleRejectProject(project._id)}
+                disabled={acceptingId === project._id}
+              >
+                Reject
+              </button>
+            </div>
+          )}
 
           {empAssignments.length > 0 && (
             <div className="emp-other-assignments">
               {empAssignments.map(a => {
                 const emp = a.employee;
+                const aStatus = a.status || (a.accepted ? 'Accepted' : 'Pending');
                 return (
                   <div key={emp?._id || Math.random()} className="emp-assignment-chip">
                     <div className="avatar avatar-xs" style={{ background: getAvatarColor(emp?._id) }}>
                       {getInitials(emp?.name)}
                     </div>
                     <span className="emp-assignment-name">{emp?.name || 'Staff'}</span>
-                    <span className={`badge ${a.accepted ? 'badge-success' : 'badge-warning'} text-2xs`}>
-                      {a.accepted ? 'Accepted' : 'Pending'}
+                    <span className={`badge ${aStatus === 'Accepted' ? 'badge-success' : aStatus === 'Rejected' ? 'badge-error' : 'badge-warning'} text-2xs`}>
+                      {aStatus}
                     </span>
                   </div>
                 );
@@ -1624,6 +1758,97 @@ export default function OverviewPage({
             ) : (
               <div className="emp-project-grid">
                 {myProjects.map(renderProjectCard)}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <div className="section-header">
+              <h3 className="section-title">My Assigned Tasks</h3>
+              <span className="text-xs text-muted">{myTasks.length} task{myTasks.length !== 1 ? 's' : ''}</span>
+            </div>
+            {isLoading ? (
+              <div className="emp-project-grid">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="emp-project-card">
+                    <div className="emp-project-card-top">
+                      <div className="skeleton skeleton-title" style={{ width: '60%', height: 18 }}></div>
+                    </div>
+                    <div className="emp-project-card-body">
+                      <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
+                      <div className="skeleton skeleton-text" style={{ width: '40%', marginTop: 4 }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : myTasks.length === 0 ? (
+              <div className="card">
+                <div className="card-body">
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <CheckSquare size={24} />
+                    </div>
+                    <p className="empty-title">No tasks assigned</p>
+                    <p className="empty-desc">Your assigned tasks will appear here once assigned by a manager or admin</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="emp-project-grid">
+                {myTasks.map(t => (
+                  <div key={t._id} className="emp-project-card animate-slide-up">
+                    <div className="emp-project-card-top">
+                      <div className="emp-project-card-title">{t.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className={getPriorityBadge(t.priority)}>{t.priority}</span>
+                        {localAccepted[t._id] === 'accepted' || (!localAccepted[t._id] && (t.status === 'accepted' || t.status === 'in_progress' || t.status === 'completed' || t.status === 'approved' || t.status === 'submitted')) ? (
+                          <span className="badge badge-success">Accepted</span>
+                        ) : localAccepted[t._id] === 'rejected' || (!localAccepted[t._id] && t.status === 'rejected') ? (
+                          <span className="badge badge-error">Rejected</span>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button
+                              className="btn btn-accent btn-xs"
+                              onClick={() => handleAcceptTask(t._id)}
+                              disabled={acceptingId === t._id}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-xs"
+                              style={{ color: 'var(--error, #dc2626)', border: '1px solid var(--gray-200, #e5e7eb)' }}
+                              onClick={() => handleRejectTask(t._id)}
+                              disabled={acceptingId === t._id}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="emp-project-card-body">
+                      <div className="emp-project-card-details">
+                        {t.project?.name && (
+                          <div className="emp-project-detail">
+                            <span className="emp-detail-label">Project</span>
+                            <span className="emp-detail-value">{t.project.name}</span>
+                          </div>
+                        )}
+                        {t.deadline && (
+                          <div className="emp-project-detail">
+                            <span className="emp-detail-label">Deadline</span>
+                            <span className="emp-detail-value">{formatDate(t.deadline)}</span>
+                          </div>
+                        )}
+                      </div>
+                      {t.description && (
+                        <div className="emp-project-desc">
+                          {t.description}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

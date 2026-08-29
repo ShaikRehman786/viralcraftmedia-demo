@@ -46,7 +46,7 @@ function getPriorityBadge(priority) {
   }
 }
 
-const CATEGORY_TABS = ['Short Form Editing', 'Podcast Editing', 'Marketing', 'Website Development', 'All'];
+const CATEGORY_TABS = ['All', 'Short Form Editing', 'Podcast Editing', 'Marketing', 'Website Development'];
 
 function getInitials(name) {
   if (!name) return '?';
@@ -157,7 +157,7 @@ export default function ProjectsPage({
 
   const [isSaving, setIsSaving] = useState(false);
 
-  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER';
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER' || user?.role === 'ADMIN';
   const isEmployee = user?.role === 'EMPLOYEE';
   const userId = safeIdString(user);
 
@@ -182,23 +182,50 @@ export default function ProjectsPage({
 
   const deduplicatedProjects = useMemo(() => {
     const seen = new Set();
-    return (projects || []).filter(p => {
+    return (projects || []).filter((p, index) => {
       if (!p) return false;
-      const key = safeIdString(p);
-      if (!key) return false;
+      const key = safeIdString(p) || p._id || p.id || p.name || `proj-${index}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   }, [projects]);
 
+  const normalizeCategory = (cat) => {
+    if (!cat) return '';
+    const c = cat.toLowerCase().trim();
+    if (c.includes('short') || c.includes('clip') || c.includes('reel') || c.includes('video')) return 'Short Form Editing';
+    if (c.includes('podcast') || c.includes('audio')) return 'Podcast Editing';
+    if (c.includes('market') || c.includes('social') || c.includes('brand')) return 'Marketing';
+    if (c.includes('web') || c.includes('dev') || c.includes('site')) return 'Website Development';
+    return cat;
+  };
+
   const filteredProjects = useMemo(() => deduplicatedProjects.filter(p => {
     if (!p) return false;
-    const matchesCategory = selectedCategoryFilter === 'All' || (p.category || 'Short Form Editing') === selectedCategoryFilter;
-    const matchesSearch = (p.name || '').toLowerCase().includes((projectSearch || '').toLowerCase()) ||
-      (p.client?.name || '').toLowerCase().includes((projectSearch || '').toLowerCase());
-    const matchesStatus = projectStatusFilter === 'all' || p.status === projectStatusFilter;
-    const matchesPriority = projectPriorityFilter === 'all' || p.priority === projectPriorityFilter;
+    const cat = p.category || '';
+    const isAllCategory = !selectedCategoryFilter || selectedCategoryFilter.toLowerCase() === 'all';
+    const matchesCategory = isEmployee || isAllCategory ||
+      (cat || 'Short Form Editing') === selectedCategoryFilter ||
+      cat === selectedCategoryFilter ||
+      normalizeCategory(cat) === selectedCategoryFilter;
+    const term = (projectSearch || '').toLowerCase().trim();
+    const matchesSearch = !term ||
+      (p.name || '').toLowerCase().includes(term) ||
+      (p.client?.name || '').toLowerCase().includes(term) ||
+      (typeof p.client === 'string' && p.client.toLowerCase().includes(term)) ||
+      (p.category || '').toLowerCase().includes(term) ||
+      (p.description || '').toLowerCase().includes(term);
+    const statusFilter = (projectStatusFilter || 'all').toLowerCase();
+    const projStatus = (p.status || 'pending').toLowerCase();
+    const matchesStatus = statusFilter === 'all' || projStatus === statusFilter ||
+      (statusFilter === 'in_progress' && (projStatus === 'ongoing' || projStatus === 'assigned' || projStatus === 'accepted')) ||
+      (statusFilter === 'under_review' && (projStatus === 'review' || projStatus === 'submitted')) ||
+      (statusFilter === 'new' && (projStatus === 'pending' || projStatus === 'to_do' || projStatus === 'todo')) ||
+      (statusFilter === 'completed' && projStatus === 'approved');
+    const priorityFilter = (projectPriorityFilter || 'all').toLowerCase();
+    const projPriority = (p.priority || 'medium').toLowerCase();
+    const matchesPriority = priorityFilter === 'all' || projPriority === priorityFilter;
     return matchesCategory && matchesSearch && matchesStatus && matchesPriority;
   }), [deduplicatedProjects, selectedCategoryFilter, projectSearch, projectStatusFilter, projectPriorityFilter]);
 
@@ -206,22 +233,38 @@ export default function ProjectsPage({
     const map = {};
     deduplicatedProjects.forEach(p => {
       if (!p) return;
-      const pIdStr = safeIdString(p);
+      const pIdStr = safeIdString(p) || p._id || p.id;
       if (!pIdStr) return;
       const matched = (tasks || []).filter(t => {
         if (!t) return false;
-        const tProjId = safeIdString(t.project);
-        return tProjId && tProjId === pIdStr;
+        const tProjId = safeIdString(t.project) || t.project?._id || t.project;
+        return tProjId && String(tProjId) === String(pIdStr);
       });
-      map[p._id] = matched;
+      if (p._id) map[p._id] = matched;
       map[pIdStr] = matched;
     });
     return map;
   }, [deduplicatedProjects, tasks]);
 
-  const kanbanTodo = useMemo(() => filteredProjects.filter(p => p && (p.status === 'new' || p.status === 'pending')), [filteredProjects]);
-  const kanbanInProgress = useMemo(() => filteredProjects.filter(p => p && (p.status === 'in_progress' || p.status === 'review' || p.status === 'under_review')), [filteredProjects]);
-  const kanbanCompleted = useMemo(() => filteredProjects.filter(p => p && (p.status === 'completed' || p.status === 'approved')), [filteredProjects]);
+  const kanbanTodo = useMemo(() => filteredProjects.filter(p => {
+    if (!p) return false;
+    const s = (p.status || 'pending').toLowerCase();
+    if (s === 'new' || s === 'pending' || s === 'to_do' || s === 'todo' || s === 'created') return true;
+    if (s === 'in_progress' || s === 'ongoing' || s === 'review' || s === 'under_review' || s === 'assigned' || s === 'accepted' || s === 'submitted' || s === 'processing' || s === 'completed' || s === 'approved' || s === 'done' || s === 'on_hold' || s === 'cancelled') return false;
+    return true;
+  }), [filteredProjects]);
+
+  const kanbanInProgress = useMemo(() => filteredProjects.filter(p => {
+    if (!p) return false;
+    const s = (p.status || '').toLowerCase();
+    return s === 'in_progress' || s === 'ongoing' || s === 'review' || s === 'under_review' || s === 'assigned' || s === 'accepted' || s === 'submitted' || s === 'processing';
+  }), [filteredProjects]);
+
+  const kanbanCompleted = useMemo(() => filteredProjects.filter(p => {
+    if (!p) return false;
+    const s = (p.status || '').toLowerCase();
+    return s === 'completed' || s === 'approved' || s === 'done';
+  }), [filteredProjects]);
 
   const openNewProjectModal = () => {
     setActiveTaskDetails(null);
@@ -629,6 +672,22 @@ export default function ProjectsPage({
             <div className="kanban-progress">
               <div className="kanban-progress-fill" style={{ width: `${progressPercent}%` }} />
             </div>
+            <div className="mt-2" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {projectTasks.map(t => (
+                <div key={t._id || t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text)' }}>{t.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {t.assignedTo?.name && (
+                      <span className="text-2xs text-muted">
+                        {t.assignedTo.name}
+                      </span>
+                    )}
+                    <span className={getPriorityBadge(t.priority)}>{t.priority}</span>
+                    <span className={getStatusBadge(t.status)}>{t.status?.replace(/_/g, ' ')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -647,18 +706,41 @@ export default function ProjectsPage({
                     <span className="text-xs text-muted">Assigned to: {project.employeeName}</span>
                   )}
                 </div>
+              ) : isRejectedByMe ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="badge badge-error">
+                    Rejected
+                  </span>
+                </div>
               ) : isPendingForMe ? (
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => handleAccept(project._id)}
-                  disabled={acceptingId === project._id}
-                >
-                  {acceptingId === project._id ? (
-                    <><span className="spinner-sm" /> Accepting...</>
-                  ) : (
-                    <><UserCheck size={14} /> Accept Project</>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleAccept(project._id)}
+                    disabled={acceptingId === project._id}
+                  >
+                    {acceptingId === project._id ? (
+                      <><span className="spinner-sm" /> Accepting...</>
+                    ) : (
+                      <><UserCheck size={14} /> Accept</>
+                    )}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--error, #dc2626)', border: '1px solid var(--gray-200, #e5e7eb)' }}
+                    onClick={async () => {
+                      try {
+                        await axios.post(`/api/projects/${project._id}/reject`);
+                        addToast('Project assignment rejected', 'info');
+                        if (onRefreshData) onRefreshData();
+                      } catch (err) {
+                        addToast('Failed to reject project', 'error');
+                      }
+                    }}
+                  >
+                    Reject
+                  </button>
+                </div>
               ) : null}
             </>
           ) : null}
@@ -668,22 +750,22 @@ export default function ProjectsPage({
               {(project.assignments && project.assignments.length > 0 ? project.assignments : employees.map(e => ({
                 employee: e,
                 accepted: project.assignmentStatus === 'Accepted' && (safeIdString(project.employeeId) === safeIdString(e)),
-                status: project.assignmentStatus === 'Accepted' && (safeIdString(project.employeeId) === safeIdString(e)) ? 'Accepted' : 'Pending'
+                status: project.assignmentStatus === 'Accepted' && (safeIdString(project.employeeId) === safeIdString(e)) ? 'Accepted' : project.assignmentStatus === 'Rejected' && (safeIdString(project.employeeId) === safeIdString(e)) ? 'Rejected' : 'Pending'
               }))).filter((a, idx, self) => {
                 const eid = safeIdString(a?.employee);
                 return eid && self.findIndex(s => safeIdString(s?.employee) === eid) === idx;
               }).map(a => {
                 const emp = a.employee;
                 const eid = safeIdString(emp);
-                const isAccepted = a.accepted || a.status === 'Accepted';
+                const aStatus = a.status || (a.accepted ? 'Accepted' : 'Pending');
                 return (
                   <div key={eid || Math.random()} className="emp-assignment-chip">
                     <div className="avatar avatar-xs" style={{ background: getAvatarColor(eid) }}>
                       {getInitials(emp?.name)}
                     </div>
                     <span className="emp-assignment-name">{emp?.name || 'Staff'}</span>
-                    <span className={`badge ${isAccepted ? 'badge-success' : 'badge-warning'} text-2xs`}>
-                      {isAccepted ? 'Accepted' : 'Pending'}
+                    <span className={`badge ${aStatus === 'Accepted' ? 'badge-success' : aStatus === 'Rejected' ? 'badge-error' : 'badge-warning'} text-2xs`}>
+                      {aStatus}
                     </span>
                   </div>
                 );

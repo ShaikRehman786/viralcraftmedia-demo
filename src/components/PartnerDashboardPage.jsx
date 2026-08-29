@@ -257,7 +257,7 @@ export default function PartnerDashboardPage() {
     return (
       <div className="flex-center" style={{ minHeight: '100vh', background: 'var(--gray-50)', flexDirection: 'column', gap: '16px' }}>
         <Loader2 className="spinner" size={32} style={{ color: 'var(--accent)' }} />
-        <span style={{ fontSize: '0.875rem', color: 'var(--gray-500)', fontWeight: 600 }}>Loading Partner Workspace...</span>
+        <span style={{ fontSize: '0.875rem', color: 'var(--gray-500)', fontWeight: 600 }}>Please wait, loading...</span>
       </div>
     );
   }

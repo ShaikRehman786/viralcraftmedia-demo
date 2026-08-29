@@ -344,7 +344,7 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
         {loading && notifications.length === 0 ? (
           <div className="notif-center-loading">
             <Loader2 size={32} className="spinner" />
-            <p>Loading notifications...</p>
+            <p>Please wait, loading...</p>
           </div>
         ) : notifications.length === 0 ? (
           <div className="notif-center-empty">

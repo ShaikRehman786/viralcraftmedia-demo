@@ -279,8 +279,129 @@ export default function BackupPortalPage({ embedded = false }) {
     return <span className="badge badge-gray">SYSTEM</span>;
   };
 
+  // Clean business data filter: removes internal change stream & infrastructure metadata
+  const getCleanBusinessData = (data) => {
+    if (!data || typeof data !== 'object') return null;
+    const internalKeys = new Set([
+      'resumeToken', 'checksum', 'recordSize', 'browser', 'os', 'device', 
+      'location', 'metadata', '__v', 'source', 'performedBy', '_id', 'restoreVersion'
+    ]);
+    const clean = {};
+    Object.keys(data).forEach(k => {
+      if (!internalKeys.has(k)) {
+        clean[k] = data[k];
+      }
+    });
+    return Object.keys(clean).length > 0 ? clean : null;
+  };
+
+  // Render field value cleanly in human-readable format
+  const renderFieldValue = (val) => {
+    if (val === null || val === undefined) {
+      return <span style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>None</span>;
+    }
+    if (typeof val === 'boolean') {
+      return (
+        <span className={`badge ${val ? 'badge-success' : 'badge-gray'}`} style={{ fontSize: '0.72rem' }}>
+          {val ? 'Yes' : 'No'}
+        </span>
+      );
+    }
+    if (Array.isArray(val)) {
+      if (val.length === 0) return <span style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>Empty</span>;
+      return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {val.map((item, idx) => (
+            <span key={idx} className="badge badge-gray" style={{ fontSize: '0.72rem' }}>
+              {typeof item === 'object' && item !== null
+                ? (item.name || item.title || item.email || item._id || JSON.stringify(item))
+                : String(item)}
+            </span>
+          ))}
+        </div>
+      );
+    }
+    if (typeof val === 'object' && val !== null) {
+      if (val.name || val.title || val.email || val.agencyName) {
+        return (
+          <span style={{ fontWeight: 600, color: 'var(--gray-800)' }}>
+            {val.name || val.title || val.agencyName} {val.email ? `(${val.email})` : ''}
+          </span>
+        );
+      }
+      return (
+        <div style={{ background: 'var(--gray-50)', padding: '6px 8px', borderRadius: '6px', fontSize: '0.75rem', border: '1px solid var(--gray-200)' }}>
+          {Object.entries(val).map(([subK, subV]) => (
+            <div key={subK} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ color: 'var(--gray-500)', fontWeight: 600 }}>{subK}:</span>
+              <span style={{ color: 'var(--gray-800)' }}>{typeof subV === 'object' ? JSON.stringify(subV) : String(subV)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    const strVal = String(val);
+    if (!isNaN(Date.parse(strVal)) && strVal.length >= 19 && strVal.includes('T')) {
+      return new Date(strVal).toLocaleString();
+    }
+    return <span style={{ color: 'var(--gray-900)', fontWeight: 500 }}>{strVal}</span>;
+  };
+
+  // Render Human-Readable Document Card Grid
+  const renderDocumentFields = (rawData) => {
+    const data = getCleanBusinessData(rawData);
+    if (!data) {
+      return (
+        <div style={{ padding: '16px', background: 'var(--gray-50)', borderRadius: '8px', border: '1px dashed var(--gray-300)', textAlign: 'center', color: 'var(--gray-500)', fontSize: '0.82rem' }}>
+          No additional business fields found for this record.
+        </div>
+      );
+    }
+
+    const entries = Object.entries(data);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+          {entries.map(([key, val]) => {
+            const isWide = typeof val === 'object' && val !== null;
+            return (
+              <div 
+                key={key} 
+                style={{
+                  background: 'var(--gray-50)',
+                  border: '1px solid var(--gray-200)',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  gridColumn: isWide ? 'span 2' : 'span 1',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '3px'
+                }}
+              >
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--gray-500)', textTransform: 'capitalize' }}>
+                  {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}
+                </span>
+                <div style={{ fontSize: '0.82rem', wordBreak: 'break-word' }}>
+                  {renderFieldValue(val)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Helper for Document Title / Primary identifier in Data Grid
+  const getDocTitle = (doc) => {
+    const d = doc.currentData || doc.previousData || doc;
+    if (!d || typeof d !== 'object') return doc.documentId || 'Record';
+    return d.name || d.title || d.eventName || d.clientName || d.agencyName || d.email || d.service || d.project || doc.documentId || 'Record';
+  };
+
   if (loading) {
-    return <CRMGlobalLoader fullScreen={!embedded} message="Connecting Enterprise Backup Services..." subMessage="Loading production clusters and change stream monitors" />;
+    return <CRMGlobalLoader fullScreen={!embedded} message="Please wait, loading..." subMessage={null} />;
   }
 
   return (
@@ -508,36 +629,42 @@ export default function BackupPortalPage({ embedded = false }) {
           <h3 style={{ fontSize: '1.05rem', fontWeight: '700', margin: '0 0 16px 0', color: 'var(--gray-900)' }}>
             Protected Collections Breakdown ({collectionSummaries.length})
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-            {collectionSummaries.map((col) => (
-              <div 
-                key={col.collectionName} 
-                className="card" 
-                style={{ 
-                  padding: '14px', 
-                  cursor: 'pointer',
-                  border: selectedCollection === col.collectionName ? '2px solid var(--accent)' : '1px solid var(--gray-200)',
-                  transition: 'all 0.2s ease'
-                }}
-                onClick={() => {
-                  setSelectedCollection(col.collectionName);
-                  setActiveTab('datagrid');
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: '700', fontSize: '0.92rem', color: 'var(--gray-900)' }}>{col.collectionName}</span>
-                  <span className="badge badge-success">{col.syncStatus}</span>
+          {collectionSummaries.length === 0 ? (
+            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--gray-500)', fontSize: '0.88rem', background: 'var(--gray-50)', borderRadius: '8px', border: '1px dashed var(--gray-300)' }}>
+              No collections currently monitored.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+              {collectionSummaries.map((col) => (
+                <div 
+                  key={col.collectionName} 
+                  className="card" 
+                  style={{ 
+                    padding: '14px', 
+                    cursor: 'pointer',
+                    border: selectedCollection === col.collectionName ? '2px solid var(--accent)' : '1px solid var(--gray-200)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onClick={() => {
+                    setSelectedCollection(col.collectionName);
+                    setActiveTab('datagrid');
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: '700', fontSize: '0.92rem', color: 'var(--gray-900)' }}>{col.collectionName}</span>
+                    <span className="badge badge-success">{col.syncStatus}</span>
+                  </div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--accent)', marginBottom: '4px' }}>
+                    {col.collectionName} ({col.recordCount})
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Backups: {col.backupCount}</span>
+                    <span>Size: {col.storageUsed}</span>
+                  </div>
                 </div>
-                <div style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--accent)', marginBottom: '4px' }}>
-                  {col.collectionName} ({col.recordCount})
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Backups: {col.backupCount}</span>
-                  <span>Size: {col.storageUsed}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -553,45 +680,51 @@ export default function BackupPortalPage({ embedded = false }) {
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {activityEvents.map((evt) => {
-              const perfRole = typeof evt.performedBy === 'object' ? (evt.performedBy.role || 'SYSTEM') : 'SYSTEM';
-              const perfName = typeof evt.performedBy === 'object' ? (evt.performedBy.name || evt.performedBy.email || 'System') : String(evt.performedBy || 'System');
-              
-              return (
-                <div key={evt._id} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  background: 'var(--gray-50)',
-                  border: '1px solid var(--gray-200)',
-                  flexWrap: 'wrap',
-                  gap: '8px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {getOperationBadge(evt.operation)}
-                    {getRoleBadge(perfRole)}
-                    <div>
-                      <span style={{ fontWeight: '700', color: 'var(--gray-900)', fontSize: '0.88rem' }}>{evt.collectionName}</span>
-                      <span style={{ color: 'var(--gray-400)', margin: '0 6px' }}>•</span>
-                      <span style={{ fontSize: '0.8rem', fontFamily: 'monospace', color: 'var(--accent)' }}>{evt.documentId}</span>
+          {activityEvents.length === 0 ? (
+            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--gray-500)', fontSize: '0.88rem', background: 'var(--gray-50)', borderRadius: '8px', border: '1px dashed var(--gray-300)' }}>
+              No recent activity events recorded.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {activityEvents.map((evt) => {
+                const perfRole = typeof evt.performedBy === 'object' ? (evt.performedBy.role || 'SYSTEM') : 'SYSTEM';
+                const perfName = typeof evt.performedBy === 'object' ? (evt.performedBy.name || evt.performedBy.email || 'System') : String(evt.performedBy || 'System');
+                
+                return (
+                  <div key={evt._id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    background: 'var(--gray-50)',
+                    border: '1px solid var(--gray-200)',
+                    flexWrap: 'wrap',
+                    gap: '8px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {getOperationBadge(evt.operation)}
+                      {getRoleBadge(perfRole)}
+                      <div>
+                        <span style={{ fontWeight: '700', color: 'var(--gray-900)', fontSize: '0.88rem' }}>{evt.collectionName}</span>
+                        <span style={{ color: 'var(--gray-400)', margin: '0 6px' }}>•</span>
+                        <span style={{ fontSize: '0.8rem', fontFamily: 'monospace', color: 'var(--accent)' }}>{evt.documentId}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--gray-700)', fontWeight: '600' }}>
+                        {perfName}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} /> {new Date(evt.timestamp || evt.createdAt).toLocaleTimeString()}
+                      </span>
                     </div>
                   </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--gray-700)', fontWeight: '600' }}>
-                      {perfName}
-                    </span>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Clock size={12} /> {new Date(evt.timestamp || evt.createdAt).toLocaleTimeString()}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -672,6 +805,7 @@ export default function BackupPortalPage({ embedded = false }) {
                 <tr>
                   <th style={{ padding: '10px' }}>Operation</th>
                   <th style={{ padding: '10px' }}>Collection</th>
+                  <th style={{ padding: '10px' }}>Record / Title</th>
                   <th style={{ padding: '10px' }}>Document ID</th>
                   <th style={{ padding: '10px' }}>Performed By</th>
                   <th style={{ padding: '10px' }}>Role</th>
@@ -680,27 +814,39 @@ export default function BackupPortalPage({ embedded = false }) {
                 </tr>
               </thead>
               <tbody>
-                {documents.map((doc) => {
-                  const perfRole = typeof doc.performedBy === 'object' ? (doc.performedBy.role || 'SYSTEM') : 'SYSTEM';
-                  const perfName = typeof doc.performedBy === 'object' ? (doc.performedBy.name || doc.performedBy.email || 'System') : String(doc.performedBy || 'System');
+                {documents.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--gray-500)', fontSize: '0.88rem' }}>
+                      No backup records found for the selected filter criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  documents.map((doc) => {
+                    const perfRole = typeof doc.performedBy === 'object' ? (doc.performedBy.role || 'SYSTEM') : 'SYSTEM';
+                    const perfName = typeof doc.performedBy === 'object' ? (doc.performedBy.name || doc.performedBy.email || 'System') : String(doc.performedBy || 'System');
+                    const primaryTitle = getDocTitle(doc);
 
-                  return (
-                    <tr key={doc._id}>
-                      <td style={{ padding: '10px' }}>{getOperationBadge(doc.operation)}</td>
-                      <td style={{ padding: '10px', fontWeight: '600', color: 'var(--gray-900)' }}>{doc.collectionName}</td>
-                      <td style={{ padding: '10px', fontFamily: 'monospace', color: 'var(--accent)' }}>{doc.documentId || doc._id}</td>
-                      <td style={{ padding: '10px' }}>{perfName}</td>
-                      <td style={{ padding: '10px' }}>{getRoleBadge(perfRole)}</td>
-                      <td style={{ padding: '10px', fontSize: '0.8rem', color: 'var(--gray-500)' }}>{new Date(doc.timestamp || doc.createdAt).toLocaleString()}</td>
-                      <td style={{ padding: '10px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                          <button onClick={() => setSelectedDoc(doc)} className="btn btn-ghost btn-sm"><Eye size={12} /> View Diff</button>
-                          <button onClick={() => handleFetchRestorePreview(doc._id)} className="btn btn-secondary btn-sm"><RotateCcw size={12} /> Preview</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                    return (
+                      <tr key={doc._id}>
+                        <td style={{ padding: '10px' }}>{getOperationBadge(doc.operation)}</td>
+                        <td style={{ padding: '10px', fontWeight: '600', color: 'var(--gray-900)' }}>{doc.collectionName}</td>
+                        <td style={{ padding: '10px', fontWeight: '600', color: 'var(--gray-800)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={primaryTitle}>
+                          {primaryTitle}
+                        </td>
+                        <td style={{ padding: '10px', fontFamily: 'monospace', color: 'var(--accent)' }}>{doc.documentId || doc._id}</td>
+                        <td style={{ padding: '10px' }}>{perfName}</td>
+                        <td style={{ padding: '10px' }}>{getRoleBadge(perfRole)}</td>
+                        <td style={{ padding: '10px', fontSize: '0.8rem', color: 'var(--gray-500)' }}>{new Date(doc.timestamp || doc.createdAt).toLocaleString()}</td>
+                        <td style={{ padding: '10px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                            <button onClick={() => setSelectedDoc(doc)} className="btn btn-ghost btn-sm"><Eye size={12} /> View Diff</button>
+                            <button onClick={() => handleFetchRestorePreview(doc._id)} className="btn btn-secondary btn-sm"><RotateCcw size={12} /> Preview</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -728,37 +874,43 @@ export default function BackupPortalPage({ embedded = false }) {
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {restorePoints.map((rp) => (
-              <div key={rp.id} className="card" style={{ padding: '16px', background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span className="badge badge-purple">{rp.type}</span>
-                  <span className="badge badge-success">{rp.verificationStatus}</span>
-                </div>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: '700', margin: '0 0 6px 0', color: 'var(--gray-900)' }}>{rp.title}</h4>
-                <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginBottom: '12px' }}>
-                  <Clock size={12} style={{ display: 'inline', marginRight: '4px' }} />
-                  {new Date(rp.timestamp).toLocaleString()}
-                </div>
+          {restorePoints.length === 0 ? (
+            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--gray-500)', fontSize: '0.88rem', background: 'var(--gray-50)', borderRadius: '8px', border: '1px dashed var(--gray-300)' }}>
+              No automated restore points available yet.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              {restorePoints.map((rp) => (
+                <div key={rp.id} className="card" style={{ padding: '16px', background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span className="badge badge-purple">{rp.type}</span>
+                    <span className="badge badge-success">{rp.verificationStatus}</span>
+                  </div>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: '700', margin: '0 0 6px 0', color: 'var(--gray-900)' }}>{rp.title}</h4>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginBottom: '12px' }}>
+                    <Clock size={12} style={{ display: 'inline', marginRight: '4px' }} />
+                    {new Date(rp.timestamp).toLocaleString()}
+                  </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--gray-700)', marginBottom: '14px', background: 'white', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--gray-200)' }}>
-                  <span>Collections: <strong>{rp.collectionsCount}</strong></span>
-                  <span>Records: <strong>{rp.recordsCount}</strong></span>
-                  <span>Size: <strong>{rp.backupSize}</strong></span>
-                </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--gray-700)', marginBottom: '14px', background: 'white', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--gray-200)' }}>
+                    <span>Collections: <strong>{rp.collectionsCount}</strong></span>
+                    <span>Records: <strong>{rp.recordsCount}</strong></span>
+                    <span>Size: <strong>{rp.backupSize}</strong></span>
+                  </div>
 
-                <button 
-                  onClick={() => {
-                    setActiveTab('datagrid');
-                  }} 
-                  className="btn btn-secondary btn-sm" 
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <RotateCcw size={13} /> Inspect Restore Snapshot
-                </button>
-              </div>
-            ))}
-          </div>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('datagrid');
+                    }} 
+                    className="btn btn-secondary btn-sm" 
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <RotateCcw size={13} /> Inspect Restore Snapshot
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -775,7 +927,7 @@ export default function BackupPortalPage({ embedded = false }) {
 
             <div className="dialog-body">
               {forceSyncing ? (
-                <CRMGlobalLoader fullScreen={false} message="Scanning Production Database..." subMessage="Comparing documents against Backup DB and backfilling missing entries" />
+                <CRMGlobalLoader fullScreen={false} message="Please wait, loading..." subMessage={null} />
               ) : forceSyncResult?.error ? (
                 <div style={{ color: 'var(--error)', fontSize: '0.85rem' }}>Force Sync Failed: {forceSyncResult.error}</div>
               ) : (
@@ -804,11 +956,11 @@ export default function BackupPortalPage({ embedded = false }) {
       {/* Restore Preview Modal */}
       {restoreModalOpen && (
         <div className="dialog-overlay">
-          <div className="dialog" style={{ maxWidth: '560px', width: '92vw' }}>
+          <div className="dialog" style={{ maxWidth: '640px', width: '92vw' }}>
             <div className="dialog-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <RotateCcw size={20} color="var(--success)" />
-                <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Restore Preview Architecture</h3>
+                <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Restore Preview</h3>
               </div>
               <button className="btn btn-ghost btn-icon" onClick={() => setRestoreModalOpen(false)}>
                 <X size={18} />
@@ -817,26 +969,27 @@ export default function BackupPortalPage({ embedded = false }) {
 
             <div className="dialog-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               {restorePreviewLoading ? (
-                <CRMGlobalLoader fullScreen={false} message="Computing Point-in-Time Snapshot..." subMessage="Generating non-destructive restore diff" />
+                <CRMGlobalLoader fullScreen={false} message="Please wait, loading..." subMessage={null} />
               ) : restorePreviewData?.error ? (
                 <div style={{ color: 'var(--error)', fontSize: '0.85rem' }}>{restorePreviewData.error}</div>
               ) : (
-                <div>
-                  <div style={{ background: 'var(--info-bg)', border: '1px solid var(--info)', color: 'var(--info)', padding: '10px 12px', borderRadius: '8px', fontSize: '0.8rem', marginBottom: '14px' }}>
-                    🔒 Dry-Run Mode: Previewing restore version {restorePreviewData?.restoreVersion} for document ID {restorePreviewData?.documentId} in {restorePreviewData?.collectionName}.
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ background: 'var(--info-bg, #eff6ff)', border: '1px solid var(--info, #3b82f6)', color: 'var(--info, #1e40af)', padding: '10px 12px', borderRadius: '8px', fontSize: '0.8rem' }}>
+                    🔒 <strong>Dry-Run Mode:</strong> Previewing restore target for <strong>{restorePreviewData?.collectionName}</strong> (ID: {restorePreviewData?.documentId}).
                   </div>
 
-                  <pre style={{
-                    background: 'var(--gray-900)',
-                    color: 'var(--success)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    fontSize: '0.75rem',
-                    maxHeight: '200px',
-                    overflowX: 'auto'
-                  }}>
-                    {JSON.stringify(restorePreviewData?.targetState, null, 2)}
-                  </pre>
+                  {restorePreviewData?.targetState ? (
+                    <div>
+                      <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 8px 0', color: 'var(--gray-900)' }}>
+                        Restorable Document Content
+                      </h4>
+                      {renderDocumentFields(restorePreviewData.targetState)}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '20px', background: 'var(--gray-50)', borderRadius: '8px', textAlign: 'center', color: 'var(--gray-600)', fontSize: '0.85rem' }}>
+                      Document data unavailable for this deleted record.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -848,15 +1001,18 @@ export default function BackupPortalPage({ embedded = false }) {
         </div>
       )}
 
-      {/* Document Detail Modal */}
+      {/* Document Detail / Diff Modal */}
       {selectedDoc && (
         <div className="dialog-overlay" onClick={() => setSelectedDoc(null)}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '92vw' }}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px', width: '92vw' }}>
             <div className="dialog-header">
               <div>
-                <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Backup Version Details</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  {getOperationBadge(selectedDoc.operation)}
+                  <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Backup Document Snapshot</h2>
+                </div>
                 <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontFamily: 'monospace' }}>
-                  {selectedDoc.collectionName} : {selectedDoc.documentId || selectedDoc._id}
+                  {selectedDoc.collectionName} • ID: {selectedDoc.documentId || selectedDoc._id}
                 </span>
               </div>
               <button className="btn btn-ghost btn-icon" onClick={() => setSelectedDoc(null)}>
@@ -864,18 +1020,85 @@ export default function BackupPortalPage({ embedded = false }) {
               </button>
             </div>
 
-            <div className="dialog-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
-              <pre style={{
-                background: 'var(--gray-900)',
-                color: '#38BDF8',
-                padding: '12px',
-                borderRadius: '8px',
-                fontSize: '0.75rem',
-                maxHeight: '220px',
-                overflowX: 'auto'
-              }}>
-                {JSON.stringify(selectedDoc.currentData || selectedDoc, null, 2)}
-              </pre>
+            <div className="dialog-body" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Audit Meta Banner */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--gray-100)', padding: '8px 12px', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--gray-600)', flexWrap: 'wrap', gap: '6px' }}>
+                <span><strong>Modified By:</strong> {typeof selectedDoc.performedBy === 'object' ? (selectedDoc.performedBy.name || selectedDoc.performedBy.email || 'System') : String(selectedDoc.performedBy || 'System')}</span>
+                <span><strong>Timestamp:</strong> {new Date(selectedDoc.timestamp || selectedDoc.createdAt).toLocaleString()}</span>
+              </div>
+
+              {/* DELETE Operation handling */}
+              {selectedDoc.operation === 'DELETE' ? (
+                selectedDoc.previousData ? (
+                  <div>
+                    <div style={{ background: '#FEF2F2', border: '1px solid #F87171', color: '#991B1B', padding: '10px 12px', borderRadius: '8px', fontSize: '0.82rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <AlertTriangle size={15} /> Deleted Document Snapshot (Captured before deletion)
+                    </div>
+                    {renderDocumentFields(selectedDoc.previousData)}
+                  </div>
+                ) : (
+                  <div style={{ padding: '24px', background: 'var(--gray-50)', borderRadius: '8px', border: '1px solid var(--gray-200)', textAlign: 'center', color: 'var(--gray-600)', fontSize: '0.85rem' }}>
+                    Document data unavailable for this deleted record.
+                  </div>
+                )
+              ) : selectedDoc.operation === 'UPDATE' && selectedDoc.previousData && selectedDoc.currentData ? (
+                /* UPDATE Operation with Diff comparison */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div>
+                    <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 8px 0', color: 'var(--gray-900)' }}>
+                      Changed Fields Comparison
+                    </h4>
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--gray-200)', borderRadius: '8px' }}>
+                      <table className="table" style={{ width: '100%', fontSize: '0.78rem' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ padding: '8px 10px' }}>Field</th>
+                            <th style={{ padding: '8px 10px' }}>Previous Value</th>
+                            <th style={{ padding: '8px 10px' }}>Current Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.from(new Set([
+                            ...(selectedDoc.changedFields || []),
+                            ...Object.keys(getCleanBusinessData(selectedDoc.currentData) || {})
+                          ])).filter(k => {
+                            const prev = selectedDoc.previousData?.[k];
+                            const curr = selectedDoc.currentData?.[k];
+                            return JSON.stringify(prev) !== JSON.stringify(curr);
+                          }).map(k => (
+                            <tr key={k}>
+                              <td style={{ padding: '8px 10px', fontWeight: 700, color: 'var(--gray-700)', textTransform: 'capitalize' }}>
+                                {k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}
+                              </td>
+                              <td style={{ padding: '8px 10px', background: '#FEF2F2', color: '#991B1B' }}>
+                                {renderFieldValue(selectedDoc.previousData?.[k])}
+                              </td>
+                              <td style={{ padding: '8px 10px', background: '#F0FDF4', color: '#166534' }}>
+                                {renderFieldValue(selectedDoc.currentData?.[k])}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 8px 0', color: 'var(--gray-900)' }}>
+                      Current Document State
+                    </h4>
+                    {renderDocumentFields(selectedDoc.currentData)}
+                  </div>
+                </div>
+              ) : (
+                /* CREATE / INSERT / FORCE_SYNC / Standard Document view */
+                <div>
+                  <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 8px 0', color: 'var(--gray-900)' }}>
+                    Backed-up Document Data
+                  </h4>
+                  {renderDocumentFields(selectedDoc.currentData || selectedDoc.previousData || selectedDoc)}
+                </div>
+              )}
             </div>
 
             <div className="dialog-footer">

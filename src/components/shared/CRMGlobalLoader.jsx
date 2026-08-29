@@ -1,13 +1,4 @@
-import React, { useState, useEffect } from 'react';
-
-const LOADING_TEXTS = [
-  'Loading ViralCraftMedia...',
-  'Preparing your workspace...',
-  'Fetching secure data...',
-  'Almost ready...',
-  'Synchronizing...',
-  'Please wait...'
-];
+import React from 'react';
 
 export default function CRMGlobalLoader({
   fullScreen = true,
@@ -15,17 +6,7 @@ export default function CRMGlobalLoader({
   subMessage = null,
   size = 'md'
 }) {
-  const [textIndex, setTextIndex] = useState(0);
-
-  useEffect(() => {
-    if (message) return; // Use custom fixed message if provided
-    const interval = setInterval(() => {
-      setTextIndex((prev) => (prev + 1) % LOADING_TEXTS.length);
-    }, 1800);
-    return () => clearInterval(interval);
-  }, [message]);
-
-  const currentMessage = message || LOADING_TEXTS[textIndex];
+  const currentMessage = 'Please wait, loading...';
 
   const logoWidth = size === 'sm' ? '36px' : size === 'lg' ? '72px' : '52px';
   const spinnerSize = size === 'sm' ? '60px' : size === 'lg' ? '110px' : '84px';
@@ -100,15 +81,6 @@ export default function CRMGlobalLoader({
         transition: 'all 0.3s ease'
       }}>
         {currentMessage}
-      </div>
-
-      {/* Sub-Message */}
-      <div style={{
-        fontSize: '0.78rem',
-        color: 'var(--gray-500, #6B7280)',
-        maxWidth: '280px'
-      }}>
-        {subMessage || 'ViralCraftMedia Enterprise Protection System'}
       </div>
 
       {/* Keyframe Animation Styles */}

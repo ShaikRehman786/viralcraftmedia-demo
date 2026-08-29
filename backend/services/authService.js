@@ -60,6 +60,7 @@ export const getSignedTokenResponse = async (user, statusCode, res) => {
     success: true,
     role: user.role,
     user: {
+      _id: user._id,
       id: user._id,
       name: user.name,
       email: user.email,

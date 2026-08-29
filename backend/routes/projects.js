@@ -9,7 +9,8 @@ import {
   getProjectChat, 
   postProjectChat,
   finalApproveProject,
-  acceptProjectAssignment
+  acceptProjectAssignment,
+  rejectProjectAssignment
 } from '../controllers/taskController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -26,6 +27,7 @@ router.get('/:id/chat', protect, getProjectChat);
 router.post('/:id/chat', protect, postProjectChat);
 router.post('/:id/final-approval', protect, authorize('SUPER_ADMIN'), finalApproveProject);
 router.post('/:id/accept', protect, acceptProjectAssignment);
+router.post('/:id/reject', protect, rejectProjectAssignment);
 
 export default router;
 

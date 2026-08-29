@@ -10,7 +10,9 @@ import {
   updateTaskHours,
   addTaskComment,
   trackTaskTime,
-  addTaskDependency
+  addTaskDependency,
+  acceptTaskAssignment,
+  rejectTaskAssignment
 } from '../controllers/taskController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -22,6 +24,8 @@ router.post('/', protect, authorize('SUPER_ADMIN', 'MANAGER'), createTask);
 router.put('/:id', protect, updateTask);
 router.delete('/:id', protect, authorize('SUPER_ADMIN', 'MANAGER'), deleteTask);
 router.post('/:id/assign', protect, authorize('SUPER_ADMIN', 'MANAGER'), assignTask);
+router.post('/:id/accept', protect, acceptTaskAssignment);
+router.post('/:id/reject', protect, rejectTaskAssignment);
 router.post('/:id/submit', protect, authorize('EMPLOYEE', 'SUPER_ADMIN'), submitTask);
 router.post('/:id/review', protect, authorize('MANAGER', 'SUPER_ADMIN'), reviewTask);
 router.put('/:id/hours', protect, authorize('SUPER_ADMIN', 'MANAGER'), updateTaskHours);

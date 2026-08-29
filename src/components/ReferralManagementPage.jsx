@@ -340,8 +340,7 @@ export default function ReferralManagementPage({ user, addToast }) {
   // Copy Login credentials to clipboard
   const handleCopyLogin = (p) => {
     const loginLink = `${window.location.origin}/partner/login`;
-    const text = `Partner Agency: ${p.agencyName}\nPortal: ${loginLink}\nEmail/Username: ${p.email}`;
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(loginLink);
     addToast(`Partner login template copied to clipboard!`, 'success');
   };
 

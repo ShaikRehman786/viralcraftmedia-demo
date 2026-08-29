@@ -427,7 +427,7 @@ export default function WhatsAppPage() {
               {loading ? (
                 <div className="wa-qr-placeholder">
                   <Loader2 size={32} className="wa-btn-spin" style={{ animation: 'wa-spin 1s linear infinite', opacity: 0.5 }} />
-                  <p>Loading WhatsApp status...</p>
+                  <p>Please wait, loading...</p>
                 </div>
               ) : state.qrCode ? (
                 <div className="wa-qr-layout">

@@ -24,7 +24,7 @@ export const getProjects = async (req, res, next) => {
     
     // Clients see their own projects. Employees see projects they are assigned to.
     // Managers and Admins see all projects.
-    if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'MANAGER') {
+    if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'MANAGER' || req.user.role === 'ADMIN') {
       projects = await Project.find()
         .populate('order')
         .populate('client')
@@ -34,11 +34,29 @@ export const getProjects = async (req, res, next) => {
         .populate('suggestedEmployee', 'name email role status')
         .sort({ createdAt: -1 });
     } else if (req.user.role === 'EMPLOYEE') {
+      const assignedTasks = await Task.find({
+        $or: [
+          { assignedTo: req.user._id },
+          { assignedTo: req.user._id.toString() }
+        ]
+      }).select('project');
+      const taskProjectIds = assignedTasks.map(t => t.project).filter(Boolean);
+
       projects = await Project.find({
         $or: [
+          { _id: { $in: taskProjectIds } },
           { employees: req.user._id },
+          { employees: req.user._id.toString() },
           { assignedEmployee: req.user._id },
+          { assignedEmployee: req.user._id.toString() },
+          { employeeId: req.user._id },
+          { employeeId: req.user._id.toString() },
           { 'assignments.employee': req.user._id },
+          { 'assignments.employee': req.user._id.toString() },
+          { editors: req.user._id },
+          { editors: req.user._id.toString() },
+          { suggestedEmployee: req.user._id },
+          { suggestedEmployee: req.user._id.toString() },
           { category: req.user.department || 'N/A' }
         ]
       })
@@ -206,7 +224,32 @@ export const getTasks = async (req, res, next) => {
     let query = {};
     
     if (req.user.role === 'EMPLOYEE') {
-      query.assignedTo = req.user._id;
+      const empProjects = await Project.find({
+        $or: [
+          { employees: req.user._id },
+          { employees: req.user._id.toString() },
+          { assignedEmployee: req.user._id },
+          { assignedEmployee: req.user._id.toString() },
+          { employeeId: req.user._id },
+          { employeeId: req.user._id.toString() },
+          { 'assignments.employee': req.user._id },
+          { 'assignments.employee': req.user._id.toString() },
+          { editors: req.user._id },
+          { editors: req.user._id.toString() },
+          { suggestedEmployee: req.user._id },
+          { suggestedEmployee: req.user._id.toString() },
+          { category: req.user.department || 'N/A' }
+        ]
+      }).select('_id');
+      const empProjectIds = empProjects.map(p => p._id);
+
+      query = {
+        $or: [
+          { assignedTo: req.user._id },
+          { assignedTo: req.user._id.toString() },
+          { project: { $in: empProjectIds } }
+        ]
+      };
     } else if (req.user.role === 'CLIENT') {
       // Find client projects first
       const client = await Client.findOne({ phone: req.user.phone }).select('_id');
@@ -222,7 +265,7 @@ export const getTasks = async (req, res, next) => {
     const tasks = await Task.find(query)
       .populate('project')
       .populate('assignedTo', 'name email')
-      .sort({ deadline: 1 });
+      .sort({ deadline: 1, createdAt: -1 });
 
     return res.status(200).json({ success: true, data: tasks });
   } catch (err) {
@@ -246,6 +289,29 @@ export const assignTask = async (req, res, next) => {
     task.status = 'assigned';
     if (deadline) task.deadline = new Date(deadline);
     await task.save();
+
+    // Link employee to project if not already present
+    if (assignedTo && task.project) {
+      const projId = task.project._id || task.project;
+      const proj = await Project.findById(projId);
+      if (proj) {
+        const empIdStr = assignedTo.toString();
+        if (!proj.employees) proj.employees = [];
+        if (!proj.employees.some(e => e?.toString() === empIdStr)) {
+          proj.employees.push(assignedTo);
+        }
+        if (!proj.assignments) proj.assignments = [];
+        if (!proj.assignments.some(a => a.employee?.toString() === empIdStr)) {
+          proj.assignments.push({
+            employee: assignedTo,
+            accepted: false,
+            acceptedAt: null,
+            status: 'Pending'
+          });
+        }
+        await proj.save();
+      }
+    }
 
     // Alert employee
     const employee = await User.findById(assignedTo);
@@ -1006,13 +1072,11 @@ export const acceptProjectAssignment = async (req, res, next) => {
       return res.status(403).json({ error: 'Only authorized employees can accept project assignments.' });
     }
 
-    // Verify department matches if employee
-    if (user.role === 'EMPLOYEE' && project.category !== user.department) {
-      return res.status(403).json({ error: 'You are not authorized to accept this project assignment.' });
-    }
-
     const isSuggested = project.suggestedEmployee?.toString() === user._id.toString();
-    const isAssigned = project.employees?.some(id => id && id.toString() === user._id.toString());
+    const isAssigned = (project.employees || []).some(id => (id?._id || id)?.toString() === user._id.toString()) ||
+      (project.assignments || []).some(a => (a.employee?._id || a.employee)?.toString() === user._id.toString()) ||
+      (project.assignedEmployee?._id || project.assignedEmployee)?.toString() === user._id.toString() ||
+      (project.employeeId?._id || project.employeeId)?.toString() === user._id.toString();
 
     if (!isSuggested && !isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
       return res.status(403).json({ error: 'You are not authorized to accept this project assignment.' });
@@ -1099,6 +1163,72 @@ export const acceptProjectAssignment = async (req, res, next) => {
 };
 
 /**
+ * Editor rejects their assigned project
+ * Route: POST /api/projects/:id/reject
+ */
+export const rejectProjectAssignment = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'Only authorized employees can reject project assignments.' });
+    }
+
+    const isAssigned = (project.employees || []).some(id => (id?._id || id)?.toString() === user._id.toString()) ||
+      (project.assignments || []).some(a => (a.employee?._id || a.employee)?.toString() === user._id.toString()) ||
+      (project.assignedEmployee?._id || project.assignedEmployee)?.toString() === user._id.toString() ||
+      (project.employeeId?._id || project.employeeId)?.toString() === user._id.toString() ||
+      project.suggestedEmployee?.toString() === user._id.toString();
+
+    if (!isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'You are not authorized to reject this project assignment.' });
+    }
+
+    project.assignmentStatus = 'Rejected';
+    project.assignedEmployee = user._id;
+    project.employeeId = user._id;
+    project.assignedEmployeeName = user.name;
+    project.employeeName = user.name;
+    project.acceptedAt = null;
+
+    if (!project.assignments) project.assignments = [];
+    const assignmentObj = project.assignments.find(a => (a.employee?._id || a.employee)?.toString() === user._id.toString());
+    if (assignmentObj) {
+      assignmentObj.accepted = false;
+      assignmentObj.status = 'Rejected';
+      assignmentObj.acceptedAt = null;
+    } else {
+      project.assignments.push({
+        employee: user._id,
+        accepted: false,
+        status: 'Rejected',
+        acceptedAt: null
+      });
+    }
+    project.markModified('assignments');
+
+    await project.save();
+
+    await project.populate('employees', 'name email');
+    await project.populate('manager', 'name email');
+    await project.populate('assignedEmployee', 'name email');
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'dashboard-update', { projectId: project._id, assignmentStatus: 'Rejected' });
+    }
+
+    return res.status(200).json({ success: true, data: project });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * Creates a new project
  * Route: POST /api/projects
  */
@@ -1129,7 +1259,18 @@ export const createProject = async (req, res, next) => {
       projectData.manager = manager;
     }
     if (employees && Array.isArray(employees)) {
-      projectData.employees = employees.filter(e => e && mongoose.Types.ObjectId.isValid(e));
+      const validEmps = employees.filter(e => e && mongoose.Types.ObjectId.isValid(e));
+      projectData.employees = validEmps;
+      if (validEmps.length > 0) {
+        projectData.assignedEmployee = validEmps[0];
+        projectData.employeeId = validEmps[0];
+        projectData.assignments = validEmps.map(empId => ({
+          employee: empId,
+          accepted: false,
+          status: 'Pending',
+          acceptedAt: null
+        }));
+      }
     }
 
     const project = await Project.create(projectData);
@@ -1137,7 +1278,8 @@ export const createProject = async (req, res, next) => {
     await project.populate([
       { path: 'client' },
       { path: 'manager', select: 'name email' },
-      { path: 'employees', select: 'name email' }
+      { path: 'employees', select: 'name email' },
+      { path: 'assignments.employee', select: 'name email' }
     ]);
 
     const ioDispatcher = req.app.get('socketio_dispatch');
@@ -1180,7 +1322,24 @@ export const updateProject = async (req, res, next) => {
     if (estimatedCompletion !== undefined) project.estimatedCompletion = estimatedCompletion ? new Date(estimatedCompletion) : null;
     if (manager !== undefined) project.manager = (manager && mongoose.Types.ObjectId.isValid(manager)) ? manager : null;
     if (employees !== undefined && Array.isArray(employees)) {
-      project.employees = employees.filter(e => e && mongoose.Types.ObjectId.isValid(e));
+      const validEmps = employees.filter(e => e && mongoose.Types.ObjectId.isValid(e));
+      project.employees = validEmps;
+      if (validEmps.length > 0) {
+        if (!project.assignedEmployee) project.assignedEmployee = validEmps[0];
+        if (!project.employeeId) project.employeeId = validEmps[0];
+        if (!project.assignments) project.assignments = [];
+        validEmps.forEach(empId => {
+          const empIdStr = empId.toString();
+          if (!project.assignments.some(a => (a.employee?._id || a.employee)?.toString() === empIdStr)) {
+            project.assignments.push({
+              employee: empId,
+              accepted: false,
+              status: 'Pending',
+              acceptedAt: null
+            });
+          }
+        });
+      }
     }
 
     if (status === 'completed' || status === 'approved') {
@@ -1269,8 +1428,29 @@ export const createTask = async (req, res, next) => {
     };
 
     if (deadline) taskData.deadline = new Date(deadline);
-    if (assignedTo) taskData.assignedTo = assignedTo;
-    if (assignedManager) taskData.assignedManager = assignedManager;
+    if (assignedTo && mongoose.Types.ObjectId.isValid(assignedTo)) {
+      taskData.assignedTo = assignedTo;
+
+      // Link employee to project
+      const empIdStr = assignedTo.toString();
+      if (!projDoc.employees) projDoc.employees = [];
+      if (!projDoc.employees.some(e => e?.toString() === empIdStr)) {
+        projDoc.employees.push(assignedTo);
+      }
+      if (!projDoc.assignments) projDoc.assignments = [];
+      if (!projDoc.assignments.some(a => a.employee?.toString() === empIdStr)) {
+        projDoc.assignments.push({
+          employee: assignedTo,
+          accepted: false,
+          acceptedAt: null,
+          status: 'Pending'
+        });
+      }
+      await projDoc.save();
+    }
+    if (assignedManager && mongoose.Types.ObjectId.isValid(assignedManager)) {
+      taskData.assignedManager = assignedManager;
+    }
 
     const task = await Task.create(taskData);
     await task.populate([
@@ -1346,7 +1526,30 @@ export const updateTask = async (req, res, next) => {
       if (priority !== undefined) task.priority = priority;
       if (status !== undefined) task.status = status;
       if (deadline !== undefined) task.deadline = deadline ? new Date(deadline) : null;
-      if (assignedTo !== undefined) task.assignedTo = assignedTo || null;
+      if (assignedTo !== undefined) {
+        task.assignedTo = (assignedTo && mongoose.Types.ObjectId.isValid(assignedTo)) ? assignedTo : null;
+        if (task.assignedTo && task.project) {
+          const projId = task.project._id || task.project;
+          const proj = await Project.findById(projId);
+          if (proj) {
+            const empIdStr = task.assignedTo.toString();
+            if (!proj.employees) proj.employees = [];
+            if (!proj.employees.some(e => e?.toString() === empIdStr)) {
+              proj.employees.push(task.assignedTo);
+            }
+            if (!proj.assignments) proj.assignments = [];
+            if (!proj.assignments.some(a => a.employee?.toString() === empIdStr)) {
+              proj.assignments.push({
+                employee: task.assignedTo,
+                accepted: false,
+                acceptedAt: null,
+                status: 'Pending'
+              });
+            }
+            await proj.save();
+          }
+        }
+      }
       if (assignedManager !== undefined) task.assignedManager = assignedManager || null;
       if (submissionUrl !== undefined) task.submissionUrl = submissionUrl;
       if (feedback !== undefined) task.feedback = feedback;
@@ -1407,6 +1610,80 @@ export const getClients = async (req, res, next) => {
   try {
     const clients = await Client.find().sort({ name: 1 }).lean();
     return res.status(200).json({ success: true, data: clients });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Editor accepts an assigned task
+ * Route: POST /api/tasks/:id/accept
+ */
+export const acceptTaskAssignment = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const task = await Task.findById(req.params.id).populate('project');
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const isAssigned = (task.assignedTo?._id || task.assignedTo)?.toString() === user._id.toString();
+    if (!isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'You are only authorized to accept tasks assigned to you.' });
+    }
+
+    task.status = 'accepted';
+    task.acceptedAt = new Date();
+    await task.save();
+
+    await task.populate([
+      { path: 'project' },
+      { path: 'assignedTo', select: 'name email' }
+    ]);
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'dashboard-update', { taskId: task._id, name: task.name, status: task.status });
+    }
+
+    return res.status(200).json({ success: true, data: task });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Editor rejects an assigned task
+ * Route: POST /api/tasks/:id/reject
+ */
+export const rejectTaskAssignment = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const task = await Task.findById(req.params.id).populate('project');
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const isAssigned = (task.assignedTo?._id || task.assignedTo)?.toString() === user._id.toString();
+    if (!isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'You are only authorized to reject tasks assigned to you.' });
+    }
+
+    task.status = 'rejected';
+    task.acceptedAt = null;
+    await task.save();
+
+    await task.populate([
+      { path: 'project' },
+      { path: 'assignedTo', select: 'name email' }
+    ]);
+
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    if (ioDispatcher) {
+      ioDispatcher(null, 'dashboard-update', { taskId: task._id, name: task.name, status: task.status });
+    }
+
+    return res.status(200).json({ success: true, data: task });
   } catch (err) {
     next(err);
   }

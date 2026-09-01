@@ -191,9 +191,11 @@ export default function OverviewPage({
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const userId = (user?._id || user?.id || user)?.toString();
 
+  const isEmployeeRole = (user?.role || '').toUpperCase() === 'EMPLOYEE';
+
   const myProjects = useMemo(() => {
     if (!projects || !Array.isArray(projects)) return [];
-    if (user?.role === 'EMPLOYEE') {
+    if (isEmployeeRole) {
       return projects;
     }
     if (!userId) return [];
@@ -228,11 +230,11 @@ export default function OverviewPage({
       seen.add(pIdStr);
       return true;
     });
-  }, [projects, tasks, userId, user]);
+  }, [projects, tasks, userId, isEmployeeRole]);
 
   const myTasks = useMemo(() => {
     if (!tasks || !Array.isArray(tasks)) return [];
-    if (user?.role === 'EMPLOYEE') {
+    if (isEmployeeRole) {
       return tasks;
     }
     if (!userId) return [];
@@ -241,7 +243,7 @@ export default function OverviewPage({
       const assignedId = (t.assignedTo?._id || t.assignedTo?.id || t.assignedTo)?.toString();
       return assignedId && assignedId === userId;
     });
-  }, [tasks, userId, user]);
+  }, [tasks, userId, isEmployeeRole]);
 
   const assignedCount = myProjects.length;
   const acceptedCount = myProjects.filter(p => {
@@ -431,10 +433,21 @@ export default function OverviewPage({
   };
 
   const renderProjectCard = (project) => {
-    const isAccepted = localAccepted[project._id] ||
+    const myAssignment = (project.assignments || []).find(a =>
+      (a?.employee?._id || a?.employee?.id || a?.employee)?.toString() === userId
+    );
+    const isAccepted = localAccepted[project._id] === 'Accepted' ||
+      localAccepted[project._id] === true ||
+      myAssignment?.accepted ||
+      myAssignment?.status === 'Accepted' ||
       (project.assignmentStatus === 'Accepted' &&
-        (project.employeeId?.toString() === userId || project.assignedEmployee?.toString() === userId));
-    const isPending = !isAccepted && !localAccepted[project._id];
+        ((project.employeeId?._id || project.employeeId)?.toString() === userId ||
+         (project.assignedEmployee?._id || project.assignedEmployee)?.toString() === userId ||
+         (project.employees || []).some(e => (e?._id || e)?.toString() === userId)));
+    const isRejected = localAccepted[project._id] === 'Rejected' ||
+      project.assignmentStatus === 'Rejected' ||
+      myAssignment?.status === 'Rejected';
+    const isPending = !isAccepted && !isRejected;
     const empAssignments = project.assignments?.filter(a =>
       (a.employee?._id || a.employee)?.toString() !== userId
     ) || [];

@@ -23,8 +23,8 @@ export const getProjects = async (req, res, next) => {
     let projects;
     
     // Clients see their own projects. Employees see projects they are assigned to.
-    // Managers and Admins see all projects.
-    if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'MANAGER' || req.user.role === 'ADMIN') {
+    const userRole = (req.user.role || '').toUpperCase();
+    if (userRole === 'SUPER_ADMIN' || userRole === 'MANAGER' || userRole === 'ADMIN') {
       projects = await Project.find()
         .populate('order')
         .populate('client')
@@ -33,33 +33,27 @@ export const getProjects = async (req, res, next) => {
         .populate('assignments.employee', 'name email')
         .populate('suggestedEmployee', 'name email role status')
         .sort({ createdAt: -1 });
-    } else if (req.user.role === 'EMPLOYEE') {
+    } else if (userRole === 'EMPLOYEE') {
+      const empId = req.user._id;
+      const empObjectId = mongoose.Types.ObjectId.isValid(empId) ? new mongoose.Types.ObjectId(empId) : null;
+      const empIdStr = empId.toString();
+      const idMatches = [empId, empIdStr, empObjectId].filter(Boolean);
+
       const assignedTasks = await Task.find({
-        $or: [
-          { assignedTo: req.user._id },
-          { assignedTo: req.user._id.toString() }
-        ]
+        assignedTo: { $in: idMatches }
       }).select('project');
       const taskProjectIds = assignedTasks.map(t => t.project).filter(Boolean);
 
-      projects = await Project.find({
-        $or: [
-          { _id: { $in: taskProjectIds } },
-          { employees: req.user._id },
-          { employees: req.user._id.toString() },
-          { assignedEmployee: req.user._id },
-          { assignedEmployee: req.user._id.toString() },
-          { employeeId: req.user._id },
-          { employeeId: req.user._id.toString() },
-          { 'assignments.employee': req.user._id },
-          { 'assignments.employee': req.user._id.toString() },
-          { editors: req.user._id },
-          { editors: req.user._id.toString() },
-          { suggestedEmployee: req.user._id },
-          { suggestedEmployee: req.user._id.toString() },
-          { category: req.user.department || 'N/A' }
-        ]
-      })
+      const orConditions = [
+        { _id: { $in: taskProjectIds } },
+        { employees: { $in: idMatches } },
+        { assignedEmployee: { $in: idMatches } },
+        { employeeId: { $in: idMatches } },
+        { 'assignments.employee': { $in: idMatches } },
+        { suggestedEmployee: { $in: idMatches } }
+      ];
+
+      projects = await Project.find({ $or: orConditions })
         .populate('order')
         .populate('client')
         .populate('manager', 'name email')
@@ -85,7 +79,7 @@ export const getProjects = async (req, res, next) => {
     const sanitizedProjects = projects.map(proj => {
       const p = proj.toObject ? proj.toObject() : proj;
       
-      if (req.user.role === 'MANAGER') {
+      if (userRole === 'MANAGER') {
         // Managers MUST NOT see client email, client phone, notes, invoices, payments, financial info
         if (p.client) {
           p.client.email = undefined;
@@ -103,7 +97,7 @@ export const getProjects = async (req, res, next) => {
           p.order.razorpayPaymentId = undefined;
           p.order.invoiceUrl = undefined;
         }
-      } else if (req.user.role === 'EMPLOYEE') {
+      } else if (userRole === 'EMPLOYEE') {
         // Employees MUST NOT see client name/email/phone, payments, invoices, notes, revenue
         if (p.client) {
           p.client.name = undefined;
@@ -154,13 +148,16 @@ export const assignStaff = async (req, res, next) => {
     // Reset single-employee acceptance if the currently assigned editor is changed
     if (employeeIds && employeeIds.length > 0) {
       if (project.employeeId && !employeeIds.some(id => id && id.toString() === project.employeeId.toString())) {
-        project.assignedEmployee = null;
-        project.employeeId = null;
+        project.assignedEmployee = project.employees[0] || null;
+        project.employeeId = project.employees[0] || null;
         project.assignedEmployeeName = '';
         project.employeeName = '';
         project.assignmentStatus = 'Pending';
         project.acceptedAt = null;
         project.acceptedBy = null;
+      } else if (!project.assignedEmployee && project.employees.length > 0) {
+        project.assignedEmployee = project.employees[0];
+        project.employeeId = project.employees[0];
       }
     } else {
       project.assignedEmployee = null;
@@ -189,6 +186,7 @@ export const assignStaff = async (req, res, next) => {
         newAssignments.push({
           employee: empId,
           accepted: false,
+          status: 'Pending',
           acceptedAt: null
         });
       }
@@ -223,34 +221,31 @@ export const getTasks = async (req, res, next) => {
   try {
     let query = {};
     
-    if (req.user.role === 'EMPLOYEE') {
-      const empProjects = await Project.find({
-        $or: [
-          { employees: req.user._id },
-          { employees: req.user._id.toString() },
-          { assignedEmployee: req.user._id },
-          { assignedEmployee: req.user._id.toString() },
-          { employeeId: req.user._id },
-          { employeeId: req.user._id.toString() },
-          { 'assignments.employee': req.user._id },
-          { 'assignments.employee': req.user._id.toString() },
-          { editors: req.user._id },
-          { editors: req.user._id.toString() },
-          { suggestedEmployee: req.user._id },
-          { suggestedEmployee: req.user._id.toString() },
-          { category: req.user.department || 'N/A' }
-        ]
-      }).select('_id');
+    const userRole = (req.user.role || '').toUpperCase();
+    if (userRole === 'EMPLOYEE') {
+      const empId = req.user._id;
+      const empObjectId = mongoose.Types.ObjectId.isValid(empId) ? new mongoose.Types.ObjectId(empId) : null;
+      const empIdStr = empId.toString();
+      const idMatches = [empId, empIdStr, empObjectId].filter(Boolean);
+
+      const empProjectConditions = [
+        { employees: { $in: idMatches } },
+        { assignedEmployee: { $in: idMatches } },
+        { employeeId: { $in: idMatches } },
+        { 'assignments.employee': { $in: idMatches } },
+        { suggestedEmployee: { $in: idMatches } }
+      ];
+
+      const empProjects = await Project.find({ $or: empProjectConditions }).select('_id');
       const empProjectIds = empProjects.map(p => p._id);
 
       query = {
         $or: [
-          { assignedTo: req.user._id },
-          { assignedTo: req.user._id.toString() },
+          { assignedTo: { $in: idMatches } },
           { project: { $in: empProjectIds } }
         ]
       };
-    } else if (req.user.role === 'CLIENT') {
+    } else if (userRole === 'CLIENT') {
       // Find client projects first
       const client = await Client.findOne({ phone: req.user.phone }).select('_id');
       if (client) {

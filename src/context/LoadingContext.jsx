@@ -100,7 +100,7 @@ export function LoadingProvider({ children }) {
     };
   }, [manualLoading]);
 
-  const isShow = visible || manualLoading || activeRequests > 0;
+  const isShow = visible || manualLoading;
 
   return (
     <LoadingContext.Provider value={{ isLoading: isShow, showLoader, hideLoader }}>

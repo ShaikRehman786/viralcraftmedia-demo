@@ -1,36 +1,27 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
-import { sendEmailJS } from '../services/emailjs.js';
 import { Clock, X } from 'lucide-react';
-import { 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  BarChart as RechartsBarChart, 
-  Bar 
-} from 'recharts';
-import CalendarTab from './CalendarTab.jsx';
 import ToastContainer, { useToast } from './Toast.jsx';
-import WhatsAppPage from './WhatsAppPage.jsx';
 import { io } from 'socket.io-client';
 import { initPushNotifications } from '../services/pushInit.js';
 import { requestNotificationPermission, getNotificationPermission, showBrowserNotification } from '../services/browserNotify.js';
-import NotificationCenterPage from './NotificationCenterPage.jsx';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
-import OverviewPage from './OverviewPage.jsx';
-import ProjectsPage from './ProjectsPage.jsx';
-import StaffPage from './StaffPage.jsx';
-import LogsPage from './LogsPage.jsx';
-import EnquiriesPage from './EnquiriesPage.jsx';
-import PaymentsPage from './PaymentsPage.jsx';
-import ReferralManagementPage from './ReferralManagementPage.jsx';
-import BackupPortalPage from './BackupPortalPage.jsx';
+import CRMGlobalLoader from './shared/CRMGlobalLoader.jsx';
+
+const OverviewPage = lazy(() => import('./OverviewPage.jsx'));
+const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'));
+const CalendarTab = lazy(() => import('./CalendarTab.jsx'));
+const StaffPage = lazy(() => import('./StaffPage.jsx'));
+const LogsPage = lazy(() => import('./LogsPage.jsx'));
+const EnquiriesPage = lazy(() => import('./EnquiriesPage.jsx'));
+const WhatsAppPage = lazy(() => import('./WhatsAppPage.jsx'));
+const PaymentsPage = lazy(() => import('./PaymentsPage.jsx'));
+const NotificationCenterPage = lazy(() => import('./NotificationCenterPage.jsx'));
+const ReferralManagementPage = lazy(() => import('./ReferralManagementPage.jsx'));
+const BackupPortalPage = lazy(() => import('./BackupPortalPage.jsx'));
 
 axios.defaults.withCredentials = true;
 
@@ -198,105 +189,56 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, [showCalendarModal]);
 
-  // Initialize category filter if employee
+  // Initialize category filter
   useEffect(() => {
-    if (user && user.role === 'EMPLOYEE' && user.department) {
-      setSelectedCategoryFilter(user.department);
-    }
+    setSelectedCategoryFilter('All');
   }, [user]);
 
-  const refreshAllData = useCallback(async (signal) => {
+  const refreshAllData = useCallback(async () => {
     if (!user) return;
-    const opts = signal ? { signal } : {};
 
     // 1. Prepare independent parallel API requests
-    const promises = {
-      notifications: axios.get('/api/notifications', opts),
-      projects: axios.get('/api/projects', opts),
-      tasks: axios.get('/api/tasks', opts)
-    };
+    const promiseEntries = [
+      ['notifications', axios.get('/api/notifications')],
+      ['projects', axios.get('/api/projects')],
+      ['tasks', axios.get('/api/tasks')]
+    ];
 
-    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'MANAGER';
+    const userRole = (user.role || '').toUpperCase();
+    const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'MANAGER';
     if (isAdmin) {
-      promises.analytics = axios.get('/api/analytics/dashboard', opts);
-      promises.staff = axios.get('/api/auth/staff', opts);
+      promiseEntries.push(['analytics', axios.get('/api/analytics/dashboard')]);
+      promiseEntries.push(['staff', axios.get('/api/auth/staff')]);
     }
 
     try {
-      // 2. Fetch all CRM module datasets in parallel
-      const keys = Object.keys(promises);
-      const results = await Promise.all(keys.map(k => promises[k]));
+      // 2. Fetch all CRM module datasets in parallel safely with allSettled
+      const results = await Promise.allSettled(promiseEntries.map(e => e[1]));
       
       const dataMap = {};
-      keys.forEach((k, idx) => {
-        dataMap[k] = results[idx].data;
+      promiseEntries.forEach(([key], idx) => {
+        if (results[idx].status === 'fulfilled' && results[idx].value?.data) {
+          dataMap[key] = results[idx].value.data;
+        }
       });
 
       if (dataMap.notifications) {
-        setNotifications(dataMap.notifications.data);
-        setUnreadCount(dataMap.notifications.unreadCount);
+        setNotifications(dataMap.notifications.data || []);
+        setUnreadCount(dataMap.notifications.unreadCount || 0);
       }
 
       if (dataMap.projects) {
         const rawProjects = Array.isArray(dataMap.projects?.data)
           ? dataMap.projects.data
           : (Array.isArray(dataMap.projects) ? dataMap.projects : (Array.isArray(dataMap.projects?.projects) ? dataMap.projects.projects : []));
-        if (user.role === 'EMPLOYEE') {
-          setProjects(rawProjects.map(p => ({
-            _id: p._id,
-            name: p.name,
-            status: p.status,
-            priority: p.priority,
-            category: p.category,
-            department: p.department,
-            description: p.description,
-            estimatedCompletion: p.estimatedCompletion,
-            driveShareableLink: p.driveShareableLink,
-            employees: p.employees,
-            manager: p.manager,
-            suggestedEmployee: p.suggestedEmployee,
-            source: p.source,
-            editors: p.editors,
-            createdAt: p.createdAt,
-            updatedAt: p.updatedAt,
-            assignmentStatus: p.assignmentStatus,
-            employeeId: p.employeeId,
-            employeeName: p.employeeName,
-            assignedEmployee: p.assignedEmployee,
-            assignedEmployeeName: p.assignedEmployeeName,
-            acceptedAt: p.acceptedAt,
-            acceptedBy: p.acceptedBy,
-            assignments: p.assignments,
-            client: undefined,
-            order: undefined
-          })));
-        } else {
-          setProjects(rawProjects);
-        }
+        setProjects(rawProjects);
       }
 
       if (dataMap.tasks) {
         const rawTasks = Array.isArray(dataMap.tasks?.data)
           ? dataMap.tasks.data
           : (Array.isArray(dataMap.tasks) ? dataMap.tasks : []);
-        if (user.role === 'EMPLOYEE') {
-          setTasks(rawTasks.map(t => ({
-            ...t,
-            project: t.project ? { 
-              _id: t.project._id || t.project,
-              name: t.project.name || '',
-              department: t.project.department,
-              category: t.project.category,
-              status: t.project.status,
-              priority: t.project.priority,
-              estimatedCompletion: t.project.estimatedCompletion,
-              driveShareableLink: t.project.driveShareableLink,
-              description: t.project.description
-            } : t.project
-          })));
-        } else {
-          setTasks(rawTasks);
-        }
+        setTasks(rawTasks);
       }
 
       if (dataMap.analytics) {
@@ -304,10 +246,9 @@ export default function DashboardPage() {
       }
 
       if (dataMap.staff) {
-        setStaff(dataMap.staff.data);
+        setStaff(dataMap.staff.data || []);
       }
     } catch (err) {
-      if (axios.isCancel(err)) return;
       console.error('Error refreshing CRM dashboard data in parallel:', err);
     } finally {
       setDataLoaded(true);
@@ -315,11 +256,7 @@ export default function DashboardPage() {
   }, [user]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    refreshAllData(controller.signal);
-    return () => {
-      controller.abort();
-    };
+    refreshAllData();
   }, [refreshAllData]);
 
   // Dynamic tab fetches: fetch logs and calendar events only when specific tabs are active
@@ -1118,180 +1055,182 @@ export default function DashboardPage() {
             </div>
           )}
           <div className="app-content">
-            {(activeTab === 'overview' || !activeTab) && (
-              <OverviewPage user={user} analytics={analytics} projects={projects} tasks={tasks} notifications={notifications} staff={staff} teamActivity={teamActivity} formatTimeAgo={formatTimeAgo} loading={!dataLoaded} onRefreshData={refreshAllData} />
-            )}
-            {activeTab === 'projects' && (
-              <ProjectsPage
-                user={user}
-                projects={projects}
-                tasks={tasks}
-                staff={staff}
-                onRefreshData={refreshAllData}
-                selectedCategoryFilter={selectedCategoryFilter}
-                setSelectedCategoryFilter={setSelectedCategoryFilter}
-                projectSearch={projectSearch}
-                setProjectSearch={setProjectSearch}
-                projectStatusFilter={projectStatusFilter}
-                setProjectStatusFilter={setProjectStatusFilter}
-                projectPriorityFilter={projectPriorityFilter}
-                setProjectPriorityFilter={setProjectPriorityFilter}
-                selectedTask={selectedTask}
-                setSelectedTask={setSelectedTask}
-                reviewDecision={reviewDecision}
-                setReviewDecision={setReviewDecision}
-                feedback={feedback}
-                setFeedback={setFeedback}
-                subUrl={subUrl}
-                setSubUrl={setSubUrl}
-                assigneeId={assigneeId}
-                setAssigneeId={setAssigneeId}
-                activeTaskDetails={activeTaskDetails}
-                setActiveTaskDetails={setActiveTaskDetails}
-                taskCommentText={taskCommentText}
-                setTaskCommentText={setTaskCommentText}
-                taskEstHours={taskEstHours}
-                setTaskEstHours={setTaskEstHours}
-                taskActHours={taskActHours}
-                setTaskActHours={setTaskActHours}
-                taskDepId={taskDepId}
-                setTaskDepId={setTaskDepId}
-                selectedFinalReviewProject={selectedFinalReviewProject}
-                setSelectedFinalReviewProject={setSelectedFinalReviewProject}
-                finalReviewDecision={finalReviewDecision}
-                setFinalReviewDecision={setFinalReviewDecision}
-                finalReviewFeedback={finalReviewFeedback}
-                setFinalReviewFeedback={setFinalReviewFeedback}
-                activeChatProj={activeChatProj}
-                setActiveChatProj={setActiveChatProj}
-                chatMessages={chatMessages}
-                chatInput={chatInput}
-                setChatInput={setChatInput}
-                chatEndRef={chatEndRef}
-                handleTaskAssignment={handleTaskAssignment}
-                handleTaskSubmission={handleTaskSubmission}
-                handleTaskReview={handleTaskReview}
-                handleConfirmSuggestion={handleConfirmSuggestion}
-                handleAcceptProject={handleAcceptProject}
-                handleTimeTracking={handleTimeTracking}
-                handleAddTaskComment={handleAddTaskComment}
-                handleAddDependency={handleAddDependency}
-                handleSaveHours={handleSaveHours}
-                handleFinalReviewSubmit={handleFinalReviewSubmit}
-                handleExportCSV={handleExportCSV}
-                handlePostChat={handlePostChat}
-                addToast={addToast}
-                formatTimeAgo={formatTimeAgo}
-              />
-            )}
-            {activeTab === 'calendar' && (
-              <CalendarTab
-                events={calendarEvents}
-                staff={staff}
-                projects={projects}
-                tasks={tasks}
-                onEditEvent={(e) => {
-                  setCalEventId(e._id.split('_')[0]);
-                  setCalTitle(e.title);
-                  setCalDesc(e.description || '');
-                  setCalStart(new Date(e.start).toISOString().slice(0, 16));
-                  setCalEnd(new Date(e.end).toISOString().slice(0, 16));
-                  setCalAllDay(e.allDay || false);
-                  setCalAssignedTo(e.assignedTo?._id || '');
-                  setCalType(e.type || 'custom');
-                  setCalColor(e.color || 'var(--accent)');
-                  setCalRecurrence(e.recurrence || 'none');
-                  setCalRecurrenceEnd(e.recurrenceEnd ? new Date(e.recurrenceEnd).toISOString().slice(0, 10) : '');
-                  setShowCalendarModal(true);
-                }}
-                onAddEvent={(defaults) => {
-                  setCalStart(defaults.start);
-                  setCalEnd(defaults.end);
-                  setCalEventId(null);
-                  setCalTitle('');
-                  setCalDesc('');
-                  setShowCalendarModal(true);
-                }}
-              />
-            )}
-            {activeTab === 'staff' && (
-              <StaffPage
-                user={user}
-                staff={staff}
-                roleUpdateUser={roleUpdateUser}
-                setRoleUpdateUser={setRoleUpdateUser}
-                roleUpdateVal={roleUpdateVal}
-                setRoleUpdateVal={setRoleUpdateVal}
-                showInviteModal={showInviteModal}
-                setShowInviteModal={setShowInviteModal}
-                inviteName={inviteName}
-                setInviteName={setInviteName}
-                inviteEmail={inviteEmail}
-                setInviteEmail={setInviteEmail}
-                invitePhone={invitePhone}
-                setInvitePhone={setInvitePhone}
-                inviteRole={inviteRole}
-                setInviteRole={setInviteRole}
-                inviteDept={inviteDept}
-                setInviteDept={setInviteDept}
-                inviteSkills={inviteSkills}
-                setInviteSkills={setInviteSkills}
-                handleRoleUpdate={handleRoleUpdate}
-                handleInviteUserSubmit={handleInviteUserSubmit}
-                handleResendInvite={handleResendInvite}
-                handleCancelInvite={handleCancelInvite}
-                handleApproveUser={handleApproveUser}
-                handleRejectUser={handleRejectUser}
-                handleToggleStatus={handleToggleStatus}
-                handleResetPassword={handleResetPassword}
-                handleDeleteUser={handleDeleteUser}
-                addToast={addToast}
-                formatTimeAgo={formatTimeAgo}
-              />
-            )}
-            {activeTab === 'logs' && (
-              <LogsPage user={user} logs={logs} staff={staff} />
-            )}
-            {activeTab === 'enquiries' && (
-              <EnquiriesPage
-                enquiries={enquiries}
-                user={user}
-                staff={staff}
-                enqSearch={enqSearch}
-                setEnqSearch={setEnqSearch}
-                enqStatusFilter={enqStatusFilter}
-                setEnqStatusFilter={setEnqStatusFilter}
-                enqCategoryFilter={enqCategoryFilter}
-                setEnqCategoryFilter={setEnqCategoryFilter}
-                enqReferralFilter={enqReferralFilter}
-                setEnqReferralFilter={setEnqReferralFilter}
-                noteText={noteText}
-                setNoteText={setNoteText}
-                activeEnquiryForNote={activeEnquiryForNote}
-                setActiveEnquiryForNote={setActiveEnquiryForNote}
-                handleAssignManager={handleAssignManager}
-                handleConvertClient={handleConvertClient}
-                handleConvertProject={handleConvertProject}
-                handleArchiveEnquiry={handleArchiveEnquiry}
-                handleAddEnquiryNote={handleAddEnquiryNote}
-                addToast={addToast}
-              />
-            )}
-            {activeTab === 'whatsapp' && (
-              <WhatsAppPage />
-            )}
-            {activeTab === 'payments' && (
-              <PaymentsPage user={user} projects={projects} triggerDownload={triggerDownload} />
-            )}
-            {activeTab === 'notification-center' && (
-              <NotificationCenterPage user={user} formatTimeAgo={formatTimeAgo} />
-            )}
-            {activeTab === 'referrals' && (
-              <ReferralManagementPage user={user} addToast={addToast} />
-            )}
-            {activeTab === 'backup' && (
-              <BackupPortalPage embedded={true} />
-            )}
+            <Suspense fallback={<CRMGlobalLoader message="Loading tab..." />}>
+              {(activeTab === 'overview' || !activeTab) && (
+                <OverviewPage user={user} analytics={analytics} projects={projects} tasks={tasks} notifications={notifications} staff={staff} teamActivity={teamActivity} formatTimeAgo={formatTimeAgo} loading={!dataLoaded} onRefreshData={refreshAllData} />
+              )}
+              {activeTab === 'projects' && (
+                <ProjectsPage
+                  user={user}
+                  projects={projects}
+                  tasks={tasks}
+                  staff={staff}
+                  onRefreshData={refreshAllData}
+                  selectedCategoryFilter={selectedCategoryFilter}
+                  setSelectedCategoryFilter={setSelectedCategoryFilter}
+                  projectSearch={projectSearch}
+                  setProjectSearch={setProjectSearch}
+                  projectStatusFilter={projectStatusFilter}
+                  setProjectStatusFilter={setProjectStatusFilter}
+                  projectPriorityFilter={projectPriorityFilter}
+                  setProjectPriorityFilter={setProjectPriorityFilter}
+                  selectedTask={selectedTask}
+                  setSelectedTask={setSelectedTask}
+                  reviewDecision={reviewDecision}
+                  setReviewDecision={setReviewDecision}
+                  feedback={feedback}
+                  setFeedback={setFeedback}
+                  subUrl={subUrl}
+                  setSubUrl={setSubUrl}
+                  assigneeId={assigneeId}
+                  setAssigneeId={setAssigneeId}
+                  activeTaskDetails={activeTaskDetails}
+                  setActiveTaskDetails={setActiveTaskDetails}
+                  taskCommentText={taskCommentText}
+                  setTaskCommentText={setTaskCommentText}
+                  taskEstHours={taskEstHours}
+                  setTaskEstHours={setTaskEstHours}
+                  taskActHours={taskActHours}
+                  setTaskActHours={setTaskActHours}
+                  taskDepId={taskDepId}
+                  setTaskDepId={setTaskDepId}
+                  selectedFinalReviewProject={selectedFinalReviewProject}
+                  setSelectedFinalReviewProject={setSelectedFinalReviewProject}
+                  finalReviewDecision={finalReviewDecision}
+                  setFinalReviewDecision={setFinalReviewDecision}
+                  finalReviewFeedback={finalReviewFeedback}
+                  setFinalReviewFeedback={setFinalReviewFeedback}
+                  activeChatProj={activeChatProj}
+                  setActiveChatProj={setActiveChatProj}
+                  chatMessages={chatMessages}
+                  chatInput={chatInput}
+                  setChatInput={setChatInput}
+                  chatEndRef={chatEndRef}
+                  handleTaskAssignment={handleTaskAssignment}
+                  handleTaskSubmission={handleTaskSubmission}
+                  handleTaskReview={handleTaskReview}
+                  handleConfirmSuggestion={handleConfirmSuggestion}
+                  handleAcceptProject={handleAcceptProject}
+                  handleTimeTracking={handleTimeTracking}
+                  handleAddTaskComment={handleAddTaskComment}
+                  handleAddDependency={handleAddDependency}
+                  handleSaveHours={handleSaveHours}
+                  handleFinalReviewSubmit={handleFinalReviewSubmit}
+                  handleExportCSV={handleExportCSV}
+                  handlePostChat={handlePostChat}
+                  addToast={addToast}
+                  formatTimeAgo={formatTimeAgo}
+                />
+              )}
+              {activeTab === 'calendar' && (
+                <CalendarTab
+                  events={calendarEvents}
+                  staff={staff}
+                  projects={projects}
+                  tasks={tasks}
+                  onEditEvent={(e) => {
+                    setCalEventId(e._id.split('_')[0]);
+                    setCalTitle(e.title);
+                    setCalDesc(e.description || '');
+                    setCalStart(new Date(e.start).toISOString().slice(0, 16));
+                    setCalEnd(new Date(e.end).toISOString().slice(0, 16));
+                    setCalAllDay(e.allDay || false);
+                    setCalAssignedTo(e.assignedTo?._id || '');
+                    setCalType(e.type || 'custom');
+                    setCalColor(e.color || 'var(--accent)');
+                    setCalRecurrence(e.recurrence || 'none');
+                    setCalRecurrenceEnd(e.recurrenceEnd ? new Date(e.recurrenceEnd).toISOString().slice(0, 10) : '');
+                    setShowCalendarModal(true);
+                  }}
+                  onAddEvent={(defaults) => {
+                    setCalStart(defaults.start);
+                    setCalEnd(defaults.end);
+                    setCalEventId(null);
+                    setCalTitle('');
+                    setCalDesc('');
+                    setShowCalendarModal(true);
+                  }}
+                />
+              )}
+              {activeTab === 'staff' && (
+                <StaffPage
+                  user={user}
+                  staff={staff}
+                  roleUpdateUser={roleUpdateUser}
+                  setRoleUpdateUser={setRoleUpdateUser}
+                  roleUpdateVal={roleUpdateVal}
+                  setRoleUpdateVal={setRoleUpdateVal}
+                  showInviteModal={showInviteModal}
+                  setShowInviteModal={setShowInviteModal}
+                  inviteName={inviteName}
+                  setInviteName={setInviteName}
+                  inviteEmail={inviteEmail}
+                  setInviteEmail={setInviteEmail}
+                  invitePhone={invitePhone}
+                  setInvitePhone={setInvitePhone}
+                  inviteRole={inviteRole}
+                  setInviteRole={setInviteRole}
+                  inviteDept={inviteDept}
+                  setInviteDept={setInviteDept}
+                  inviteSkills={inviteSkills}
+                  setInviteSkills={setInviteSkills}
+                  handleRoleUpdate={handleRoleUpdate}
+                  handleInviteUserSubmit={handleInviteUserSubmit}
+                  handleResendInvite={handleResendInvite}
+                  handleCancelInvite={handleCancelInvite}
+                  handleApproveUser={handleApproveUser}
+                  handleRejectUser={handleRejectUser}
+                  handleToggleStatus={handleToggleStatus}
+                  handleResetPassword={handleResetPassword}
+                  handleDeleteUser={handleDeleteUser}
+                  addToast={addToast}
+                  formatTimeAgo={formatTimeAgo}
+                />
+              )}
+              {activeTab === 'logs' && (
+                <LogsPage user={user} logs={logs} staff={staff} />
+              )}
+              {activeTab === 'enquiries' && (
+                <EnquiriesPage
+                  enquiries={enquiries}
+                  user={user}
+                  staff={staff}
+                  enqSearch={enqSearch}
+                  setEnqSearch={setEnqSearch}
+                  enqStatusFilter={enqStatusFilter}
+                  setEnqStatusFilter={setEnqStatusFilter}
+                  enqCategoryFilter={enqCategoryFilter}
+                  setEnqCategoryFilter={setEnqCategoryFilter}
+                  enqReferralFilter={enqReferralFilter}
+                  setEnqReferralFilter={setEnqReferralFilter}
+                  noteText={noteText}
+                  setNoteText={setNoteText}
+                  activeEnquiryForNote={activeEnquiryForNote}
+                  setActiveEnquiryForNote={setActiveEnquiryForNote}
+                  handleAssignManager={handleAssignManager}
+                  handleConvertClient={handleConvertClient}
+                  handleConvertProject={handleConvertProject}
+                  handleArchiveEnquiry={handleArchiveEnquiry}
+                  handleAddEnquiryNote={handleAddEnquiryNote}
+                  addToast={addToast}
+                />
+              )}
+              {activeTab === 'whatsapp' && (
+                <WhatsAppPage />
+              )}
+              {activeTab === 'payments' && (
+                <PaymentsPage user={user} projects={projects} triggerDownload={triggerDownload} />
+              )}
+              {activeTab === 'notification-center' && (
+                <NotificationCenterPage user={user} formatTimeAgo={formatTimeAgo} />
+              )}
+              {activeTab === 'referrals' && (
+                <ReferralManagementPage user={user} addToast={addToast} />
+              )}
+              {activeTab === 'backup' && (
+                <BackupPortalPage embedded={true} />
+              )}
+            </Suspense>
           </div>
         </div>
       </div>

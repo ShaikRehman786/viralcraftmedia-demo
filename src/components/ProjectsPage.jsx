@@ -174,11 +174,8 @@ export default function ProjectsPage({
   }, [isAdmin]);
 
   const activeTabs = useMemo(() => {
-    if (user?.role === 'EMPLOYEE' && user?.department) {
-      return [user.department];
-    }
     return CATEGORY_TABS;
-  }, [user, user?.department]);
+  }, []);
 
   const deduplicatedProjects = useMemo(() => {
     const seen = new Set();
@@ -595,10 +592,23 @@ export default function ProjectsPage({
     const myAssignment = (project.assignments || []).find(a =>
       safeIdString(a?.employee) === userId
     );
-    const isAcceptedByMe = localAccepted[project._id] ||
-      (project.assignmentStatus === 'Accepted' && (safeIdString(project.employeeId) === userId || safeIdString(project.assignedEmployee) === userId)) ||
-      myAssignment?.accepted;
-    const isPendingForMe = !isAcceptedByMe && (employees || []).some(e => safeIdString(e) === userId);
+    const isAcceptedByMe = localAccepted[project._id] === 'Accepted' ||
+      localAccepted[project._id] === true ||
+      myAssignment?.accepted ||
+      myAssignment?.status === 'Accepted' ||
+      (project.assignmentStatus === 'Accepted' &&
+        (safeIdString(project.employeeId) === userId ||
+         safeIdString(project.assignedEmployee) === userId ||
+         (employees || []).some(e => safeIdString(e) === userId)));
+    const isRejectedByMe = localAccepted[project._id] === 'Rejected' ||
+      project.assignmentStatus === 'Rejected' ||
+      myAssignment?.status === 'Rejected';
+    const isPendingForMe = !isAcceptedByMe && !isRejectedByMe && (
+      (employees || []).some(e => safeIdString(e) === userId) ||
+      myAssignment !== undefined ||
+      safeIdString(project.assignedEmployee) === userId ||
+      safeIdString(project.employeeId) === userId
+    );
 
     const otherAssignments = (project.assignments || []).filter(a =>
       safeIdString(a?.employee) !== userId
@@ -716,7 +726,22 @@ export default function ProjectsPage({
                 <div className="flex items-center gap-2">
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={() => handleAccept(project._id)}
+                    onClick={async () => {
+                      setAcceptingId(project._id);
+                      try {
+                        if (handleAcceptProject) {
+                          await handleAcceptProject(project._id);
+                        } else {
+                          await axios.post(`/api/projects/${project._id}/accept`);
+                          if (onRefreshData) onRefreshData();
+                        }
+                        setLocalAccepted(prev => ({ ...prev, [project._id]: 'Accepted' }));
+                      } catch (err) {
+                        addToast('Failed to accept project', 'error');
+                      } finally {
+                        setAcceptingId(null);
+                      }
+                    }}
                     disabled={acceptingId === project._id}
                   >
                     {acceptingId === project._id ? (
@@ -729,14 +754,19 @@ export default function ProjectsPage({
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--error, #dc2626)', border: '1px solid var(--gray-200, #e5e7eb)' }}
                     onClick={async () => {
+                      setAcceptingId(project._id);
                       try {
                         await axios.post(`/api/projects/${project._id}/reject`);
+                        setLocalAccepted(prev => ({ ...prev, [project._id]: 'Rejected' }));
                         addToast('Project assignment rejected', 'info');
                         if (onRefreshData) onRefreshData();
                       } catch (err) {
                         addToast('Failed to reject project', 'error');
+                      } finally {
+                        setAcceptingId(null);
                       }
                     }}
+                    disabled={acceptingId === project._id}
                   >
                     Reject
                   </button>

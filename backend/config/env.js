@@ -5,11 +5,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load backend-specific .env from the backend directory
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// Load backend-specific .env from the backend directory (with override enabled)
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 // Also load root .env (lower priority) for shared variables
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 const requiredEnv = [
   'RAZORPAY_KEY_ID',
@@ -34,6 +34,15 @@ if (missingEnv.length > 0) {
     console.error(`👉 ${key} is missing. Please configure ${key} inside your .env file.`);
   });
   console.error('Server boot halted due to missing required configurations.');
+  console.error('=================================================\n');
+  process.exit(1);
+}
+
+// Strict Test Mode Safety Assertion: prevent accidental LIVE charges
+if (process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.startsWith('rzp_test_')) {
+  console.error('\n=================================================');
+  console.error('❌ SAFETY ERROR: Razorpay Key is not a TEST/SANDBOX key (rzp_test_...).');
+  console.error('Server halted to prevent accidental LIVE payment processing.');
   console.error('=================================================\n');
   process.exit(1);
 }

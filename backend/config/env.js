@@ -182,7 +182,16 @@ export const config = {
   // ##################################
   vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',
-  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:contact@viralcraftmedia.com'
+  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:contact@viralcraftmedia.com',
+
+  // ##################################
+  // EMAILJS CONFIGURATION (Server-side only - Private Key never exposed to frontend)
+  // Strict mode requires Private Key as accessToken
+  // ##################################
+  emailjsServiceId: process.env.EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || '',
+  emailjsTemplateId: process.env.EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID || '',
+  emailjsPublicKey: process.env.EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || '',
+  emailjsPrivateKey: process.env.EMAILJS_PRIVATE_KEY || ''
 };
 
 // Helper: Environment-aware frontend base URL (single source of truth)
@@ -204,14 +213,4 @@ export function getFrontendBaseUrl() {
     return rawUrl;
   }
   return rawUrl || 'http://localhost:5173';
-},
-
-  // ##################################
-  // EMAILJS CONFIGURATION (Server-side only - Private Key never exposed to frontend)
-  // Strict mode requires Private Key as accessToken
-  // ##################################
-  emailjsServiceId: process.env.EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || '',
-  emailjsTemplateId: process.env.EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID || '',
-  emailjsPublicKey: process.env.EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || '',
-  emailjsPrivateKey: process.env.EMAILJS_PRIVATE_KEY || ''
-};
+}

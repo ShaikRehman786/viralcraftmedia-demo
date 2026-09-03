@@ -1617,18 +1617,51 @@ export const getClients = async (req, res, next) => {
 export const acceptTaskAssignment = async (req, res, next) => {
   try {
     const user = req.user;
-    const task = await Task.findById(req.params.id).populate('project');
+    if (!user) {
+      return res.status(401).json({ error: 'User authentication required' });
+    }
+
+    const task = await Task.findById(req.params.id);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    const isAssigned = (task.assignedTo?._id || task.assignedTo)?.toString() === user._id.toString();
+    // Role gate — same as acceptProjectAssignment
+    if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'Only authorized employees can accept task assignments.' });
+    }
+
+    const empIdStr = user._id.toString();
+
+    // Check direct task assignment (only assignedTo exists on Task schema)
+    let isAssigned = task.assignedTo?.toString() === empIdStr;
+
+    // If not directly assigned, check parent project assignment — exact same pattern as acceptProjectAssignment
+    if (!isAssigned && task.project) {
+      const projId = task.project._id || task.project;
+      const project = await Project.findById(projId);
+      if (project) {
+        const isSuggested = project.suggestedEmployee?.toString() === empIdStr;
+        const isProjectStaff = (project.employees || []).some(id => (id?._id || id)?.toString() === empIdStr) ||
+          (project.assignments || []).some(a => (a.employee?._id || a.employee)?.toString() === empIdStr) ||
+          (project.assignedEmployee?._id || project.assignedEmployee)?.toString() === empIdStr ||
+          (project.employeeId?._id || project.employeeId)?.toString() === empIdStr;
+
+        if (isSuggested || isProjectStaff) {
+          isAssigned = true;
+        }
+      }
+    }
+
     if (!isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
-      return res.status(403).json({ error: 'You are only authorized to accept tasks assigned to you.' });
+      return res.status(403).json({ error: 'You are not authorized to accept this task.' });
     }
 
     task.status = 'accepted';
     task.acceptedAt = new Date();
+    if (!task.assignedTo) {
+      task.assignedTo = user._id;
+    }
     await task.save();
 
     await task.populate([
@@ -1654,14 +1687,44 @@ export const acceptTaskAssignment = async (req, res, next) => {
 export const rejectTaskAssignment = async (req, res, next) => {
   try {
     const user = req.user;
-    const task = await Task.findById(req.params.id).populate('project');
+    if (!user) {
+      return res.status(401).json({ error: 'User authentication required' });
+    }
+
+    const task = await Task.findById(req.params.id);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    const isAssigned = (task.assignedTo?._id || task.assignedTo)?.toString() === user._id.toString();
+    // Role gate — same as rejectProjectAssignment
+    if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'Only authorized employees can reject task assignments.' });
+    }
+
+    const empIdStr = user._id.toString();
+
+    // Check direct task assignment (only assignedTo exists on Task schema)
+    let isAssigned = task.assignedTo?.toString() === empIdStr;
+
+    // If not directly assigned, check parent project assignment — exact same pattern as rejectProjectAssignment
+    if (!isAssigned && task.project) {
+      const projId = task.project._id || task.project;
+      const project = await Project.findById(projId);
+      if (project) {
+        const isSuggested = project.suggestedEmployee?.toString() === empIdStr;
+        const isProjectStaff = (project.employees || []).some(id => (id?._id || id)?.toString() === empIdStr) ||
+          (project.assignments || []).some(a => (a.employee?._id || a.employee)?.toString() === empIdStr) ||
+          (project.assignedEmployee?._id || project.assignedEmployee)?.toString() === empIdStr ||
+          (project.employeeId?._id || project.employeeId)?.toString() === empIdStr;
+
+        if (isSuggested || isProjectStaff) {
+          isAssigned = true;
+        }
+      }
+    }
+
     if (!isAssigned && user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {
-      return res.status(403).json({ error: 'You are only authorized to reject tasks assigned to you.' });
+      return res.status(403).json({ error: 'You are not authorized to reject this task.' });
     }
 
     task.status = 'rejected';

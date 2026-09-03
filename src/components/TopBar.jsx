@@ -174,7 +174,7 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
   return (
     <>
       <header className="app-header">
-        <div className="header-left">
+        <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             className="header-btn menu-toggle-btn"
             onClick={() => setSidebarOpen(prev => !prev)}
@@ -182,6 +182,12 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
           >
             <Menu size={18} />
           </button>
+          <img
+            src="/logoooooooooo.png"
+            alt="ViralCraft Media"
+            className="topbar-logo"
+            style={{ height: '26px', width: 'auto', objectFit: 'contain' }}
+          />
           <div className="header-breadcrumb">
             <span>{getTabLabel(activeTab)}</span>
           </div>
@@ -212,8 +218,8 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
 
           <button
             onClick={handleLogout}
-            className="btn btn-ghost btn-sm"
-            style={{ color: 'var(--error, #dc2626)', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 10px', fontSize: '0.8rem', flexShrink: 0 }}
+            className="btn btn-ghost btn-sm header-logout-btn"
+            style={{ color: 'var(--error, #dc2626)', display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', fontSize: '0.8rem', flexShrink: 0, fontWeight: 600, border: '1px solid rgba(220, 38, 38, 0.2)', borderRadius: '8px' }}
             title="Logout"
           >
             <LogOut size={15} />

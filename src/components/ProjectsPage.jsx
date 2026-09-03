@@ -488,12 +488,45 @@ export default function ProjectsPage({
       await axios.post(`/api/projects/${projectId}/accept`);
       setLocalAccepted(prev => ({ ...prev, [projectId]: true }));
       addToast('Project accepted successfully!', 'success');
+      if (onRefreshData) await onRefreshData();
     } catch (err) {
       addToast(err.response?.data?.error || 'Failed to accept.', 'error');
     } finally {
       setAcceptingId(null);
     }
-  }, [addToast]);
+  }, [addToast, onRefreshData]);
+
+  const handleAcceptTask = useCallback(async (taskOrId) => {
+    const taskId = (taskOrId?._id || taskOrId?.id || taskOrId)?.toString();
+    if (!taskId) return;
+    setAcceptingId(taskId);
+    try {
+      await axios.post(`/api/tasks/${taskId}/accept`);
+      setLocalAccepted(prev => ({ ...prev, [taskId]: 'accepted' }));
+      addToast('Task accepted successfully!', 'success');
+      if (onRefreshData) await onRefreshData();
+    } catch (err) {
+      addToast(err.response?.data?.error || 'Failed to accept task.', 'error');
+    } finally {
+      setAcceptingId(null);
+    }
+  }, [addToast, onRefreshData]);
+
+  const handleRejectTask = useCallback(async (taskOrId) => {
+    const taskId = (taskOrId?._id || taskOrId?.id || taskOrId)?.toString();
+    if (!taskId) return;
+    setAcceptingId(taskId);
+    try {
+      await axios.post(`/api/tasks/${taskId}/reject`);
+      setLocalAccepted(prev => ({ ...prev, [taskId]: 'rejected' }));
+      addToast('Task rejected.', 'info');
+      if (onRefreshData) await onRefreshData();
+    } catch (err) {
+      addToast(err.response?.data?.error || 'Failed to reject task.', 'error');
+    } finally {
+      setAcceptingId(null);
+    }
+  }, [addToast, onRefreshData]);
 
   const kanbanCard = (project) => {
     const projectTasks = tasksByProject[project._id] || [];
@@ -683,20 +716,53 @@ export default function ProjectsPage({
               <div className="kanban-progress-fill" style={{ width: `${progressPercent}%` }} />
             </div>
             <div className="mt-2" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {projectTasks.map(t => (
-                <div key={t._id || t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text)' }}>{t.name}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {t.assignedTo?.name && (
-                      <span className="text-2xs text-muted">
-                        {t.assignedTo.name}
-                      </span>
-                    )}
-                    <span className={getPriorityBadge(t.priority)}>{t.priority}</span>
-                    <span className={getStatusBadge(t.status)}>{t.status?.replace(/_/g, ' ')}</span>
+              {projectTasks.map(t => {
+                const tId = t._id || t.id;
+                const isTaskAccepted = localAccepted[tId] === 'accepted' || (!localAccepted[tId] && (t.status === 'accepted' || t.status === 'in_progress' || t.status === 'completed' || t.status === 'approved' || t.status === 'submitted'));
+                const isTaskRejected = localAccepted[tId] === 'rejected' || (!localAccepted[tId] && t.status === 'rejected');
+
+                return (
+                  <div key={tId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{t.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {t.assignedTo?.name && (
+                        <span className="text-2xs text-muted">
+                          {t.assignedTo.name}
+                        </span>
+                      )}
+                      <span className={getPriorityBadge(t.priority)}>{t.priority}</span>
+                      {isEmployee ? (
+                        isTaskAccepted ? (
+                          <span className="badge badge-success text-2xs">Accepted</span>
+                        ) : isTaskRejected ? (
+                          <span className="badge badge-error text-2xs">Rejected</span>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button
+                              className="btn btn-accent btn-xs"
+                              style={{ padding: '2px 6px', fontSize: '0.7rem' }}
+                              onClick={() => handleAcceptTask(tId)}
+                              disabled={acceptingId === tId}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-xs"
+                              style={{ color: 'var(--error, #dc2626)', border: '1px solid var(--border)', padding: '2px 6px', fontSize: '0.7rem' }}
+                              onClick={() => handleRejectTask(tId)}
+                              disabled={acceptingId === tId}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        <span className={getStatusBadge(t.status)}>{t.status?.replace(/_/g, ' ')}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -840,17 +906,19 @@ export default function ProjectsPage({
       {/* ─── Mobile Layout (<768px) ─── */}
       <div className="mobile-only">
         <div className="mobile-filters">
-          <div className="tabs mobile-tabs">
-            {activeTabs.map(tab => (
-              <button
-                key={tab}
-                className={`tab ${selectedCategoryFilter === tab ? 'active' : ''}`}
-                onClick={() => setSelectedCategoryFilter(tab)}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          {!isEmployee && (
+            <div className="tabs mobile-tabs">
+              {activeTabs.map(tab => (
+                <button
+                  key={tab}
+                  className={`tab ${selectedCategoryFilter === tab ? 'active' : ''}`}
+                  onClick={() => setSelectedCategoryFilter(tab)}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="search-wrap mobile-search">
             <Search size={16} />
             <input
@@ -955,7 +1023,7 @@ export default function ProjectsPage({
 
         <div className="section-header">
           <div>
-            <h2 className="section-title">All Projects</h2>
+            <h2 className="section-title">{isEmployee ? 'My Assigned Projects' : 'All Projects'}</h2>
             <p className="section-subtitle">{filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} found</p>
           </div>
         </div>
@@ -988,17 +1056,23 @@ export default function ProjectsPage({
       {/* ─── Desktop Layout (≥768px) — pixel-perfect original ─── */}
       <div className="desktop-only">
         <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
-          <div className="tabs">
-            {activeTabs.map(tab => (
-              <button
-                key={tab}
-                className={`tab ${selectedCategoryFilter === tab ? 'active' : ''}`}
-                onClick={() => setSelectedCategoryFilter(tab)}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          {!isEmployee ? (
+            <div className="tabs">
+              {activeTabs.map(tab => (
+                <button
+                  key={tab}
+                  className={`tab ${selectedCategoryFilter === tab ? 'active' : ''}`}
+                  onClick={() => setSelectedCategoryFilter(tab)}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
+              My Assigned Projects
+            </h2>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="search-wrap">
               <Search size={16} />
@@ -1060,7 +1134,7 @@ export default function ProjectsPage({
 
         <div className="section-header">
           <div>
-            <h2 className="section-title">All Projects</h2>
+            <h2 className="section-title">{isEmployee ? 'My Assigned Projects' : 'All Projects'}</h2>
             <p className="section-subtitle">{filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} found</p>
           </div>
         </div>

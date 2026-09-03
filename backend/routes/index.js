@@ -42,7 +42,7 @@ router.use('/tasks', taskRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/calendar', protect, authorize('SUPER_ADMIN'), calendarRoutes);
 router.use('/logs', protect, authorize('SUPER_ADMIN'), logRoutes);
-router.use('/notifications', protect, authorize('SUPER_ADMIN'), notificationRoutes);
+router.use('/notifications', protect, notificationRoutes);
 router.use('/teamlogger', teamLoggerRoutes);
 router.use('/enquiries', enquiryRoutes);
 router.use('/whatsapp', protect, authorize('SUPER_ADMIN'), whatsappRoutes);

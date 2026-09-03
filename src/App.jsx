@@ -92,6 +92,11 @@ export function PartnerAuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Only invoke partner auth endpoint if the current route is within the partner portal
+    if (!window.location.pathname.startsWith('/partner')) {
+      setLoading(false);
+      return;
+    }
     axios.get('/api/partners/me')
       .then(res => {
         setPartner(res.data.partner);

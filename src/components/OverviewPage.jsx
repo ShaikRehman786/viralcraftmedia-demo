@@ -19,7 +19,8 @@ import {
   Briefcase,
   CalendarDays,
   AlertTriangle,
-  BarChart3
+  BarChart3,
+  ExternalLink
 } from 'lucide-react';
 import axios from 'axios';
 import {
@@ -354,27 +355,31 @@ export default function OverviewPage({
     }
   }, [onRefreshData]);
 
-  const handleAcceptTask = useCallback(async (taskId) => {
+  const handleAcceptTask = useCallback(async (taskOrId) => {
+    const taskId = (taskOrId?._id || taskOrId?.id || taskOrId)?.toString();
+    if (!taskId) return;
     setAcceptingId(taskId);
     try {
-      await axios.post(`/api/tasks/${taskId}/accept`);
+      const res = await axios.post(`/api/tasks/${taskId}/accept`);
       setLocalAccepted(prev => ({ ...prev, [taskId]: 'accepted' }));
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      console.error(err);
+      console.error('Failed to accept task:', err);
     } finally {
       setAcceptingId(null);
     }
   }, [onRefreshData]);
 
-  const handleRejectTask = useCallback(async (taskId) => {
+  const handleRejectTask = useCallback(async (taskOrId) => {
+    const taskId = (taskOrId?._id || taskOrId?.id || taskOrId)?.toString();
+    if (!taskId) return;
     setAcceptingId(taskId);
     try {
-      await axios.post(`/api/tasks/${taskId}/reject`);
+      const res = await axios.post(`/api/tasks/${taskId}/reject`);
       setLocalAccepted(prev => ({ ...prev, [taskId]: 'rejected' }));
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      console.error(err);
+      console.error('Failed to reject task:', err);
     } finally {
       setAcceptingId(null);
     }
@@ -495,6 +500,20 @@ export default function OverviewPage({
           {project.description && (
             <div className="emp-project-desc">
               {project.description.length > 100 ? project.description.slice(0, 100) + '...' : project.description}
+            </div>
+          )}
+          {project.driveShareableLink && (
+            <div style={{ marginTop: 8 }}>
+              <a
+                href={project.driveShareableLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-accent btn-xs"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <ExternalLink size={12} />
+                Open Drive
+              </a>
             </div>
           )}
           {(() => {
@@ -1736,7 +1755,7 @@ export default function OverviewPage({
 
           <div className="mt-6">
             <div className="section-header">
-              <h3 className="section-title">My Projects</h3>
+              <h3 className="section-title">My Assigned Projects</h3>
               <span className="text-xs text-muted">{myProjects.length} project{myProjects.length !== 1 ? 's' : ''}</span>
             </div>
             {isLoading ? (
@@ -1857,6 +1876,20 @@ export default function OverviewPage({
                       {t.description && (
                         <div className="emp-project-desc">
                           {t.description}
+                        </div>
+                      )}
+                      {t.project?.driveShareableLink && (
+                        <div style={{ marginTop: 8 }}>
+                          <a
+                            href={t.project.driveShareableLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-accent btn-xs"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          >
+                            <ExternalLink size={12} />
+                            Open Drive
+                          </a>
                         </div>
                       )}
                     </div>

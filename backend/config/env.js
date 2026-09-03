@@ -38,13 +38,38 @@ if (missingEnv.length > 0) {
   process.exit(1);
 }
 
-// Strict Test Mode Safety Assertion: prevent accidental LIVE charges
-if (process.env.RAZORPAY_KEY_ID && !process.env.RAZORPAY_KEY_ID.startsWith('rzp_test_')) {
-  console.error('\n=================================================');
-  console.error('❌ SAFETY ERROR: Razorpay Key is not a TEST/SANDBOX key (rzp_test_...).');
-  console.error('Server halted to prevent accidental LIVE payment processing.');
-  console.error('=================================================\n');
-  process.exit(1);
+// Environment-aware Razorpay Safety Validation
+// Production (NODE_ENV=production) requires LIVE key (rzp_live_)
+// Non-production (development/test) requires TEST key (rzp_test_)
+// Prevents accidental LIVE charges in test and accidental test keys in production
+const _effectiveEnv = (process.env.NODE_ENV || 'development').toLowerCase();
+const _isProductionEnv = _effectiveEnv === 'production';
+if (process.env.RAZORPAY_KEY_ID) {
+  const _key = process.env.RAZORPAY_KEY_ID.trim();
+  const _isTestKey = _key.startsWith('rzp_test_');
+  const _isLiveKey = _key.startsWith('rzp_live_');
+  if (_isProductionEnv) {
+    if (!_isLiveKey) {
+      console.error('\n=================================================');
+      console.error('❌ SAFETY ERROR: Production mode (NODE_ENV=production) requires a Razorpay LIVE key (rzp_live_...).');
+      console.error('Current RAZORPAY_KEY_ID does not start with rzp_live_.');
+      console.error('Set RAZORPAY_KEY_ID=rzp_live_... and RAZORPAY_KEY_SECRET for live payments.');
+      console.error('Server halted due to invalid production payment configuration.');
+      console.error('=================================================\n');
+      process.exit(1);
+    }
+  } else {
+    if (!_isTestKey) {
+      console.error('\n=================================================');
+      console.error('❌ SAFETY ERROR: Test/Sandbox mode requires a Razorpay TEST key (rzp_test_...).');
+      console.error('Current RAZORPAY_KEY_ID does not start with rzp_test_.');
+      console.error('A LIVE key (rzp_live_...) is not allowed outside production.');
+      console.error('Set NODE_ENV=production to use LIVE keys, or use a TEST key for development.');
+      console.error('Server halted to prevent accidental LIVE payment processing.');
+      console.error('=================================================\n');
+      process.exit(1);
+    }
+  }
 }
 
 export const config = {

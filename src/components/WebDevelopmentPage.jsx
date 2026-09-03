@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getReferralAttribution, clearReferralAttribution } from '../services/referralAttribution.js';
-import { 
+import {
   Code, Globe, Zap, Shield, Clock, Users, Target, Monitor, CheckCircle2
 } from 'lucide-react';
 import Navbar from './Navbar.jsx';

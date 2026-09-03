@@ -108,6 +108,15 @@ const orderSchema = new mongoose.Schema({
   },
   orderDate: {
     type: String
+  },
+  enquiryId: {
+    type: String,
+    trim: true
+  },
+  enquiry: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Enquiry',
+    default: null
   }
 }, {
   timestamps: true

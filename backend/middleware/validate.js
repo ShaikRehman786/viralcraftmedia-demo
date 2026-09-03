@@ -9,13 +9,18 @@ export const sanitizeInput = (val) => {
     .trim();
 };
 
-// Recursively sanitize all string fields in an object
+// Recursively sanitize all string fields in an object (prototype-pollution safe)
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export const sanitizeObject = (obj) => {
   if (typeof obj === 'string') return sanitizeInput(obj);
   if (Array.isArray(obj)) return obj.map(sanitizeObject);
   if (obj && typeof obj === 'object') {
-    const sanitized = {};
+    const sanitized = Object.create(null);
     for (const [key, value] of Object.entries(obj)) {
+      if (DANGEROUS_KEYS.has(key)) continue;
+      // Also block keys containing prototype pollution patterns or dot-notation abuse
+      if (key.includes('.') && DANGEROUS_KEYS.has(key.split('.')[0])) continue;
       sanitized[key] = sanitizeObject(value);
     }
     return sanitized;
@@ -23,17 +28,30 @@ export const sanitizeObject = (obj) => {
   return obj;
 };
 
-// Check for MongoDB operator injection (keys starting with $)
+// Check for MongoDB operator injection (keys starting with $) and prototype pollution
 export const preventMongoInjection = (req, res, next) => {
   const sanitize = (obj) => {
     if (obj instanceof Object) {
-      for (const k in obj) {
-        if (k.startsWith('$')) {
+      // Use own-property iteration to avoid traversing polluted prototype
+      const keys = Object.keys(obj);
+      for (const k of keys) {
+        if (k.startsWith('$') || DANGEROUS_KEYS.has(k)) {
+          delete obj[k];
+        } else if (k.includes('.') && DANGEROUS_KEYS.has(k.split('.')[0])) {
           delete obj[k];
         } else {
-          sanitize(obj[k]);
+          const val = obj[k];
+          if (val instanceof Object) {
+            sanitize(val);
+          }
         }
       }
+      // Also clean __proto__ directly if present as own property descriptor
+      try {
+        if (Object.prototype.hasOwnProperty.call(obj, '__proto__')) {
+          delete obj['__proto__'];
+        }
+      } catch {}
     }
   };
   
@@ -51,18 +69,23 @@ export const validateCsrfToken = (req, res, next) => {
   const referer = req.headers.referer;
   
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProduction = nodeEnv === 'production';
   const clientUrl = process.env.CLIENT_URL;
-  const allowedOrigins = [
+  const prodOrigins = [
     clientUrl,
     'https://viralcraftmedia-demo.vercel.app',
     'https://viralcraftmedia-demo.onrender.com',
     'https://viralcraftmedia.com',
-    'https://www.viralcraftmedia.com',
+    'https://www.viralcraftmedia.com'
+  ].filter(Boolean);
+  const devOrigins = [
+    ...prodOrigins,
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:5000',
     'http://localhost:3000'
-  ].filter(Boolean);
+  ];
+  const allowedOrigins = isProduction ? prodOrigins : devOrigins;
 
   // Skip CSRF check for GET/HEAD/OPTIONS requests and webhook endpoints
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
@@ -75,11 +98,49 @@ export const validateCsrfToken = (req, res, next) => {
 
   // Check origin or referer for state-changing requests
   const requestOrigin = origin || referer;
-  if (requestOrigin) {
-    const isAllowed = allowedOrigins.some(allowed => requestOrigin.startsWith(allowed));
-    if (!isAllowed) {
-      return res.status(403).json({ error: 'CSRF validation failed: Invalid request origin.' });
+  // Fail-closed: missing Origin/Referer on state-changing requests is rejected
+  // (except webhook already skipped above). Frontend browsers always send Origin
+  // for cross-origin withCredentials requests, so missing header indicates
+  // potential CSRF or non-browser client.
+  if (!requestOrigin) {
+    // Allow same-site requests without Origin if they carry Authorization header
+    // (non-cookie auth is not vulnerable to CSRF) - but cookie-auth requires Origin
+    const hasCookieAuth = req.cookies && (req.cookies.accessToken || req.cookies.refreshToken || req.cookies.partnerAccessToken);
+    const hasBearer = req.headers.authorization && req.headers.authorization.startsWith('Bearer');
+    // If cookie-auth is used, require Origin/Referer
+    if (hasCookieAuth && !hasBearer) {
+      return res.status(403).json({ error: 'CSRF validation failed: Missing Origin/Referer header.' });
     }
+    // For Bearer-only or no-auth (e.g., public create-order), allow without Origin
+    // but still continue to next middleware
+    return next();
+  }
+  // Strict origin check - use URL parsing to prevent subdomain bypass via startsWith
+  const isAllowed = allowedOrigins.some(allowed => {
+    try {
+      // Exact match or startsWith with '/' boundary to prevent evil-subdomain bypass
+      return requestOrigin === allowed || requestOrigin.startsWith(allowed + '/') || requestOrigin.startsWith(allowed + '?') || requestOrigin === allowed;
+    } catch {
+      return requestOrigin.startsWith(allowed);
+    }
+  });
+  // Also check via URL origin equality for robustness
+  let originAllowed = isAllowed;
+  if (!originAllowed) {
+    try {
+      const reqUrl = new URL(requestOrigin);
+      originAllowed = allowedOrigins.some(allowed => {
+        try {
+          const allowedUrl = new URL(allowed);
+          return reqUrl.origin === allowedUrl.origin;
+        } catch {
+          return false;
+        }
+      });
+    } catch {}
+  }
+  if (!originAllowed) {
+    return res.status(403).json({ error: 'CSRF validation failed: Invalid request origin.' });
   }
 
   next();

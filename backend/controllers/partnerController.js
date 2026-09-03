@@ -8,11 +8,11 @@ import PartnerCommission from '../models/PartnerCommission.js';
 import { config } from '../config/env.js';
 import { logEvent } from '../services/loggingService.js';
 
-// Helper to generate JWT token with Partner role and set HTTP-only cookie
+// Helper to generate JWT token with Partner role and set HTTP-only cookie (SEC-016 isolated secret)
 const sendTokenResponse = (partner, statusCode, res) => {
   const token = jwt.sign(
     { id: partner._id, role: 'PARTNER' },
-    config.jwtSecret,
+    config.partnerJwtSecret,
     { expiresIn: '24h' }
   );
 
@@ -44,7 +44,7 @@ const sendTokenResponse = (partner, statusCode, res) => {
 // @desc    Partner Login
 // @route   POST /api/partners/login
 // @access  Public
-export const loginPartner = async (req, res) => {
+export const loginPartner = async (req, res, next) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -84,14 +84,14 @@ export const loginPartner = async (req, res) => {
 
     sendTokenResponse(partner, 200, res);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // @desc    Partner Logout
 // @route   POST /api/partners/logout
 // @access  Public
-export const logoutPartner = async (req, res) => {
+export const logoutPartner = async (req, res, next) => {
   const isProduction = config.nodeEnv === 'production';
   res.cookie('partnerAccessToken', 'none', {
     expires: new Date(Date.now() + 5 * 1000),
@@ -106,7 +106,7 @@ export const logoutPartner = async (req, res) => {
 // @desc    Get Current Partner Profile
 // @route   GET /api/partners/me
 // @access  Private (Partner)
-export const getMe = async (req, res) => {
+export const getMe = async (req, res, next) => {
   res.status(200).json({
     success: true,
     partner: {
@@ -125,7 +125,7 @@ export const getMe = async (req, res) => {
 // @desc    Change Password
 // @route   POST /api/partners/me/change-password
 // @access  Private (Partner)
-export const changePassword = async (req, res) => {
+export const changePassword = async (req, res, next) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {
@@ -154,14 +154,14 @@ export const changePassword = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // @desc    Update Current Partner Profile
 // @route   PUT /api/partners/me
 // @access  Private (Partner)
-export const updateMyProfile = async (req, res) => {
+export const updateMyProfile = async (req, res, next) => {
   const { agencyName, ownerName, email, phone } = req.body;
 
   try {
@@ -207,14 +207,14 @@ export const updateMyProfile = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // @desc    Get Partner Dashboard Stats
 // @route   GET /api/partners/dashboard
 // @access  Private (Partner)
-export const getDashboardStats = async (req, res) => {
+export const getDashboardStats = async (req, res, next) => {
   try {
     const partnerId = req.partner._id;
 
@@ -356,28 +356,28 @@ export const getDashboardStats = async (req, res) => {
       recentCommissions
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // @desc    Get Partner's Campaigns
 // @route   GET /api/partners/campaigns
 // @access  Private (Partner)
-export const getPartnerCampaigns = async (req, res) => {
+export const getPartnerCampaigns = async (req, res, next) => {
   try {
     const campaigns = await ReferralCampaign.find({ partner: req.partner._id })
       .sort({ createdAt: -1 });
 
     res.status(200).json({ success: true, count: campaigns.length, data: campaigns });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // @desc    Get Partner's Anonymized Analytics
 // @route   GET /api/partners/analytics
 // @access  Private (Partner)
-export const getPartnerAnalytics = async (req, res) => {
+export const getPartnerAnalytics = async (req, res, next) => {
   try {
     const partnerId = req.partner._id;
 
@@ -409,14 +409,14 @@ export const getPartnerAnalytics = async (req, res) => {
 
     res.status(200).json({ success: true, data: analyticsData });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // @desc    Get Partner's Commissions
 // @route   GET /api/partners/commissions
 // @access  Private (Partner)
-export const getPartnerCommissions = async (req, res) => {
+export const getPartnerCommissions = async (req, res, next) => {
   try {
     const rawCommissions = await PartnerCommission.find({ partner: req.partner._id })
       .populate({
@@ -441,14 +441,14 @@ export const getPartnerCommissions = async (req, res) => {
 
     res.status(200).json({ success: true, count: commissions.length, data: commissions });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // @desc    Track Referral Campaign Link Opens
 // @route   POST /api/partners/campaigns/track/:referralCode
 // @access  Public
-export const trackCampaignClick = async (req, res) => {
+export const trackCampaignClick = async (req, res, next) => {
   const { referralCode } = req.params;
   const { visitorId, landingPage, referrer, utmSource, utmMedium, utmCampaign, utmTerm, utmContent, browser, device, os, country, city } = req.body;
 

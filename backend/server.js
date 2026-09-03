@@ -31,18 +31,23 @@ const startServer = async () => {
 
     const server = http.createServer(app);
 
-    // Initialize Socket.io with CORS parameters matching Express
-    const allowedOrigins = [
+    // Initialize Socket.io with CORS parameters matching Express - environment-aware
+    const isProduction = config.nodeEnv === 'production';
+    const prodOrigins = [
       config.clientUrl,
       'https://viralcraftmedia-demo.vercel.app',
       'https://viralcraftmedia-demo.onrender.com',
       'https://viralcraftmedia.com',
-      'https://www.viralcraftmedia.com',
+      'https://www.viralcraftmedia.com'
+    ].filter(Boolean);
+    const devOrigins = [
+      ...prodOrigins,
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:5000',
       'http://localhost:3000'
-    ].filter(Boolean);
+    ];
+    const allowedOrigins = isProduction ? prodOrigins : devOrigins;
     const io = new Server(server, {
       cors: {
         origin: allowedOrigins,

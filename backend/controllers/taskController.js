@@ -138,6 +138,15 @@ export const assignStaff = async (req, res, next) => {
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
+    // Manager BOLA: MANAGER can only modify projects they manage
+    if (req.user && (req.user.role || '').toUpperCase() === 'MANAGER') {
+      const ownerId = project.manager ? project.manager.toString() : null;
+      const requesterId = req.user._id.toString();
+      // Allow if project has no manager yet or manager is requester
+      if (ownerId && ownerId !== requesterId) {
+        return res.status(403).json({ error: 'Not authorized to modify this project. You can only manage your assigned projects.' });
+      }
+    }
 
     if (managerId) project.manager = managerId;
     if (employeeIds && Array.isArray(employeeIds)) {
@@ -258,7 +267,7 @@ export const getTasks = async (req, res, next) => {
     }
 
     const tasks = await Task.find(query)
-      .populate('project')
+      .populate('project', 'name status category priority estimatedCompletion client manager employees suggestedEmployee')
       .populate('assignedTo', 'name email')
       .sort({ deadline: 1, createdAt: -1 });
 
@@ -278,6 +287,14 @@ export const assignTask = async (req, res, next) => {
     const task = await Task.findById(req.params.id).populate('project');
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
+    }
+    // Manager BOLA: MANAGER can only assign tasks within projects they manage
+    if (req.user && (req.user.role || '').toUpperCase() === 'MANAGER') {
+      const project = task.project;
+      const managerId = project ? (project.manager?._id || project.manager)?.toString() : null;
+      if (managerId && managerId !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Not authorized to assign tasks for this project.' });
+      }
     }
 
     task.assignedTo = assignedTo;
@@ -661,6 +678,13 @@ export const updateTaskHours = async (req, res, next) => {
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
+    // Manager BOLA: verify manager owns the parent project
+    if (req.user && (req.user.role || '').toUpperCase() === 'MANAGER') {
+      const project = await Project.findById(task.project).select('manager');
+      if (project && project.manager && project.manager.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Not authorized to update hours for this task.' });
+      }
+    }
     if (estimatedHours !== undefined) task.estimatedHours = estimatedHours;
     if (actualHours !== undefined) task.actualHours = actualHours;
     await task.save();
@@ -829,6 +853,13 @@ export const addTaskDependency = async (req, res, next) => {
     const task = await Task.findById(req.params.id);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
+    }
+    // Manager BOLA: verify manager owns the parent project
+    if (req.user && (req.user.role || '').toUpperCase() === 'MANAGER') {
+      const project = await Project.findById(task.project).select('manager');
+      if (project && project.manager && project.manager.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Not authorized to modify dependencies for this task.' });
+      }
     }
     if (!task.dependencies.includes(dependencyId)) {
       task.dependencies.push(dependencyId);
@@ -1308,12 +1339,27 @@ export const updateProject = async (req, res, next) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
+    // Manager BOLA for updateProject
+    if (req.user && (req.user.role || '').toUpperCase() === 'MANAGER') {
+      const ownerId = project.manager ? project.manager.toString() : null;
+      if (ownerId && ownerId !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Not authorized to update this project.' });
+      }
+    }
     if (name !== undefined && name !== null) project.name = String(name).trim();
     if (description !== undefined) project.description = description ? String(description).trim() : '';
     if (client !== undefined) project.client = (client && mongoose.Types.ObjectId.isValid(client)) ? client : null;
     if (category !== undefined) project.category = category;
     if (priority !== undefined) project.priority = priority;
-    if (status !== undefined) project.status = status;
+    // Approval workflow enforcement: MANAGER cannot directly complete/approve
+    if (status !== undefined) {
+      const userRole = (req.user?.role || '').toUpperCase();
+      const restricted = ['completed', 'approved'];
+      if (userRole === 'MANAGER' && restricted.includes(String(status).toLowerCase())) {
+        return res.status(403).json({ error: 'Managers cannot directly set status to completed/approved.Requires SUPER_ADMIN final approval.' });
+      }
+      project.status = status;
+    }
     if (estimatedCompletion !== undefined) project.estimatedCompletion = estimatedCompletion ? new Date(estimatedCompletion) : null;
     if (manager !== undefined) project.manager = (manager && mongoose.Types.ObjectId.isValid(manager)) ? manager : null;
     if (employees !== undefined && Array.isArray(employees)) {
@@ -1337,7 +1383,8 @@ export const updateProject = async (req, res, next) => {
       }
     }
 
-    if (status === 'completed' || status === 'approved') {
+    // Only SUPER_ADMIN completion triggers financial side-effects (prevent Manager bypass)
+    if ((status === 'completed' || status === 'approved') && (req.user?.role || '').toUpperCase() === 'SUPER_ADMIN') {
       if (project.order) {
         await Order.findByIdAndUpdate(project.order, { status: 'completed' }).catch(() => {});
       }
@@ -1603,7 +1650,18 @@ export const deleteTask = async (req, res, next) => {
  */
 export const getClients = async (req, res, next) => {
   try {
-    const clients = await Client.find().sort({ name: 1 }).lean();
+    const userRole = (req.user?.role || '').toUpperCase();
+    // Least-privilege: MANAGER gets only essential fields, SUPER_ADMIN gets more but still sanitized
+    if (userRole === 'MANAGER') {
+      const clients = await Client.find().select('name email phone platform orders createdAt').sort({ name: 1 }).lean();
+      // Strip invoices/payments/deliveryHistory which are SUPER_ADMIN only
+      const sanitized = clients.map(c => {
+        const { invoices, payments, deliveryHistory, whatsappHistory, notes, ...safe } = c;
+        return safe;
+      });
+      return res.status(200).json({ success: true, data: sanitized });
+    }
+    const clients = await Client.find().select('name email phone platform orders createdAt invoices payments').sort({ name: 1 }).lean();
     return res.status(200).json({ success: true, data: clients });
   } catch (err) {
     next(err);

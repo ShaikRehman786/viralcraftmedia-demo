@@ -1,16 +1,21 @@
 import { config } from '../config/env.js';
 
-const allowedOrigins = [
+const isProduction = config.nodeEnv === 'production';
+const prodOrigins = [
   config.clientUrl,
   'https://viralcraftmedia-demo.vercel.app',
   'https://viralcraftmedia-demo.onrender.com',
   'https://viralcraftmedia.com',
-  'https://www.viralcraftmedia.com',
+  'https://www.viralcraftmedia.com'
+].filter(Boolean);
+const devOrigins = [
+  ...prodOrigins,
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5000',
   'http://localhost:3000'
-].filter(Boolean);
+];
+const allowedOrigins = isProduction ? prodOrigins : devOrigins;
 
 // Set CORS headers on error responses so the browser can read the error message.
 // Validate origin against whitelisted allowedOrigins

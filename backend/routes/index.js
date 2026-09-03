@@ -34,8 +34,8 @@ router.use('/auth', authRoutes);
 
 // Employee routes
 router.post('/employee/forgot-password', authLimiter, employeeForgotPassword);
-router.get('/employee/reset-password/:token', employeeValidateResetToken);
-router.post('/employee/reset-password/:token', employeeResetPassword);
+router.get('/employee/reset-password/:token', authLimiter, employeeValidateResetToken);
+router.post('/employee/reset-password/:token', authLimiter, employeeResetPassword);
 
 router.use('/projects', projectRoutes);
 router.use('/tasks', taskRoutes);

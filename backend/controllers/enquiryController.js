@@ -28,6 +28,25 @@ export const createEnquiry = async (req, res, next) => {
       return res.status(400).json({ error: 'Name, phone number, and service category are required.' });
     }
 
+    // Idempotency: prevent duplicate lead for same active customer journey (double-click, refresh, retry)
+    // If same phone + serviceCategory submitted within last 5 minutes and still pending, reuse existing lead
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const existingRecent = await Enquiry.findOne({
+      phone,
+      serviceCategory,
+      status: 'pending_review',
+      createdAt: { $gte: fiveMinutesAgo }
+    }).sort({ createdAt: -1 });
+    if (existingRecent) {
+      // Reuse existing lead - do NOT create duplicate
+      return res.status(200).json({
+        success: true,
+        message: 'Enquiry already submitted - reusing existing lead.',
+        enquiryId: existingRecent.enquiryId,
+        reused: true
+      });
+    }
+
     const count = await Enquiry.countDocuments();
     const enquiryId = `VCM-ENQ-${String(count + 1).padStart(4, '0')}`;
 
@@ -306,7 +325,12 @@ export const getEnquiries = async (req, res, next) => {
     const andConditions = [];
 
     if (search) {
-      const regex = new RegExp(search, 'i');
+      const trimmedSearch = search.toString().trim();
+      if (trimmedSearch.length > 100) {
+        return res.status(400).json({ error: 'Search query too long (max 100 characters)' });
+      }
+      const escapedSearch = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedSearch, 'i');
       andConditions.push({
         $or: [
           { name: regex },

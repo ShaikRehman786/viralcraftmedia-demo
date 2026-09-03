@@ -19,7 +19,18 @@ export const protectPartner = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, config.jwtSecret);
+    // SEC-016: Try partner-isolated secret first, fallback to main secret for backward compatibility
+    let decoded;
+    try {
+      decoded = jwt.verify(token, config.partnerJwtSecret);
+    } catch (e) {
+      // Fallback to main secret for existing sessions signed before isolation
+      if (config.partnerJwtSecret !== config.jwtSecret) {
+        decoded = jwt.verify(token, config.jwtSecret);
+      } else {
+        throw e;
+      }
+    }
 
     // Verify token was generated for a partner role
     if (decoded.role !== 'PARTNER') {

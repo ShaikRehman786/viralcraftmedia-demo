@@ -11,7 +11,7 @@ import {
 } from '../controllers/authController.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { validateLogin } from '../middleware/validate.js';
-import { authLimiter } from '../middleware/rateLimiter.js';
+import { authLimiter, apiLimiter } from '../middleware/rateLimiter.js';
 import { logEvent } from '../services/loggingService.js';
 import { notifyStaff } from '../services/notificationService.js';
 import User from '../models/User.js';
@@ -23,12 +23,12 @@ const router = express.Router();
 
 // Public auth routes
 router.post('/login', authLimiter, validateLogin, login);
-router.post('/refresh', refresh);
+router.post('/refresh', authLimiter, refresh);
 router.post('/forgot-password', authLimiter, forgotPassword);
-router.post('/reset-password/:token', resetPassword);
+router.post('/reset-password/:token', authLimiter, resetPassword);
 
 // Verify invitation token public route
-router.get('/verify-invitation/:token', async (req, res, next) => {
+router.get('/verify-invitation/:token', apiLimiter, async (req, res, next) => {
   try {
     const invitationTokenRaw = req.params.token;
     const tokenHash = crypto.createHash('sha256').update(invitationTokenRaw).digest('hex');
@@ -62,7 +62,7 @@ router.get('/verify-invitation/:token', async (req, res, next) => {
 });
 
 // Accept invitation public route (Profile complete)
-router.post('/accept-invitation/:token', async (req, res, next) => {
+router.post('/accept-invitation/:token', authLimiter, async (req, res, next) => {
   try {
     const { name, password, department, skills } = req.body;
     if (!password) {

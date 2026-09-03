@@ -21,7 +21,12 @@ export const getNotifications = async (req, res, next) => {
     else if (read === 'false') filter.isRead = false;
 
     if (search) {
-      const regex = new RegExp(search, 'i');
+      const trimmedSearch = search.toString().trim();
+      if (trimmedSearch.length > 100) {
+        return res.status(400).json({ error: 'Search query too long (max 100 characters)' });
+      }
+      const escapedSearch = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedSearch, 'i');
       filter.$or = [
         { title: regex },
         { message: regex },

@@ -222,6 +222,7 @@ export default function LandingPage() {
   };
   const [_payId, setPayId] = useState('');
   const [vcmId, setVcmId] = useState('');
+  const [enquiryId, setEnquiryId] = useState('');
   const [price, setPrice] = useState(0);
   const [jobs, setJobs] = useState(0);
   const [toasts, setToasts] = useState([]);
@@ -462,11 +463,43 @@ export default function LandingPage() {
     setStatus('loading');
     setPayId('');
     try {
+      // Persist customer details BEFORE payment - ONE lead per journey (idempotent)
+      // Captures enquiryId and reuses it for payment linkage to prevent duplicate leads
+      let activeEnquiryId = enquiryId;
+      try {
+        if (!activeEnquiryId) {
+          const enqRes = await fetch(`${API_BASE}/api/enquiries`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              phone,
+              email: '',
+              serviceCategory: 'Clip Editing',
+              description: `Platform: ${platform}\nVideo Link: ${link}\nInstructions: ${instructions}\nClips: ${jobs}`,
+              budget: price,
+              referralDetails: getReferralAttribution()
+            })
+          });
+          const enqData = await enqRes.json().catch(() => ({}));
+          if (enqRes.ok && enqData.enquiryId) {
+            activeEnquiryId = enqData.enquiryId;
+            setEnquiryId(activeEnquiryId);
+            // Clear referral attribution after ONE lead creation - prevents next direct booking in same browser from being misattributed
+            try { clearReferralAttribution(); } catch {}
+            // Also clear the cookie via expiry (backend already clears cookie, but ensure client fallback cleared)
+          } else if (!enqRes.ok) {
+            console.warn('Pre-payment enquiry save response not ok:', enqData.error);
+          }
+        }
+      } catch (preErr) {
+        console.warn('Pre-payment enquiry save failed (non-blocking):', preErr.message);
+      }
       toast('Creating order...', 'info');
       const cRes = await fetch(`${API_BASE}/api/config`);
       if (!cRes.ok) throw new Error('Config fetch failed');
       const cData = await cRes.json();
-      const oRes = await fetch(`${API_BASE}/api/create-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: price }) });
+      const oRes = await fetch(`${API_BASE}/api/create-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: price, clipCount: jobs, enquiryId: activeEnquiryId }) });
       if (!oRes.ok) throw new Error('Order creation failed');
       const oData = await oRes.json();
       if (typeof window.Razorpay === 'undefined') throw new Error('Razorpay unavailable');
@@ -477,7 +510,7 @@ export default function LandingPage() {
         handler: async (resp) => {
           toast('Verifying...', 'info');
           try {
-            const vRes = await fetch(`${API_BASE}/api/verify-payment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ razorpay_order_id: oData.orderId, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature, name, contact: `91${phone}`, videoLink: link, instructions, clipCount: jobs, amount: price, platform, referralDetails: getReferralAttribution() }) });
+            const vRes = await fetch(`${API_BASE}/api/verify-payment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ razorpay_order_id: oData.orderId, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature, name, contact: `91${phone}`, videoLink: link, instructions, clipCount: jobs, amount: price, platform, enquiryId: activeEnquiryId, referralDetails: getReferralAttribution() }) });
             if (!vRes.ok) throw new Error('Verify failed');
             const vData = await vRes.json();
             if (vData.success) {
@@ -485,6 +518,8 @@ export default function LandingPage() {
               const pBase64 = vData.pdfBase64 || '';
               setPayId(resp.razorpay_payment_id);
               setVcmId(oid);
+              // Ensure referral attribution is cleared after ONE journey (prevents next direct booking being misattributed)
+              try { clearReferralAttribution(); } catch {}
               if (pBase64) {
                 setPdfBase64(pBase64);
                 try {

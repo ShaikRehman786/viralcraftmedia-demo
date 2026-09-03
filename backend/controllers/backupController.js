@@ -96,7 +96,11 @@ export const getBackupCollectionData = async (req, res, next) => {
 
     // Filter by Collection Name
     if (collectionName && collectionName.toUpperCase() !== 'ALL') {
-      query.collectionName = { $regex: new RegExp(`^${collectionName}$`, 'i') };
+      const escapedCollection = collectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (escapedCollection.length > 100) {
+        return res.status(400).json({ error: 'Collection name too long' });
+      }
+      query.collectionName = { $regex: new RegExp(`^${escapedCollection}$`, 'i') };
     }
 
     // Filter by Operation
@@ -120,12 +124,17 @@ export const getBackupCollectionData = async (req, res, next) => {
 
     // Search query on documentId, collectionName, user email, or changed fields
     if (search) {
+      const trimmedSearch = search.toString().trim();
+      if (trimmedSearch.length > 100) {
+        return res.status(400).json({ error: 'Search query too long (max 100 characters)' });
+      }
+      const escapedSearch = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { documentId: { $regex: search, $options: 'i' } },
-        { collectionName: { $regex: search, $options: 'i' } },
-        { 'performedBy.email': { $regex: search, $options: 'i' } },
-        { 'performedBy.name': { $regex: search, $options: 'i' } },
-        { changedFields: { $in: [new RegExp(search, 'i')] } }
+        { documentId: { $regex: escapedSearch, $options: 'i' } },
+        { collectionName: { $regex: escapedSearch, $options: 'i' } },
+        { 'performedBy.email': { $regex: escapedSearch, $options: 'i' } },
+        { 'performedBy.name': { $regex: escapedSearch, $options: 'i' } },
+        { changedFields: { $in: [new RegExp(escapedSearch, 'i')] } }
       ];
     }
 
@@ -403,7 +412,11 @@ export const exportAuditLogController = async (req, res, next) => {
 
     const query = {};
     if (collectionName !== 'ALL') {
-      query.collectionName = { $regex: new RegExp(`^${collectionName}$`, 'i') };
+      const escapedCollection = collectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (escapedCollection.length > 100) {
+        return res.status(400).json({ error: 'Collection name too long' });
+      }
+      query.collectionName = { $regex: new RegExp(`^${escapedCollection}$`, 'i') };
     }
 
     const records = await BackupRecord.find(query).sort({ timestamp: -1 }).limit(limit).lean();

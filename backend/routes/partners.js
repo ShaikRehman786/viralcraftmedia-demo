@@ -13,13 +13,14 @@ import {
   trackCampaignClick
 } from '../controllers/partnerController.js';
 import { protectPartner } from '../middleware/partnerAuth.js';
+import { authLimiter, apiLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
 // Public routes
-router.post('/login', loginPartner);
+router.post('/login', authLimiter, loginPartner);
 router.post('/logout', logoutPartner);
-router.post('/campaigns/track/:referralCode', trackCampaignClick);
+router.post('/campaigns/track/:referralCode', apiLimiter, trackCampaignClick);
 
 // Protected routes (Partner Auth Only)
 router.get('/me', protectPartner, getMe);

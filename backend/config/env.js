@@ -72,6 +72,20 @@ if (process.env.RAZORPAY_KEY_ID) {
   }
 }
 
+// Backup admin password must be set explicitly - no hardcoded fallback (SEC-013)
+if (!process.env.BACKUP_ADMIN_PASSWORD) {
+  if (_isProductionEnv) {
+    console.error('\n=================================================');
+    console.error('❌ CRITICAL: BACKUP_ADMIN_PASSWORD is not set.');
+    console.error('Set BACKUP_ADMIN_PASSWORD in environment variables.');
+    console.error('Server halted - backup credentials must be explicitly configured in production.');
+    console.error('=================================================\n');
+    process.exit(1);
+  } else {
+    console.warn('⚠️  WARNING: BACKUP_ADMIN_PASSWORD not set - backup portal will be unavailable until configured.');
+  }
+}
+
 export const config = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -90,7 +104,7 @@ export const config = {
   // ##################################
   backupMongoUri: process.env.BACKUP_MONGODB_URI,
   backupAdminEmail: process.env.BACKUP_ADMIN_EMAIL || 'backupadmin@viralcraftmedia.com',
-  backupAdminPassword: process.env.BACKUP_ADMIN_PASSWORD || 'vcm@Backup2026',
+  backupAdminPassword: process.env.BACKUP_ADMIN_PASSWORD,
   backupAdminName: process.env.BACKUP_ADMIN_NAME || 'Backup Administrator',
   backupAdminRole: process.env.BACKUP_ADMIN_ROLE || 'backup_admin',
   backupJwtSecret: process.env.BACKUP_JWT_SECRET || process.env.JWT_SECRET,
@@ -103,6 +117,9 @@ export const config = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   jwtAccessExpiry: process.env.JWT_ACCESS_EXPIRY || '15m',
   jwtRefreshExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
+  // Partner JWT isolation (SEC-016) - falls back to main secret for backward compatibility
+  partnerJwtSecret: process.env.PARTNER_JWT_SECRET || process.env.JWT_SECRET,
+  partnerJwtRefreshSecret: process.env.PARTNER_JWT_REFRESH_SECRET || process.env.JWT_REFRESH_SECRET,
   
   // ##################################
   // RAZORPAY CONFIGURATION

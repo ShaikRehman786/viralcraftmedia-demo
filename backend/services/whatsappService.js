@@ -325,7 +325,8 @@ const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
       logStep('Parser Success', 'NEW PROJECT input parsed successfully');
 
       // Find or create Client
-      let clientObj = await ClientModel.findOne({ name: new RegExp('^' + parsed.client + '$', 'i') });
+      const escapedClient = parsed.client.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
+      let clientObj = await ClientModel.findOne({ name: new RegExp('^' + escapedClient + '$', 'i') });
       if (!clientObj) {
         clientObj = new ClientModel({
           name: parsed.client,
@@ -507,11 +508,12 @@ const handleEmployeeCommand = async (employeeUser, text, msg, senderPhone) => {
   const taskIdArg = parts.length > 1 ? parts[1].trim() : null;
 
   if (taskIdArg) {
+    const escapedTaskId = taskIdArg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
     task = await Task.findOne({ 
       assignedTo: employeeUser._id, 
       $or: [
         { taskId: taskIdArg },
-        { taskId: new RegExp(taskIdArg + '$', 'i') }
+        { taskId: new RegExp(escapedTaskId + '$', 'i') }
       ]
     });
   }

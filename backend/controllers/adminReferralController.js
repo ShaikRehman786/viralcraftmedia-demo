@@ -50,18 +50,27 @@ const createPartnerNotification = async (partnerId, title, message, actionUrl = 
 // PARTNER CRUD
 // ==========================================
 
+// Helper to strip sensitive fields from partner documents
+const sanitizePartner = (partnerDoc) => {
+  if (!partnerDoc) return partnerDoc;
+  const obj = partnerDoc.toObject ? partnerDoc.toObject() : { ...partnerDoc };
+  delete obj.password;
+  delete obj.__v;
+  return obj;
+};
+
 // Get All Partners
-export const getPartners = async (req, res) => {
+export const getPartners = async (req, res, next) => {
   try {
-    const partners = await Partner.find().sort({ createdAt: -1 });
+    const partners = await Partner.find().select('-password').sort({ createdAt: -1 });
     res.status(200).json({ success: true, count: partners.length, data: partners });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Create Partner
-export const createPartner = async (req, res) => {
+export const createPartner = async (req, res, next) => {
   const { agencyName, ownerName, email, phone, password, notes, profileImage } = req.body;
 
   if (!agencyName || !ownerName || !email || !phone || !password) {
@@ -116,14 +125,14 @@ export const createPartner = async (req, res) => {
       userAgent: req.headers['user-agent']
     });
 
-    res.status(201).json({ success: true, data: partner });
+    res.status(201).json({ success: true, data: sanitizePartner(partner) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Edit Partner
-export const updatePartner = async (req, res) => {
+export const updatePartner = async (req, res, next) => {
   const { agencyName, ownerName, email, phone, password, status, notes, profileImage } = req.body;
 
   try {
@@ -172,14 +181,14 @@ export const updatePartner = async (req, res) => {
       userAgent: req.headers['user-agent']
     });
 
-    res.status(200).json({ success: true, data: partner });
+    res.status(200).json({ success: true, data: sanitizePartner(partner) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Reset Partner Password
-export const resetPartnerPassword = async (req, res) => {
+export const resetPartnerPassword = async (req, res, next) => {
   const { password } = req.body;
 
   if (!password) {
@@ -226,12 +235,12 @@ export const resetPartnerPassword = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Partner password reset successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Delete Partner
-export const deletePartner = async (req, res) => {
+export const deletePartner = async (req, res, next) => {
   try {
     const partner = await Partner.findByIdAndDelete(req.params.id);
     if (!partner) {
@@ -256,7 +265,7 @@ export const deletePartner = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Partner and associated records deleted successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
@@ -265,7 +274,7 @@ export const deletePartner = async (req, res) => {
 // ==========================================
 
 // Get All Campaigns
-export const getCampaigns = async (req, res) => {
+export const getCampaigns = async (req, res, next) => {
   try {
     const campaigns = await ReferralCampaign.find()
       .populate('partner', 'agencyName ownerName email')
@@ -273,11 +282,11 @@ export const getCampaigns = async (req, res) => {
 
     res.status(200).json({ success: true, count: campaigns.length, data: campaigns });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-export const createCampaign = async (req, res) => {
+export const createCampaign = async (req, res, next) => {
   const { campaignName, partner, validityDays, customExpiryDate, landingPage, minCommissionPercentage, maxCommissionPercentage, notes, service, targetRoute, campaignType, serviceId, serviceSlug, serviceName } = req.body;
 
   // Log incoming request body safely
@@ -436,7 +445,7 @@ export const createCampaign = async (req, res) => {
 };
 
 // Edit Campaign
-export const updateCampaign = async (req, res) => {
+export const updateCampaign = async (req, res, next) => {
   const { campaignName, status, minCommissionPercentage, maxCommissionPercentage, notes, landingPage, service, targetRoute, campaignType, serviceId, serviceSlug, serviceName } = req.body;
 
   try {
@@ -516,7 +525,7 @@ export const updateCampaign = async (req, res) => {
 };
 
 // Delete Campaign
-export const deleteCampaign = async (req, res) => {
+export const deleteCampaign = async (req, res, next) => {
   try {
     const campaign = await ReferralCampaign.findByIdAndDelete(req.params.id);
     if (!campaign) {
@@ -529,12 +538,12 @@ export const deleteCampaign = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Campaign and associated logs deleted' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Duplicate Campaign
-export const duplicateCampaign = async (req, res) => {
+export const duplicateCampaign = async (req, res, next) => {
   try {
     const source = await ReferralCampaign.findById(req.params.id);
     if (!source) {
@@ -579,7 +588,7 @@ export const duplicateCampaign = async (req, res) => {
 
     res.status(201).json({ success: true, data: duplicate });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
@@ -588,7 +597,7 @@ export const duplicateCampaign = async (req, res) => {
 // ==========================================
 
 // Get Aggregated Admin Analytics
-export const getAdminAnalytics = async (req, res) => {
+export const getAdminAnalytics = async (req, res, next) => {
   try {
     const totalClicks = await ReferralVisit.countDocuments();
     
@@ -643,12 +652,12 @@ export const getAdminAnalytics = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Get All Bookings
-export const getBookings = async (req, res) => {
+export const getBookings = async (req, res, next) => {
   try {
     const bookings = await ReferralBooking.find()
       .populate('partner', 'agencyName ownerName')
@@ -657,12 +666,12 @@ export const getBookings = async (req, res) => {
 
     res.status(200).json({ success: true, count: bookings.length, data: bookings });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Complete booking and calculate Commission
-export const createBookingCommission = async (req, res) => {
+export const createBookingCommission = async (req, res, next) => {
   const { 
     bookingValue, 
     commissionPercentage, 
@@ -839,7 +848,7 @@ export const createBookingCommission = async (req, res) => {
 
     res.status(200).json({ success: true, data: commission });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
@@ -848,7 +857,7 @@ export const createBookingCommission = async (req, res) => {
 // ==========================================
 
 // Get All Commissions
-export const getAdminCommissions = async (req, res) => {
+export const getAdminCommissions = async (req, res, next) => {
   try {
     const commissions = await PartnerCommission.find()
       .populate('partner', 'agencyName ownerName email')
@@ -860,12 +869,12 @@ export const getAdminCommissions = async (req, res) => {
 
     res.status(200).json({ success: true, count: commissions.length, data: commissions });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Approve/Reject Commission
-export const updateCommissionStatus = async (req, res) => {
+export const updateCommissionStatus = async (req, res, next) => {
   const { status } = req.body;
 
   if (!status || !['Approved', 'Cancelled', 'Pending'].includes(status)) {
@@ -917,12 +926,12 @@ export const updateCommissionStatus = async (req, res) => {
 
     res.status(200).json({ success: true, data: commission });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Payout Commission
-export const payCommission = async (req, res) => {
+export const payCommission = async (req, res, next) => {
   const { paymentDate, transactionReference, internalNotes } = req.body;
 
   if (!paymentDate || !transactionReference) {
@@ -992,12 +1001,12 @@ export const payCommission = async (req, res) => {
 
     res.status(200).json({ success: true, data: commission });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Get All Payments
-export const getPayments = async (req, res) => {
+export const getPayments = async (req, res, next) => {
   try {
     const payments = await PartnerPayment.find()
       .populate('partner', 'agencyName ownerName')
@@ -1009,12 +1018,12 @@ export const getPayments = async (req, res) => {
 
     res.status(200).json({ success: true, count: payments.length, data: payments });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
 // Executive grouping Reports
-export const getReports = async (req, res) => {
+export const getReports = async (req, res, next) => {
   try {
     const partnerReport = await PartnerCommission.aggregate([
       {
@@ -1046,6 +1055,6 @@ export const getReports = async (req, res) => {
       }))
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };

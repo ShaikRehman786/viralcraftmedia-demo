@@ -93,11 +93,22 @@ export async function generateInvoicePdf({
 
   const currencySymbol = fontLoaded ? '₹' : 'INR ';
 
-  // Invoice Header & Logo Drawing with official VCM current website logo
+  // Invoice Header & Logo Drawing with official VCM current website logo (same asset as Navbar/Sidebar)
   const logoData = getLogoBase64();
   if (logoData) {
     try {
-      doc.addImage(logoData, 'PNG', 15, 12, 42, 12);
+      const props = doc.getImageProperties(logoData);
+      const maxW = 42;
+      const maxH = 12;
+      let w = maxW;
+      let h = (props.height * w) / props.width;
+      if (h > maxH) {
+        h = maxH;
+        w = (props.width * h) / props.height;
+      }
+      // Vertically center within 12mm header band, preserve aspect (no stretch)
+      const yOffset = 12 + (maxH - h) / 2;
+      doc.addImage(logoData, 'PNG', 15, yOffset, w, h);
     } catch (e) {
       doc.setFontSize(18);
       doc.setFont(fontLoaded ? 'Roboto' : 'helvetica', 'bold');

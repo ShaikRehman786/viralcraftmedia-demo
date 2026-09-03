@@ -41,6 +41,15 @@ const paymentSchema = new mongoose.Schema({
   orderId: {
     type: String // Sequential ID VCM-XXXX if captured
   },
+  enquiryId: {
+    type: String,
+    trim: true
+  },
+  enquiry: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Enquiry',
+    default: null
+  },
   logs: [
     {
       message: String,

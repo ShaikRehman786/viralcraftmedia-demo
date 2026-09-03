@@ -182,7 +182,29 @@ export const config = {
   // ##################################
   vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',
-  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:contact@viralcraftmedia.com',
+  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:contact@viralcraftmedia.com'
+};
+
+// Helper: Environment-aware frontend base URL (single source of truth)
+// Production: requires explicit https://<production-frontend> and never falls back to localhost
+// Development: returns explicit config or localhost fallback
+export function getFrontendBaseUrl() {
+  const rawUrl = (config.appUrl || config.clientUrl || process.env.FRONTEND_URL || process.env.APP_URL || process.env.CLIENT_URL || '').trim().replace(/\/+$/, '');
+  const isProduction = (process.env.NODE_ENV || config.nodeEnv || 'development').toLowerCase() === 'production';
+  if (isProduction) {
+    if (!rawUrl) {
+      throw new Error('FRONTEND_URL / APP_URL / CLIENT_URL is not configured for production. Set APP_URL or CLIENT_URL to https://<production-frontend-domain> (e.g., https://viralcraftmedia-demo.vercel.app) in Render environment variables.');
+    }
+    if (!rawUrl.startsWith('https://')) {
+      throw new Error(`Production frontend URL must use HTTPS: got "${rawUrl}"`);
+    }
+    if (rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1')) {
+      throw new Error(`Production frontend URL must not be localhost: got "${rawUrl}"`);
+    }
+    return rawUrl;
+  }
+  return rawUrl || 'http://localhost:5173';
+},
 
   // ##################################
   // EMAILJS CONFIGURATION (Server-side only - Private Key never exposed to frontend)

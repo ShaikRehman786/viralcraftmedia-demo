@@ -17,7 +17,7 @@ import { notifyStaff } from '../services/notificationService.js';
 import User from '../models/User.js';
 import crypto from 'crypto';
 import { sendEmail } from '../services/emailService.js';
-import { config } from '../config/env.js';
+import { config, getFrontendBaseUrl } from '../config/env.js';
 
 // Helper: Send EmailJS invitation securely from backend (private key never exposed to browser)
 // Uses server-side EmailJS REST API with accessToken for strict mode
@@ -269,7 +269,16 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
     });
 
     // Attempt to send invitation email securely from backend (private key stays server-side, strict mode remains enabled)
-    const registrationLink = `${config.appUrl || config.clientUrl || 'http://localhost:5173'}/register?token=${invitationToken}`;
+    let registrationLink;
+    try {
+      registrationLink = `${getFrontendBaseUrl()}/register?token=${invitationToken}`;
+    } catch (urlErr) {
+      console.error('[EmailJS] Frontend URL config error:', urlErr.message);
+      // Do not create invitation with invalid URL in production - fail fast
+      // Remove the just-created user to avoid orphaned invitation with localhost link
+      await User.findByIdAndDelete(user._id).catch(() => {});
+      return res.status(500).json({ error: 'Server frontend URL not configured for production. Set APP_URL/CLIENT_URL to https://<production-domain>.' });
+    }
     try {
       await sendInvitationEmailSecure({
         toName: name,
@@ -407,8 +416,14 @@ router.post('/staff/:staffId/resend', protect, authorize('SUPER_ADMIN'), async (
     
     await user.save();
 
-    // Build registration URL
-    const registration_link = `${config.appUrl || config.clientUrl || 'http://localhost:5173'}/register?token=${invitationToken}`;
+    // Build registration URL (environment-aware, fail-fast in production)
+    let registration_link;
+    try {
+      registration_link = `${getFrontendBaseUrl()}/register?token=${invitationToken}`;
+    } catch (urlErr) {
+      console.error('[EmailJS] Frontend URL config error (resend):', urlErr.message);
+      return res.status(500).json({ error: 'Server frontend URL not configured for production. Set APP_URL/CLIENT_URL to https://<production-domain>.' });
+    }
 
     // Send invitation email using EmailJS REST API (server-side, strict mode with private key)
     try {

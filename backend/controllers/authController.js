@@ -5,7 +5,7 @@ import { sendPasswordResetEmail, sendEmail } from '../services/emailService.js';
 import { notifyStaff } from '../services/notificationService.js';
 import { recordLoginBackup, recordLogoutBackup } from '../services/backupService.js';
 import crypto from 'crypto';
-import { config } from '../config/env.js';
+import { config, getFrontendBaseUrl } from '../config/env.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
@@ -410,7 +410,13 @@ export const forgotPassword = async (req, res, next) => {
     user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins expiry
     await user.save();
 
-    const resetUrl = `${config.appUrl || 'http://localhost:5173'}/reset-password/${resetToken}`;
+    let resetUrl;
+    try {
+      resetUrl = `${getFrontendBaseUrl()}/reset-password/${resetToken}`;
+    } catch (urlErr) {
+      console.error('[Password Reset] Frontend URL config error:', urlErr.message);
+      return res.status(500).json({ error: 'Server frontend URL not configured for production. Set APP_URL/CLIENT_URL to https://<production-domain>.' });
+    }
     
     await sendPasswordResetEmail(user.name, user.email, resetUrl);
 

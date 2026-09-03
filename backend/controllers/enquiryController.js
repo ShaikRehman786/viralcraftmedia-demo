@@ -14,7 +14,7 @@ import { getSuggestedEmployee } from '../services/routingService.js';
 import { sendEmail } from '../services/emailService.js';
 import { notifyStaff, notifyUser } from '../services/notificationService.js';
 import crypto from 'crypto';
-import { config } from '../config/env.js';
+import { config, getFrontendBaseUrl } from '../config/env.js';
 
 /**
  * Creates a new Lead / Enquiry from public service pages
@@ -458,7 +458,12 @@ const ensureClientProfile = async (enquiry) => {
       await user.save();
 
       if (enquiry.email) {
-        const loginUrl = `${process.env.APP_URL || 'http://localhost:5173'}/login`;
+        let loginUrl;
+        try {
+          loginUrl = `${getFrontendBaseUrl()}/login`;
+        } catch {
+          loginUrl = 'https://viralcraftmedia.com/login';
+        }
         const emailHtml = `
           <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
             <h3 style="color: #FF6A00;">Welcome to ViralCraftMedia</h3>

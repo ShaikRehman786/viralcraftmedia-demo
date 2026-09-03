@@ -1,6 +1,6 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
-import { config } from '../config/env.js';
+import { config, getFrontendBaseUrl } from '../config/env.js';
 import Payment from '../models/Payment.js';
 import Order from '../models/Order.js';
 import Project from '../models/Project.js';
@@ -587,9 +587,14 @@ export const createEnquiry = async (req, res, next) => {
       });
       await user.save();
 
-      // Send greeting email with temp password (mocked or sent)
+      // Send greeting email with temp password (environment-aware)
       if (email) {
-        const loginUrl = `${process.env.APP_URL || 'http://localhost:5173'}/login`;
+        let loginUrl;
+        try {
+          loginUrl = `${getFrontendBaseUrl()}/login`;
+        } catch {
+          loginUrl = 'https://viralcraftmedia.com/login';
+        }
         const emailHtml = `
           <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
             <h3 style="color: #FF6A00;">Welcome to ViralCraftMedia</h3>

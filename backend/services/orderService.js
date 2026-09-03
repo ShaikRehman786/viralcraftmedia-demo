@@ -12,7 +12,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { sendOrderSuccessEmail, sendEmail } from './emailService.js';
 import { getSuggestedEmployee } from './routingService.js';
-import { config } from '../config/env.js';
+import { config, getFrontendBaseUrl } from '../config/env.js';
 
 /**
  * Calculates correct price for given number of clips
@@ -139,8 +139,13 @@ export const ingestVerifiedOrder = async (orderDetails, socketDispatcher = null)
         });
         await existingUser.save();
         
-        // Send email with credentials
-        const loginUrl = `${process.env.APP_URL || 'http://localhost:5173'}/login`;
+        // Send email with credentials (environment-aware frontend URL)
+        let loginUrl;
+        try {
+          loginUrl = `${getFrontendBaseUrl()}/login`;
+        } catch {
+          loginUrl = 'https://viralcraftmedia.com/login';
+        }
         const emailHtml = `
           <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
             <h3 style="color: #FF6A00;">Welcome to ViralCraftMedia</h3>
@@ -291,7 +296,7 @@ export const ingestVerifiedOrder = async (orderDetails, socketDispatcher = null)
           <p>We are glad to inform you that work on your project <strong>${project.name}</strong> has started.</p>
           <p><strong>Order ID:</strong> ${orderId}</p>
           <p>You can track the progress inside your client dashboard:</p>
-          <p><a href="${config.appUrl || 'http://localhost:5173'}/login" style="display: inline-block; padding: 10px 20px; background: #FF6A00; color: #FFF; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In to Portal</a></p>
+          <p><a href="${(() => { try { return getFrontendBaseUrl(); } catch { return 'https://viralcraftmedia.com'; } })()}/login" style="display: inline-block; padding: 10px 20px; background: #FF6A00; color: #FFF; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In to Portal</a></p>
         </div>
       `
     }).catch(console.error);

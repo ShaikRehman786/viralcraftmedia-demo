@@ -71,6 +71,12 @@ app.use('/api', validateCsrfToken);
 // Mount API routes under /api base path
 app.use('/api', routes);
 
+// Fallback: also mount at root for proxies/CDNs that strip the /api prefix.
+// Primary mount is /api/projects → routes handles /projects.
+// Fallback mount is /projects → same routes, so both /api/projects and /projects resolve.
+app.use(validateCsrfToken);
+app.use(routes);
+
 // Centralized error responder
 app.use(errorHandler);
 

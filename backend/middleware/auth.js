@@ -48,11 +48,12 @@ export const protect = async (req, res, next) => {
 
     // Force password change guard
     if (user.mustChangePassword) {
-      // Allow only change-password and logout routes
-      const allowedPaths = ['/change-password', '/logout', '/me'];
-      const currentPath = req.path.toLowerCase();
+      // Allow only change-password, logout, profile, and read-only employee data routes
+      const allowedPaths = ['/change-password', '/logout', '/me', '/notifications', '/projects', '/tasks'];
+      // Use originalUrl + path so the check works even when router strips the prefix
+      const currentPath = (req.originalUrl || req.path).toLowerCase();
       
-      const isAllowed = allowedPaths.some(path => currentPath.endsWith(path));
+      const isAllowed = allowedPaths.some(path => currentPath.includes(path));
       if (!isAllowed) {
         return res.status(403).json({ 
           error: 'ForcePasswordReset', 

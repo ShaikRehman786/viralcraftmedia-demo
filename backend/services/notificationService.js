@@ -118,6 +118,24 @@ export async function createNotification({
   }
 }
 
+const MANAGER_EXCLUDED_TITLES = /(Payment|Invoice|Commission|Payout|Refund|Revenue|Lead|Enquiry|Referral Booking|New Referral)/i;
+
+export async function notifyAdminsOnly(args) {
+  // Payment/financial notifications: SUPER_ADMIN only, never MANAGER
+  const { default: User } = await import('../models/User.js');
+  const admins = await User.find({ role: 'SUPER_ADMIN' });
+  const results = [];
+  for (const admin of admins) {
+    const notify = await createNotification({ userId: admin._id, ...args });
+    if (notify && args.dispatcher) args.dispatcher(admin._id.toString(), 'new_notification', notify);
+    results.push(notify);
+  }
+  if (results.filter(Boolean).length > 0) {
+    sendPushToStaff(results[0]).catch(()=>{});
+  }
+  return results.filter(Boolean);
+}
+
 export async function notifyStaff({
   title,
   message,
@@ -133,7 +151,10 @@ export async function notifyStaff({
 }) {
   try {
     const { default: User } = await import('../models/User.js');
-    const staffUsers = await User.find({ role: { $in: ['SUPER_ADMIN', 'MANAGER'] } });
+    // Manager privacy: financial/customer-acquisition notifications must not go to MANAGER
+    const isFinancial = MANAGER_EXCLUDED_TITLES.test(title);
+    const roles = isFinancial ? ['SUPER_ADMIN'] : ['SUPER_ADMIN', 'MANAGER'];
+    const staffUsers = await User.find({ role: { $in: roles } });
 
     const results = [];
     for (const staff of staffUsers) {

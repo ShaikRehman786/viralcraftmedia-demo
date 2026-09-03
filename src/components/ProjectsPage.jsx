@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search,
   Download,
@@ -652,62 +653,45 @@ export default function ProjectsPage({
       : 0;
 
     return (
-      <div key={project._id} className="data-card">
-        <div className="data-card-header">
-          <div className="data-card-title">{project.name}</div>
-          <div className="flex items-center gap-2 flex-wrap">
+      <div key={project._id} className="vcm-project-card">
+        <div className="vcm-card__header">
+          <h3 className="vcm-card__title">{project.name}</h3>
+          <div className="vcm-card__badges">
             <span className={getStatusBadge(project.status)}>{project.status?.replace(/_/g, ' ')}</span>
             <span className={getPriorityBadge(project.priority)}>{project.priority}</span>
             {project.referral?.isReferral && (
-              <span className="badge badge-warning">🔗 Referral Project</span>
+              <span className="badge badge-warning">🔗 Referral</span>
+            )}
+            {!project.referral?.isReferral && (
+              <span className="badge badge-accent">Source: {project.source || 'Website'}</span>
             )}
           </div>
         </div>
-        <div className="data-card-body">
+        <div className="vcm-card__body">
           {project.description && (
-            <div className="data-card-desc">
-              {project.description.length > 100 ? project.description.slice(0, 100) + '...' : project.description}
+            <p className="vcm-card__desc">{project.description.length > 120 ? project.description.slice(0, 120) + '…' : project.description}</p>
+          )}
+          <div className="vcm-meta-grid">
+            {!isEmployee && project.client?.name && (
+              <span className="vcm-meta"><Briefcase size={12}/> <strong>Client:</strong> {project.client.name}</span>
+            )}
+            <span className="vcm-meta"><FolderOpen size={12}/> <strong>Service:</strong> {project.category || 'General'}</span>
+            {project.manager?.name && (
+              <span className="vcm-meta"><User size={12}/> <strong>Manager:</strong> {project.manager.name}</span>
+            )}
+            <span className="vcm-meta"><CalendarDays size={12}/> <strong>Deadline:</strong> {formatDate(project.estimatedCompletion)}</span>
+          </div>
+          {!isEmployee && project.referral?.isReferral && (
+            <div className="vcm-referral-inline">
+              <span className="vcm-meta"><UserCheck size={12}/> {project.referral.partnerAgency || 'Partner'}</span>
+              <span className="vcm-meta"><FolderOpen size={11}/> {project.referral.campaignName || 'Campaign'}</span>
+              <code className="vcm-code">{project.referral.referralCode}</code>
             </div>
           )}
-          <div className="flex items-center gap-3 flex-wrap">
-            {!isEmployee && project.client?.name && (
-              <span className="text-xs text-muted flex items-center gap-1">
-                <Briefcase size={12} /> {project.client.name}
-              </span>
-            )}
-            {!isEmployee && project.referral?.isReferral && (
-              <>
-                <span className="text-xs text-muted flex items-center gap-1">
-                  <UserCheck size={12} /> {project.referral.partnerAgency || 'Referral Partner'}
-                </span>
-                <span className="text-xs text-muted flex items-center gap-1">
-                  <FolderOpen size={11} /> {project.referral.campaignName || 'Campaign'}
-                </span>
-                <span className="text-xs font-mono text-accent">{project.referral.referralCode}</span>
-              </>
-            )}
-            {project.manager?.name && (
-              <span className="text-xs text-muted flex items-center gap-1">
-                <User size={12} /> {project.manager.name}
-              </span>
-            )}
-            <span className="text-xs text-muted flex items-center gap-1">
-              <CalendarDays size={11} />
-              {formatDate(project.estimatedCompletion)}
-            </span>
-            {project.category && (
-              <span className="text-xs text-muted flex items-center gap-1">
-                <FolderOpen size={11} /> {project.category}
-              </span>
-            )}
-            {project.department && (
-              <span className="text-xs text-muted">{project.department}</span>
-            )}
-          </div>
         </div>
 
         {projectTasks.length > 0 && (
-          <div className="emp-progress-section">
+          <div className="vcm-card__progress">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-muted">Progress</span>
               <span className="text-xs font-semibold">{progressPercent}%</span>
@@ -722,11 +706,11 @@ export default function ProjectsPage({
                 const isTaskRejected = localAccepted[tId] === 'rejected' || (!localAccepted[tId] && t.status === 'rejected');
 
                 return (
-                  <div key={tId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }}>
-                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{t.name}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div key={tId} className="vcm-task-mini">
+                    <span className="vcm-task-mini__name">{t.name}</span>
+                    <div className="vcm-task-mini__meta">
                       {t.assignedTo?.name && (
-                        <span className="text-2xs text-muted">
+                        <span className="vcm-task-mini__assignee">
                           {t.assignedTo.name}
                         </span>
                       )}
@@ -737,18 +721,16 @@ export default function ProjectsPage({
                         ) : isTaskRejected ? (
                           <span className="badge badge-error text-2xs">Rejected</span>
                         ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div className="vcm-task-mini__actions">
                             <button
                               className="btn btn-accent btn-xs"
-                              style={{ padding: '2px 6px', fontSize: '0.7rem' }}
                               onClick={() => handleAcceptTask(tId)}
                               disabled={acceptingId === tId}
                             >
                               Accept
                             </button>
                             <button
-                              className="btn btn-ghost btn-xs"
-                              style={{ color: 'var(--error, #dc2626)', border: '1px solid var(--border)', padding: '2px 6px', fontSize: '0.7rem' }}
+                              className="btn btn-ghost btn-xs vcm-btn--danger"
                               onClick={() => handleRejectTask(tId)}
                               disabled={acceptingId === tId}
                             >
@@ -767,19 +749,19 @@ export default function ProjectsPage({
           </div>
         )}
 
-        <div className="border-top pt-2 mt-2">
+        <div className="vcm-card__footer">
           {isEmployee ? (
             <>
               {isAcceptedByMe ? (
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="vcm-card__status">
                   <span className="badge badge-success">
                     <UserCheck size={11} /> Accepted
                   </span>
                   {project.acceptedAt && (
-                    <span className="text-2xs text-muted">on {formatDate(project.acceptedAt)}</span>
+                    <span className="vcm-card__meta-text">on {formatDate(project.acceptedAt)}</span>
                   )}
                   {project.employeeName && (
-                    <span className="text-xs text-muted">Assigned to: {project.employeeName}</span>
+                    <span className="vcm-card__meta-text">Assigned to: {project.employeeName}</span>
                   )}
                 </div>
               ) : isRejectedByMe ? (
@@ -1164,502 +1146,335 @@ export default function ProjectsPage({
         )}
       </div>
 
-      {/* ─── Create / Edit Project Modal ─── */}
-      {showProjectModal && (
-        <div className="dialog-overlay" onClick={() => setShowProjectModal(false)}>
-          <div className="dialog animate-scale-in" onClick={e => e.stopPropagation()} style={{ maxWidth: 550 }}>
-            <div className="dialog-header">
-              <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>{editingProject ? 'Edit Project' : 'Create New Project'}</h2>
-              <button type="button" className="dialog-close-btn" onClick={() => setShowProjectModal(false)} aria-label="Close modal"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSaveProjectSubmit} className="dialog-form">
-              <div className="dialog-body">
-                <div>
-                  <label className="form-label">Project Title *</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    placeholder="e.g. Podcast Video Editing & Graphics"
-                    value={projectForm.name}
-                    onChange={e => setProjectForm({ ...projectForm, name: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="form-label">Client</label>
-                    <select
-                      className="select w-full"
-                      value={projectForm.client}
-                      onChange={e => setProjectForm({ ...projectForm, client: e.target.value })}
-                    >
-                      <option value="">Select Client</option>
-                      {clients.map(c => (
-                        <option key={c._id} value={c._id}>{c.name} ({c.phone || c.email || 'Client'})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Service Category</label>
-                    <select
-                      className="select w-full"
-                      value={projectForm.category}
-                      onChange={e => setProjectForm({ ...projectForm, category: e.target.value })}
-                    >
-                      <option value="Short Form Editing">Short Form Editing</option>
-                      <option value="Podcast Editing">Podcast Editing</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Website Development">Website Development</option>
-                      <option value="Branding">Branding</option>
-                      <option value="Consultation">Consultation</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="form-label">Priority</label>
-                    <select
-                      className="select w-full"
-                      value={projectForm.priority}
-                      onChange={e => setProjectForm({ ...projectForm, priority: e.target.value })}
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Status</label>
-                    <select
-                      className="select w-full"
-                      value={projectForm.status}
-                      onChange={e => setProjectForm({ ...projectForm, status: e.target.value })}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="review">Review</option>
-                      <option value="approved">Approved</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Deadline</label>
-                    <input
-                      type="date"
-                      className="input w-full"
-                      value={projectForm.estimatedCompletion}
-                      onChange={e => setProjectForm({ ...projectForm, estimatedCompletion: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="form-label">Manager</label>
-                    <select
-                      className="select w-full"
-                      value={projectForm.manager}
-                      onChange={e => setProjectForm({ ...projectForm, manager: e.target.value })}
-                    >
-                      <option value="">Select Manager</option>
-                      {(staff || []).filter(s => s.role === 'MANAGER' || s.role === 'SUPER_ADMIN').map(s => (
-                        <option key={s._id} value={s._id}>{s.name} ({s.role})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Assigned Employee</label>
-                    <select
-                      className="select w-full"
-                      value={projectForm.employees[0] || ''}
-                      onChange={e => setProjectForm({ ...projectForm, employees: e.target.value ? [e.target.value] : [] })}
-                    >
-                      <option value="">Select Employee</option>
-                      {(staff || []).filter(s => s.role === 'EMPLOYEE').map(s => (
-                        <option key={s._id} value={s._id}>{s.name} ({s.department || 'Editor'})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="form-label">Description / Work Notes</label>
-                  <textarea
-                    className="input w-full"
-                    rows="3"
-                    placeholder="Add instructions, asset links, or key requirements..."
-                    value={projectForm.description}
-                    onChange={e => setProjectForm({ ...projectForm, description: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="dialog-footer">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowProjectModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={isSaving}>
-                  {isSaving ? 'Saving...' : editingProject ? 'Update Project' : 'Create Project'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Create / Edit Task Modal ─── */}
-      {showTaskModal && (
-        <div className="dialog-overlay" onClick={() => setShowTaskModal(false)}>
-          <div className="dialog animate-scale-in" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
-            <div className="dialog-header">
-              <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>{editingTask ? 'Edit Task' : 'Create New Task'}</h2>
-              <button type="button" className="dialog-close-btn" onClick={() => setShowTaskModal(false)} aria-label="Close modal"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSaveTaskSubmit} className="dialog-form">
-              <div className="dialog-body">
-                <div>
-                  <label className="form-label">Select Project *</label>
-                  <select
-                    className="select w-full"
-                    value={taskForm.project}
-                    onChange={e => setTaskForm({ ...taskForm, project: e.target.value })}
-                    required
-                  >
-                    <option value="">Select Target Project</option>
-                    {deduplicatedProjects.map(p => (
-                      <option key={p._id} value={p._id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="form-label">Task Name *</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    placeholder="e.g. Audio noise reduction & color grade"
-                    value={taskForm.name}
-                    onChange={e => setTaskForm({ ...taskForm, name: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="form-label">Priority</label>
-                    <select
-                      className="select w-full"
-                      value={taskForm.priority}
-                      onChange={e => setTaskForm({ ...taskForm, priority: e.target.value })}
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Status</label>
-                    <select
-                      className="select w-full"
-                      value={taskForm.status}
-                      onChange={e => setTaskForm({ ...taskForm, status: e.target.value })}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="assigned">Assigned</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="submitted">Submitted</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Due Date</label>
-                    <input
-                      type="date"
-                      className="input w-full"
-                      value={taskForm.deadline}
-                      onChange={e => setTaskForm({ ...taskForm, deadline: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="form-label">Assigned Employee</label>
-                  <select
-                    className="select w-full"
-                    value={taskForm.assignedTo}
-                    onChange={e => setTaskForm({ ...taskForm, assignedTo: e.target.value })}
-                  >
-                    <option value="">Unassigned</option>
-                    {(staff || []).filter(s => s.role === 'EMPLOYEE' || s.role === 'MANAGER').map(s => (
-                      <option key={s._id} value={s._id}>{s.name} ({s.role})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="form-label">Description / Instructions</label>
-                  <textarea
-                    className="input w-full"
-                    rows="3"
-                    placeholder="Task instructions or deliverables detail..."
-                    value={taskForm.description}
-                    onChange={e => setTaskForm({ ...taskForm, description: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="dialog-footer">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowTaskModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={isSaving}>
-                  {isSaving ? 'Saving...' : editingTask ? 'Update Task' : 'Create Task'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Detailed Project Workspace Drawer (Zoho/HubSpot CRM Style) ─── */}
-      {activeTaskDetails && (
-        <div className="dialog-overlay" onClick={() => setActiveTaskDetails(null)}>
-          <div className="dialog animate-scale-in" onClick={e => e.stopPropagation()} style={{ maxWidth: 780, width: '92%' }}>
-            {/* Header */}
-            <div className="dialog-header flex justify-between items-start border-b pb-3">
+      {/* ─── Create / Edit Project Modal — Premium Grouped Form (Portal to viewport) ─── */}
+      {showProjectModal && createPortal(
+        <div className="vcm-modal-overlay" onClick={() => setShowProjectModal(false)}>
+          <div className="vcm-modal vcm-modal--form animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="vcm-modal__header">
               <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className={getStatusBadge(activeTaskDetails.status)}>
-                    {activeTaskDetails.status?.replace(/_/g, ' ')}
-                  </span>
-                  <span className={getPriorityBadge(activeTaskDetails.priority)}>
-                    {activeTaskDetails.priority}
-                  </span>
-                  <span className="badge badge-gray">
-                    {activeTaskDetails.category || 'General'}
-                  </span>
-                  <span className="badge badge-accent">
-                    Source: {activeTaskDetails.source || 'Web'}
-                  </span>
+                <h2 className="vcm-modal__title">{editingProject ? 'Edit Project' : 'Create New Project'}</h2>
+                <p className="vcm-modal__subtitle">{editingProject ? 'Update project information and assignments' : 'Add a new project to your workspace'}</p>
+              </div>
+              <button type="button" className="vcm-modal__close" onClick={() => setShowProjectModal(false)} aria-label="Close"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleSaveProjectSubmit} className="vcm-form">
+              <div className="vcm-modal__body vcm-form__body">
+                <div className="vcm-form__section">
+                  <h3 className="vcm-form__section-title"><FileText size={14}/> Basic Information</h3>
+                  <div className="vcm-field">
+                    <label className="vcm-field__label">Project Title <span className="vcm-required">*</span></label>
+                    <input type="text" className="input" placeholder="e.g. Podcast Video Editing & Graphics" value={projectForm.name} onChange={e => setProjectForm({ ...projectForm, name: e.target.value })} required />
+                  </div>
+                  <div className="vcm-form__row vcm-form__row--2">
+                    <label className="vcm-field"><span className="vcm-field__label">Client</span>
+                      <select className="select" value={projectForm.client} onChange={e => setProjectForm({ ...projectForm, client: e.target.value })}>
+                        <option value="">Select Client</option>
+                        {clients.map(c => (<option key={c._id} value={c._id}>{c.name} ({c.phone || c.email || 'Client'})</option>))}
+                      </select>
+                    </label>
+                    <label className="vcm-field"><span className="vcm-field__label">Service Category</span>
+                      <select className="select" value={projectForm.category} onChange={e => setProjectForm({ ...projectForm, category: e.target.value })}>
+                        <option value="Short Form Editing">Short Form Editing</option>
+                        <option value="Podcast Editing">Podcast Editing</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Website Development">Website Development</option>
+                        <option value="Branding">Branding</option>
+                        <option value="Consultation">Consultation</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label className="vcm-field"><span className="vcm-field__label">Description / Work Notes</span>
+                    <textarea className="textarea" rows="3" placeholder="Add instructions, asset links, or key requirements..." value={projectForm.description} onChange={e => setProjectForm({ ...projectForm, description: e.target.value })} />
+                  </label>
+                </div>
+
+                <div className="vcm-form__section">
+                  <h3 className="vcm-form__section-title"><AlertTriangle size={14}/> Priority & Status</h3>
+                  <div className="vcm-form__row vcm-form__row--3">
+                    <label className="vcm-field"><span className="vcm-field__label">Priority</span>
+                      <select className="select" value={projectForm.priority} onChange={e => setProjectForm({ ...projectForm, priority: e.target.value })}>
+                        <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
+                      </select>
+                    </label>
+                    <label className="vcm-field"><span className="vcm-field__label">Status</span>
+                      <select className="select" value={projectForm.status} onChange={e => setProjectForm({ ...projectForm, status: e.target.value })}>
+                        <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="approved">Approved</option><option value="completed">Completed</option>
+                      </select>
+                    </label>
+                    <label className="vcm-field"><span className="vcm-field__label">Deadline</span>
+                      <input type="date" className="input" value={projectForm.estimatedCompletion} onChange={e => setProjectForm({ ...projectForm, estimatedCompletion: e.target.value })} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="vcm-form__section">
+                  <h3 className="vcm-form__section-title"><UserCheck size={14}/> Assignment</h3>
+                  <div className="vcm-form__row vcm-form__row--2">
+                    <label className="vcm-field"><span className="vcm-field__label">Manager</span>
+                      <select className="select" value={projectForm.manager} onChange={e => setProjectForm({ ...projectForm, manager: e.target.value })}>
+                        <option value="">Select Manager</option>
+                        {(staff || []).filter(s => s.role === 'MANAGER' || s.role === 'SUPER_ADMIN').map(s => (<option key={s._id} value={s._id}>{s.name} ({s.role})</option>))}
+                      </select>
+                    </label>
+                    <label className="vcm-field"><span className="vcm-field__label">Assigned Employee</span>
+                      <select className="select" value={projectForm.employees[0] || ''} onChange={e => setProjectForm({ ...projectForm, employees: e.target.value ? [e.target.value] : [] })}>
+                        <option value="">Select Employee</option>
+                        {(staff || []).filter(s => s.role === 'EMPLOYEE').map(s => (<option key={s._id} value={s._id}>{s.name} ({s.department || 'Editor'})</option>))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="vcm-modal__footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowProjectModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Saving...' : editingProject ? 'Update Project' : 'Create Project'}</button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ─── Create / Edit Task Modal — Structured (Portal) ─── */}
+      {showTaskModal && createPortal(
+        <div className="vcm-modal-overlay" onClick={() => setShowTaskModal(false)}>
+          <div className="vcm-modal vcm-modal--form animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="vcm-modal__header">
+              <div>
+                <h2 className="vcm-modal__title">{editingTask ? 'Edit Task' : 'Create New Task'}</h2>
+                <p className="vcm-modal__subtitle">{editingTask ? 'Update task details and assignment' : 'Add a task to a project'}</p>
+              </div>
+              <button type="button" className="vcm-modal__close" onClick={() => setShowTaskModal(false)} aria-label="Close"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleSaveTaskSubmit} className="vcm-form">
+              <div className="vcm-modal__body vcm-form__body">
+                <div className="vcm-form__section">
+                  <h3 className="vcm-form__section-title"><Briefcase size={14}/> Basic Details</h3>
+                  <label className="vcm-field"><span className="vcm-field__label">Target Project <span className="vcm-required">*</span></span>
+                    <select className="select" value={taskForm.project} onChange={e => setTaskForm({ ...taskForm, project: e.target.value })} required>
+                      <option value="">Select Target Project</option>
+                      {deduplicatedProjects.map(p => (<option key={p._id} value={p._id}>{p.name}</option>))}
+                    </select>
+                  </label>
+                  <label className="vcm-field"><span className="vcm-field__label">Task Name <span className="vcm-required">*</span></span>
+                    <input type="text" className="input" placeholder="e.g. Audio noise reduction & color grade" value={taskForm.name} onChange={e => setTaskForm({ ...taskForm, name: e.target.value })} required />
+                  </label>
+                  <label className="vcm-field"><span className="vcm-field__label">Description</span>
+                    <textarea className="textarea" rows="3" placeholder="Task instructions or deliverables detail..." value={taskForm.description} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} />
+                  </label>
+                </div>
+                <div className="vcm-form__section">
+                  <h3 className="vcm-form__section-title"><AlertTriangle size={14}/> Priority & Status</h3>
+                  <div className="vcm-form__row vcm-form__row--3">
+                    <label className="vcm-field"><span className="vcm-field__label">Priority</span>
+                      <select className="select" value={taskForm.priority} onChange={e => setTaskForm({ ...taskForm, priority: e.target.value })}>
+                        <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                      </select>
+                    </label>
+                    <label className="vcm-field"><span className="vcm-field__label">Status</span>
+                      <select className="select" value={taskForm.status} onChange={e => setTaskForm({ ...taskForm, status: e.target.value })}>
+                        <option value="pending">Pending</option><option value="assigned">Assigned</option><option value="in_progress">In Progress</option><option value="submitted">Submitted</option><option value="completed">Completed</option>
+                      </select>
+                    </label>
+                    <label className="vcm-field"><span className="vcm-field__label">Due Date</span>
+                      <input type="date" className="input" value={taskForm.deadline} onChange={e => setTaskForm({ ...taskForm, deadline: e.target.value })} />
+                    </label>
+                  </div>
+                </div>
+                <div className="vcm-form__section">
+                  <h3 className="vcm-form__section-title"><UserCheck size={14}/> Assignment</h3>
+                  <label className="vcm-field"><span className="vcm-field__label">Assigned Employee</span>
+                    <select className="select" value={taskForm.assignedTo} onChange={e => setTaskForm({ ...taskForm, assignedTo: e.target.value })}>
+                      <option value="">Unassigned</option>
+                      {(staff || []).filter(s => s.role === 'EMPLOYEE' || s.role === 'MANAGER').map(s => (<option key={s._id} value={s._id}>{s.name} ({s.role})</option>))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div className="vcm-modal__footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowTaskModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Saving...' : editingTask ? 'Update Task' : 'Create Task'}</button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ─── Premium Project Details Drawer (Portal — viewport-centered) ─── */}
+      {activeTaskDetails && createPortal(
+        <div className="vcm-modal-overlay" onClick={() => setActiveTaskDetails(null)}>
+          <div className="vcm-modal vcm-modal--project animate-scale-in" onClick={e => e.stopPropagation()}>
+            {/* Sticky Header */}
+            <div className="vcm-modal__header">
+              <div className="vcm-modal__header-main">
+                <div className="vcm-badges">
+                  <span className={getStatusBadge(activeTaskDetails.status)}>{activeTaskDetails.status?.replace(/_/g, ' ')}</span>
+                  <span className={getPriorityBadge(activeTaskDetails.priority)}>{activeTaskDetails.priority}</span>
+                  <span className="badge badge-gray">{activeTaskDetails.category || 'General'}</span>
+                  {!activeTaskDetails.referral?.isReferral && (
+                    <span className="badge badge-accent">Source: {activeTaskDetails.source || 'Website'}</span>
+                  )}
                   {activeTaskDetails.referral?.isReferral && (
                     <span className="badge badge-warning">🔗 Partner Referral</span>
                   )}
                 </div>
-                <h3 className="modal-title text-xl font-bold text-gray-900 dark:text-white" style={{ margin: 0, lineHeight: 1.3 }}>
-                  {activeTaskDetails.name}
-                </h3>
+                <h2 className="vcm-modal__title">{activeTaskDetails.name}</h2>
+                <p className="vcm-modal__subtitle">Project ID: {safeIdString(activeTaskDetails) || '—'} • Created {formatDate(activeTaskDetails.createdAt)}</p>
               </div>
-              <button
-                type="button"
-                className="dialog-close-btn"
-                onClick={() => setActiveTaskDetails(null)}
-                aria-label="Close modal"
-              >
-                <X size={18} />
-              </button>
+              <button type="button" className="vcm-modal__close" onClick={() => setActiveTaskDetails(null)} aria-label="Close"><X size={18} /></button>
             </div>
 
-            {/* Scrollable Modal Content */}
-            <div className="dialog-body space-y-5 py-4 overflow-y-auto" style={{ maxHeight: 'calc(75vh - 120px)' }}>
-              {/* Project Information Responsive Grid */}
-              <div>
-                <h4 className="text-2xs font-bold text-muted uppercase tracking-wider mb-2">Project Overview</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 bg-secondary rounded-xl border border-gray-200 dark:border-gray-800">
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Client</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5 truncate">
-                      {activeTaskDetails.client?.name || 'General Client'}
-                    </span>
+            {/* Scrollable Body — Two-column desktop, single-column mobile */}
+            <div className="vcm-modal__body">
+              <div className="vcm-layout">
+                <div className="vcm-layout__main">
+                  <div className="vcm-section">
+                    <h3 className="vcm-section__title">Project Overview</h3>
+                    <div className="vcm-overview-grid">
+                      <div className="vcm-stat-card">
+                        <div className="vcm-stat-card__label"><Briefcase size={12}/> Client</div>
+                        <div className="vcm-stat-card__value">{activeTaskDetails.client?.name || 'General Client'}</div>
+                        {activeTaskDetails.client?.email && <div className="vcm-stat-card__meta">{activeTaskDetails.client.email}</div>}
+                      </div>
+                      <div className="vcm-stat-card">
+                        <div className="vcm-stat-card__label"><FolderOpen size={12}/> Service</div>
+                        <div className="vcm-stat-card__value">{activeTaskDetails.category || 'Short Form Editing'}</div>
+                      </div>
+                      <div className="vcm-stat-card">
+                        <div className="vcm-stat-card__label"><User size={12}/> Manager</div>
+                        <div className="vcm-stat-card__value">{activeTaskDetails.manager?.name || 'Unassigned'}</div>
+                      </div>
+                      <div className="vcm-stat-card">
+                        <div className="vcm-stat-card__label"><UserCheck size={12}/> Assigned Employee</div>
+                        <div className="vcm-stat-card__value">{activeTaskDetails.employees?.[0]?.name || activeTaskDetails.assignedEmployeeName || 'Unassigned'}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Service Category</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5">
-                      {activeTaskDetails.category || 'Short Form Editing'}
-                    </span>
+
+                  {activeTaskDetails.description && (
+                    <div className="vcm-section">
+                      <h3 className="vcm-section__title"><FileText size={14}/> Description & Work Notes</h3>
+                      <div className="vcm-prose">{activeTaskDetails.description}</div>
+                    </div>
+                  )}
+
+                  {activeTaskDetails.referral?.isReferral ? (
+                    <div className="vcm-section vcm-section--referral">
+                      <h3 className="vcm-section__title">🔗 Referral Partner Details</h3>
+                      <div className="vcm-referral-grid">
+                        <div><span className="vcm-label">Partner</span><span className="vcm-value">{activeTaskDetails.referral.partnerAgency || 'Partner'}</span></div>
+                        <div><span className="vcm-label">Campaign</span><span className="vcm-value">{activeTaskDetails.referral.campaignName || 'General'}</span></div>
+                        <div><span className="vcm-label">Code</span><code className="vcm-code">{activeTaskDetails.referral.referralCode}</code></div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="vcm-layout__side">
+                  {(() => {
+                    const projTasks = tasksByProject[activeTaskDetails._id] || [];
+                    const total = projTasks.length;
+                    const completed = projTasks.filter(t => t.status === 'completed' || t.status === 'approved').length;
+                    const inProgress = projTasks.filter(t => t.status === 'in_progress' || t.status === 'assigned').length;
+                    const pending = Math.max(0, total - completed - inProgress);
+                    return (
+                      <div className="vcm-section">
+                        <h3 className="vcm-section__title">Task Summary</h3>
+                        <div className="vcm-summary-grid">
+                          <div className="vcm-summary-card"><div className="vcm-summary-card__value">{total}</div><div className="vcm-summary-card__label">Total</div></div>
+                          <div className="vcm-summary-card"><div className="vcm-summary-card__value" style={{color: 'var(--success)'}}>{completed}</div><div className="vcm-summary-card__label">Completed</div></div>
+                          <div className="vcm-summary-card"><div className="vcm-summary-card__value" style={{color: 'var(--info)'}}>{inProgress}</div><div className="vcm-summary-card__label">In Progress</div></div>
+                          <div className="vcm-summary-card"><div className="vcm-summary-card__value" style={{color: 'var(--warning)'}}>{pending}</div><div className="vcm-summary-card__label">Pending</div></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="vcm-section">
+                    <h3 className="vcm-section__title">Dates & Info</h3>
+                    <div className="vcm-meta-row" style={{flexDirection: 'column', gap: '10px'}}>
+                      <div className="vcm-meta-item"><span className="vcm-meta-label">Deadline</span><span className="vcm-meta-value"><CalendarDays size={12}/> {formatDate(activeTaskDetails.estimatedCompletion)}</span></div>
+                      <div className="vcm-meta-item"><span className="vcm-meta-label">Last Updated</span><span className="vcm-meta-value">{formatDate(activeTaskDetails.updatedAt || activeTaskDetails.createdAt)}</span></div>
+                      <div className="vcm-meta-item"><span className="vcm-meta-label">Created By</span><span className="vcm-meta-value">{activeTaskDetails.createdBy?.name || 'Admin'}</span></div>
+                      <div className="vcm-meta-item"><span className="vcm-meta-label">Created Date</span><span className="vcm-meta-value">{formatDate(activeTaskDetails.createdAt)}</span></div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Manager</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5 truncate">
-                      {activeTaskDetails.manager?.name || 'Unassigned'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Assigned Employee</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5 truncate">
-                      {activeTaskDetails.employees?.[0]?.name || activeTaskDetails.assignedEmployeeName || 'Unassigned'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Created Date</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5">
-                      {formatDate(activeTaskDetails.createdAt)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Deadline</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5">
-                      {formatDate(activeTaskDetails.estimatedCompletion)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Created By</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5">
-                      {activeTaskDetails.createdBy?.name || 'Admin'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-2xs text-muted block uppercase font-semibold">Last Updated</span>
-                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 block mt-0.5">
-                      {formatDate(activeTaskDetails.updatedAt || activeTaskDetails.createdAt)}
-                    </span>
-                  </div>
+
+                  {isAdmin && (
+                    <div className="vcm-section vcm-section--actions">
+                      <h3 className="vcm-section__title">Management Actions</h3>
+                      <div className="vcm-actions-grid" style={{gridTemplateColumns: '1fr'}}>
+                        <label className="vcm-field">
+                          <span className="vcm-field__label">Project Status</span>
+                          <select className="select" value={activeTaskDetails.status} onChange={e => handleUpdateProjectStatusDirect(activeTaskDetails._id, e.target.value)}>
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="review">Review</option>
+                            <option value="approved">Approved</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                        </label>
+                        <label className="vcm-field">
+                          <span className="vcm-field__label">Assign Staff</span>
+                          <select className="select" value={safeIdString(activeTaskDetails.employees?.[0]) || ''} onChange={async (e) => {
+                              const empId = e.target.value;
+                              try {
+                                const res = await axios.put(`/api/projects/${activeTaskDetails._id}`, { employees: empId ? [empId] : [] });
+                                addToast('Assigned employee updated successfully!', 'success');
+                                if (res.data?.data) setActiveTaskDetails(res.data.data);
+                                if (onRefreshData) await onRefreshData();
+                              } catch (err) { addToast('Failed to reassign employee', 'error'); }
+                            }}>
+                            <option value="">Unassigned</option>
+                            {(staff || []).filter(s => s.role === 'EMPLOYEE' || s.role === 'MANAGER').map(s => (
+                              <option key={s._id} value={s._id}>{s.name} ({s.department || s.role})</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Referral Details if applicable */}
-              {activeTaskDetails.referral?.isReferral && (
-                <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                  <h4 className="text-2xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Referral Partner Details</h4>
-                  <div className="flex items-center gap-4 text-xs flex-wrap">
-                    <span><strong>Partner:</strong> {activeTaskDetails.referral.partnerAgency || 'Partner'}</span>
-                    <span><strong>Campaign:</strong> {activeTaskDetails.referral.campaignName || 'General'}</span>
-                    <span><strong>Code:</strong> <code className="font-mono text-accent">{activeTaskDetails.referral.referralCode}</code></span>
-                  </div>
-                </div>
-              )}
-
-              {/* Description / Work Notes Section */}
-              {activeTaskDetails.description && (
-                <div>
-                  <h4 className="text-2xs font-bold text-muted uppercase tracking-wider mb-1.5">Description & Work Notes</h4>
-                  <div className="text-xs bg-secondary p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
-                    {activeTaskDetails.description}
-                  </div>
-                </div>
-              )}
-
-              {/* Project Quick Action Bar for Admin */}
-              {isAdmin && (
-                <div>
-                  <h4 className="text-2xs font-bold text-muted uppercase tracking-wider mb-1.5">Management Actions</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-secondary rounded-xl border border-gray-200 dark:border-gray-800">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-[90px]">Project Status:</span>
-                      <select
-                        className="select select-sm flex-1"
-                        value={activeTaskDetails.status}
-                        onChange={e => handleUpdateProjectStatusDirect(activeTaskDetails._id, e.target.value)}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="review">Review</option>
-                        <option value="approved">Approved</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-[90px]">Assign Staff:</span>
-                      <select
-                        className="select select-sm flex-1"
-                        value={safeIdString(activeTaskDetails.employees?.[0]) || ''}
-                        onChange={async (e) => {
-                          const empId = e.target.value;
-                          try {
-                            const res = await axios.put(`/api/projects/${activeTaskDetails._id}`, { employees: empId ? [empId] : [] });
-                            addToast('Assigned employee updated successfully!', 'success');
-                            if (res.data?.data) setActiveTaskDetails(res.data.data);
-                            if (onRefreshData) await onRefreshData();
-                          } catch (err) {
-                            addToast('Failed to reassign employee', 'error');
-                          }
-                        }}
-                      >
-                        <option value="">Unassigned</option>
-                        {(staff || []).filter(s => s.role === 'EMPLOYEE' || s.role === 'MANAGER').map(s => (
-                          <option key={s._id} value={s._id}>{s.name} ({s.department || s.role})</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Tasks Progress & Management */}
               {(() => {
                 const projTasks = tasksByProject[activeTaskDetails._id] || [];
                 const completedTasks = projTasks.filter(t => t.status === 'completed' || t.status === 'approved').length;
                 const progressPct = projTasks.length > 0 ? Math.round((completedTasks / projTasks.length) * 100) : (activeTaskDetails.status === 'completed' ? 100 : 0);
-
                 return (
-                  <div>
-                    <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
-                      <h4 className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-primary" />
-                        Project Tasks ({projTasks.length})
-                      </h4>
-                      {isAdmin && (
-                        <button
-                          className="btn btn-accent btn-xs"
-                          onClick={() => openNewTaskModal(activeTaskDetails._id)}
-                        >
-                          <Plus size={12} /> Add Task
-                        </button>
-                      )}
+                  <div className="vcm-section">
+                    <div className="vcm-section__head">
+                      <h3 className="vcm-section__title"><CheckCircle2 size={16}/> Project Tasks ({projTasks.length})</h3>
+                      {isAdmin && <button className="btn btn-accent btn-sm" onClick={() => openNewTaskModal(activeTaskDetails._id)}><Plus size={14}/> Add Task</button>}
                     </div>
-
-                    {/* Progress Bar */}
-                    <div className="mb-3">
-                      <div className="flex justify-between text-2xs font-semibold mb-1 text-muted">
-                        <span>Task Completion</span>
-                        <span>{completedTasks} / {projTasks.length} ({progressPct}%)</span>
-                      </div>
-                      <div className="w-full bg-secondary h-2.5 rounded-full overflow-hidden border">
-                        <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
-                      </div>
+                    <div className="vcm-progress">
+                      <div className="vcm-progress__bar"><div className="vcm-progress__fill" style={{ width: `${progressPct}%` }} /></div>
+                      <div className="vcm-progress__label">{completedTasks} / {projTasks.length} ({progressPct}%) completed</div>
                     </div>
-
                     {projTasks.length === 0 ? (
-                      <div className="text-center p-4 bg-secondary rounded-xl border text-muted text-xs">
-                        No tasks created under this project yet. {isAdmin && 'Click "+ Add Task" to assign work.'}
-                      </div>
+                      <div className="vcm-empty">No tasks yet. {isAdmin && 'Click “Add Task” to assign work.'}</div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="vcm-task-list">
                         {projTasks.map(t => (
-                          <div key={t._id} className="p-3 bg-secondary rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="font-semibold text-xs">{t.name}</span>
-                                <span className={getPriorityBadge(t.priority)}>{t.priority}</span>
-                                <span className={getStatusBadge(t.status)}>{t.status?.replace(/_/g, ' ')}</span>
-                              </div>
-                              {t.description && <p className="text-2xs text-muted mt-0.5">{t.description}</p>}
-                              <div className="flex items-center gap-3 text-2xs text-muted mt-1">
-                                <span>Assigned: {t.assignedTo?.name || 'Unassigned'}</span>
-                                {t.deadline && <span>Due: {formatDate(t.deadline)}</span>}
-                              </div>
+                          <div key={t._id} className="vcm-task-row">
+                            <div className="vcm-task-row__main">
+                              <div className="vcm-task-row__title">{t.name}</div>
+                              <div className="vcm-task-row__meta"><span className={getPriorityBadge(t.priority)}>{t.priority}</span><span className={getStatusBadge(t.status)}>{t.status?.replace(/_/g, ' ')}</span><span className="vcm-meta-text">Assigned: {t.assignedTo?.name || 'Unassigned'}</span>{t.deadline && <span className="vcm-meta-text">Due {formatDate(t.deadline)}</span>}</div>
+                              {t.description && <p className="vcm-task-row__desc">{t.description}</p>}
                             </div>
-
-                            <div className="flex items-center gap-2">
-                              {/* Employee Status Change */}
+                            <div className="vcm-task-row__actions">
                               {isEmployee && (t.assignedTo?._id === userId || t.assignedTo === userId) && (
-                                <select
-                                  className="select select-xs"
-                                  value={t.status}
-                                  onChange={e => handleUpdateTaskStatusDirect(t._id, e.target.value)}
-                                >
+                                <select className="select select-sm" value={t.status} onChange={e => handleUpdateTaskStatusDirect(t._id, e.target.value)}>
                                   <option value="pending">Pending</option>
                                   <option value="in_progress">In Progress</option>
                                   <option value="submitted">Submitted</option>
                                   <option value="completed">Completed</option>
                                 </select>
                               )}
-
                               {isAdmin && (
                                 <>
-                                  <select
-                                    className="select select-xs"
-                                    value={t.status}
-                                    onChange={e => handleUpdateTaskStatusDirect(t._id, e.target.value)}
-                                  >
+                                  <select className="select select-sm" value={t.status} onChange={e => handleUpdateTaskStatusDirect(t._id, e.target.value)}>
                                     <option value="pending">Pending</option>
                                     <option value="assigned">Assigned</option>
                                     <option value="in_progress">In Progress</option>
@@ -1680,30 +1495,15 @@ export default function ProjectsPage({
               })()}
             </div>
 
-            {/* Sticky Action Footer */}
-            <div className="dialog-footer border-t pt-3 flex justify-between items-center gap-3">
-              <div className="flex gap-2">
-                {isAdmin && (
-                  <>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => openEditProjectModal(activeTaskDetails)}
-                    >
-                      Edit Project
-                    </button>
-                    <button
-                      className="btn btn-error btn-sm"
-                      onClick={() => handleDeleteProjectDirect(activeTaskDetails._id)}
-                    >
-                      Delete Project
-                    </button>
-                  </>
-                )}
+            <div className="vcm-modal__footer">
+              <div className="vcm-modal__footer-actions">
+                {isAdmin && (<><button className="btn btn-secondary btn-sm" onClick={() => openEditProjectModal(activeTaskDetails)}>Edit Project</button><button className="btn btn-error btn-sm" onClick={() => handleDeleteProjectDirect(activeTaskDetails._id)}>Delete Project</button></>)}
               </div>
               <button className="btn btn-ghost btn-sm" onClick={() => setActiveTaskDetails(null)}>Close</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -38,7 +38,7 @@ const ROLE_ACCESS = {
   enquiries: ['SUPER_ADMIN'],
   whatsapp: ['SUPER_ADMIN'],
   payments: ['CLIENT', 'SUPER_ADMIN'],
-  'notification-center': ['SUPER_ADMIN'],
+  'notification-center': ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
   referrals: ['SUPER_ADMIN'],
 };
 

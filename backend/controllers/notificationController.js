@@ -1,5 +1,13 @@
 import Notification from '../models/Notification.js';
 
+const MANAGER_BLOCKED_TITLE_REGEX = /(Payment|Invoice|Commission|Payout|Refund|Revenue|Lead|Enquiry|Referral Booking|New Referral)/i;
+
+function getManagerAllowedFilter(user) {
+  if (!user || (user.role || '').toUpperCase() !== 'MANAGER') return {};
+  // Manager: only operational Project/Task/Employee notifications, never financial/customer acquisition
+  return { title: { $not: MANAGER_BLOCKED_TITLE_REGEX } };
+}
+
 export const getNotifications = async (req, res, next) => {
   try {
     const {
@@ -13,7 +21,7 @@ export const getNotifications = async (req, res, next) => {
       endDate = ''
     } = req.query;
 
-    const filter = { user: req.user._id };
+    const filter = { user: req.user._id, ...getManagerAllowedFilter(req.user) };
 
     if (type) filter.type = type;
     if (priority) filter.priority = priority;
@@ -73,7 +81,8 @@ export const getNotifications = async (req, res, next) => {
 
 export const getUnreadCount = async (req, res, next) => {
   try {
-    const count = await Notification.countDocuments({ user: req.user._id, isRead: false });
+    const filter = { user: req.user._id, isRead: false, ...getManagerAllowedFilter(req.user) };
+    const count = await Notification.countDocuments(filter);
     return res.status(200).json({ success: true, unreadCount: count });
   } catch (err) {
     next(err);

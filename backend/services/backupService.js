@@ -425,17 +425,46 @@ export const initBackupSystem = async () => {
 };
 
 /**
+ * Helper: detect ChangeStreamHistoryLost / stale resume point (oplog window exceeded)
+ */
+const isHistoryLostError = (err) => {
+  if (!err) return false;
+  if (err.code === 286) return true;
+  if (err.codeName === 'ChangeStreamHistoryLost') return true;
+  const msg = (err.message || '').toLowerCase();
+  return (
+    msg.includes('resume of change stream was not possible') ||
+    msg.includes('resume point may no longer be in the oplog') ||
+    msg.includes('changestreamhistorylost') ||
+    msg.includes('historylost') ||
+    msg.includes('resume token is no longer valid')
+  );
+};
+
+/**
  * MongoDB Change Stream Watcher with Resume Token Persistence
+ * Single watcher, single error/close listener, single reconnect scheduler
  */
 export const startChangeStreamWatcher = async () => {
-  if (isChangeStreamActive || !mongoose.connection || mongoose.connection.readyState !== 1) {
+  // Ensure only one active watcher - close existing before creating new
+  if (changeStream) {
+    try {
+      await changeStream.close();
+    } catch {}
+    changeStream = null;
+    isChangeStreamActive = false;
+  }
+  if (!mongoose.connection || mongoose.connection.readyState !== 1) {
     return;
+  }
+  if (changeStreamReconnectTimeout) {
+    clearTimeout(changeStreamReconnectTimeout);
+    changeStreamReconnectTimeout = null;
   }
 
   try {
     console.log('[CHANGE STREAM] Initializing MongoDB Change Stream watcher...');
 
-    // Load saved resume token from database
     let resumeTokenDoc = null;
     try {
       resumeTokenDoc = await ChangeStreamToken.findOne({ streamId: 'global_production_stream' }).lean();
@@ -443,35 +472,44 @@ export const startChangeStreamWatcher = async () => {
       console.warn('[CHANGE STREAM] Token lookup warning:', e.message);
     }
 
-    const options = { 
+    const options = {
       fullDocument: 'updateLookup',
       fullDocumentBeforeChange: 'whenAvailable'
     };
     if (resumeTokenDoc && resumeTokenDoc.resumeToken) {
       options.resumeAfter = resumeTokenDoc.resumeToken;
-      console.log('[CHANGE STREAM] Resuming watch from token timestamp:', resumeTokenDoc.lastEventTime);
+      console.log('[CHANGE STREAM] Attempting to resume from token lastEventTime:', resumeTokenDoc.lastEventTime ? new Date(resumeTokenDoc.lastEventTime).toISOString() : 'unknown');
+    } else {
+      console.log('[CHANGE STREAM] No resume token found - starting fresh from current oplog position');
     }
 
-    // Pipeline to filter out internal system collections
-    const pipeline = [
-      {
-        $match: {
-          'ns.coll': { $nin: EXCLUDED_COLLECTIONS }
-        }
-      }
-    ];
+    const pipeline = [{ $match: { 'ns.coll': { $nin: EXCLUDED_COLLECTIONS } } }];
 
+    // Exactly ONE db.watch() per initialization
     changeStream = mongoose.connection.db.watch(pipeline, options);
-    isChangeStreamActive = true;
-    console.log('✓ MongoDB Change Stream Active (Real-Time Protection Enabled)');
 
+    let hasConfirmedOpen = false;
+    const confirmActive = () => {
+      if (!hasConfirmedOpen && changeStream) {
+        hasConfirmedOpen = true;
+        isChangeStreamActive = true;
+        console.log('✓ MongoDB Change Stream Active (Real-Time Protection Enabled)');
+      }
+    };
+    const activeConfirmTimer = setTimeout(() => {
+      if (!hasConfirmedOpen && changeStream) confirmActive();
+    }, 800);
+
+    // Exactly ONE change listener - persists complete resume token
     changeStream.on('change', async (change) => {
+      if (!hasConfirmedOpen) {
+        clearTimeout(activeConfirmTimer);
+        confirmActive();
+      }
       try {
         const collectionName = change.ns.coll;
         const documentId = change.documentKey?._id;
         const resumeToken = change._id;
-
-        // Persist resume token asynchronously
         if (resumeToken) {
           ChangeStreamToken.updateOne(
             { streamId: 'global_production_stream' },
@@ -479,60 +517,79 @@ export const startChangeStreamWatcher = async () => {
             { upsert: true }
           ).catch(() => {});
         }
-
         let operation = 'UPDATE';
         let previousData = change.fullDocumentBeforeChange || null;
         let currentData = change.fullDocument || null;
         let changedFields = [];
-
-        if (change.operationType === 'insert') {
-          operation = 'CREATE';
-        } else if (change.operationType === 'delete') {
-          operation = 'DELETE';
-          currentData = null;
-        } else if (change.operationType === 'update' || change.operationType === 'replace') {
+        if (change.operationType === 'insert') operation = 'CREATE';
+        else if (change.operationType === 'delete') { operation = 'DELETE'; currentData = null; }
+        else if (change.operationType === 'update' || change.operationType === 'replace') {
           operation = 'UPDATE';
-          if (change.updateDescription && change.updateDescription.updatedFields) {
-            changedFields = Object.keys(change.updateDescription.updatedFields);
-          }
+          if (change.updateDescription?.updatedFields) changedFields = Object.keys(change.updateDescription.updatedFields);
         }
-
-        await recordBackupEntry({
-          collectionName,
-          documentId,
-          operation,
-          previousData,
-          currentData,
-          changedFields,
-          source: 'CHANGE_STREAM',
-          resumeToken
-        });
+        await recordBackupEntry({ collectionName, documentId, operation, previousData, currentData, changedFields, source: 'CHANGE_STREAM', resumeToken });
       } catch (err) {
         console.error('[CHANGE STREAM EVENT ERROR]:', err.message);
       }
     });
 
-    changeStream.on('error', (err) => {
+    // Exactly ONE error listener
+    changeStream.on('error', async (err) => {
+      clearTimeout(activeConfirmTimer);
       console.error('[CHANGE STREAM ERROR]:', err.message);
+      hasConfirmedOpen = false;
       isChangeStreamActive = false;
+      try { await changeStream.close(); } catch {}
+      changeStream = null;
+      if (isHistoryLostError(err)) {
+        const staleTime = resumeTokenDoc?.lastEventTime ? new Date(resumeTokenDoc.lastEventTime).toISOString() : 'unknown';
+        console.warn(`[CHANGE STREAM] History lost - resume point ${staleTime} no longer in oplog. Invalidating stale token.`);
+        try {
+          await ChangeStreamToken.deleteOne({ streamId: 'global_production_stream' });
+          console.log('[CHANGE STREAM] Stale resume token retired. Fresh stream will start from current oplog position on next reconnect.');
+        } catch (delErr) {
+          console.warn('[CHANGE STREAM] Failed to retire stale token:', delErr.message);
+        }
+        console.warn('[CHANGE STREAM] Historical events between last checkpoint and now cannot be replayed - oplog window exceeded (expected after extended downtime)');
+      }
       scheduleChangeStreamReconnect();
     });
 
+    // Exactly ONE close listener
     changeStream.on('close', () => {
-      console.warn('[CHANGE STREAM CLOSED]. Scheduling reconnect...');
+      clearTimeout(activeConfirmTimer);
+      if (hasConfirmedOpen || isChangeStreamActive) {
+        console.warn('[CHANGE STREAM CLOSED]. Scheduling reconnect...');
+      } else {
+        console.warn('[CHANGE STREAM CLOSED] before confirmation. Scheduling reconnect...');
+      }
+      hasConfirmedOpen = false;
       isChangeStreamActive = false;
+      changeStream = null;
       scheduleChangeStreamReconnect();
     });
   } catch (err) {
+    if (isHistoryLostError(err)) {
+      console.warn('[CHANGE STREAM INIT] History lost on init - retiring stale token');
+      try { await ChangeStreamToken.deleteOne({ streamId: 'global_production_stream' }); } catch {}
+      console.log('[CHANGE STREAM] Stale token retired on init. Fresh stream will start on next reconnect.');
+      console.warn('[CHANGE STREAM] Historical events cannot be replayed - oplog window exceeded');
+      scheduleChangeStreamReconnect();
+      return;
+    }
     console.warn('[CHANGE STREAM INIT WARN] Change Stream unavailable (e.g. standalone Mongo). Falling back to schema hooks:', err.message);
     isChangeStreamActive = false;
+    changeStream = null;
   }
 };
 
 const scheduleChangeStreamReconnect = () => {
   if (changeStreamReconnectTimeout) clearTimeout(changeStreamReconnectTimeout);
   changeStreamReconnectTimeout = setTimeout(() => {
-    startChangeStreamWatcher().catch(() => {});
+    changeStreamReconnectTimeout = null;
+    startChangeStreamWatcher().catch((err) => {
+      console.warn('[CHANGE STREAM RECONNECT WARN]:', err.message);
+    });
   }, 10000);
 };
 

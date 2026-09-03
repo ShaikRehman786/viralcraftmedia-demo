@@ -10,6 +10,16 @@ import Enquiry from '../models/Enquiry.js';
  */
 export const getDashboardStats = async (req, res, next) => {
   try {
+    const userRole = (req.user?.role || '').toUpperCase();
+    const cacheKey = `analytics:dashboard:${userRole}:${req.user._id}`;
+    const { safeGet, safeSet } = await import('../config/redis.js');
+    try {
+      const cached = await safeGet(cacheKey);
+      if (cached) {
+        return res.status(200).json(JSON.parse(cached));
+      }
+    } catch {}
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -266,7 +276,7 @@ export const getDashboardStats = async (req, res, next) => {
     }
 
     if (req.user.role === 'MANAGER') {
-      return res.status(200).json({
+      const payload = {
         success: true,
         stats: {
           ordersToday,
@@ -285,10 +295,12 @@ export const getDashboardStats = async (req, res, next) => {
           employeeProductivity,
           managerProductivity
         }
-      });
+      };
+      safeSet(cacheKey, JSON.stringify(payload), 60).catch(() => {});
+      return res.status(200).json(payload);
     }
 
-    return res.status(200).json({
+    const payload = {
       success: true,
       stats: {
         totalRevenue,
@@ -312,7 +324,9 @@ export const getDashboardStats = async (req, res, next) => {
         recentOrders,
         referralStats
       }
-    });
+    };
+    safeSet(cacheKey, JSON.stringify(payload), 60).catch(() => {});
+    return res.status(200).json(payload);
   } catch (err) {
     next(err);
   }

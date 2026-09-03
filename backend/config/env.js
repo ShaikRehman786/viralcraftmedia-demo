@@ -185,6 +185,12 @@ export const config = {
   vapidSubject: process.env.VAPID_SUBJECT || 'mailto:contact@viralcraftmedia.com',
 
   // ##################################
+  // REDIS CONFIGURATION (Backend-only, never exposed to frontend)
+  // Optional: If not set, CRM works via MongoDB (graceful fallback)
+  // ##################################
+  redisUrl: process.env.REDIS_URL || '',
+
+  // ##################################
   // EMAILJS CONFIGURATION (Server-side only - Private Key never exposed to frontend)
   // Strict mode requires Private Key as accessToken
   // ##################################

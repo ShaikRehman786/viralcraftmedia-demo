@@ -111,6 +111,8 @@ export async function createNotification({
 
     await notify.save();
     recordNotificationBackup({ notification: notify, receiver: { _id: userId } }).catch(() => {});
+    // Invalidate unread count cache for recipient (Redis failure is non-blocking)
+    import('../config/redis.js').then(({ safeDel }) => safeDel(`notifications:unread:${userId}`).catch(()=>{})).catch(()=>{});
     return notify;
   } catch (err) {
     console.error('Notification creation failed:', err.message);

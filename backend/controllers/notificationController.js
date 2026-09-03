@@ -81,8 +81,17 @@ export const getNotifications = async (req, res, next) => {
 
 export const getUnreadCount = async (req, res, next) => {
   try {
+    const cacheKey = `notifications:unread:${req.user._id}`;
+    const { safeGet, safeSet } = await import('../config/redis.js');
+    try {
+      const cached = await safeGet(cacheKey);
+      if (cached !== null) {
+        return res.status(200).json({ success: true, unreadCount: parseInt(cached, 10) });
+      }
+    } catch {}
     const filter = { user: req.user._id, isRead: false, ...getManagerAllowedFilter(req.user) };
     const count = await Notification.countDocuments(filter);
+    safeSet(cacheKey, String(count), 30).catch(() => {});
     return res.status(200).json({ success: true, unreadCount: count });
   } catch (err) {
     next(err);
@@ -99,6 +108,10 @@ export const markAsRead = async (req, res, next) => {
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
     }
+    try {
+      const { safeDel } = await import('../config/redis.js');
+      await safeDel(`notifications:unread:${req.user._id}`);
+    } catch {}
     return res.status(200).json({ success: true, data: notification });
   } catch (err) {
     next(err);
@@ -111,6 +124,10 @@ export const markAllAsRead = async (req, res, next) => {
       { user: req.user._id, isRead: false },
       { isRead: true, readAt: new Date() }
     );
+    try {
+      const { safeDel } = await import('../config/redis.js');
+      await safeDel(`notifications:unread:${req.user._id}`);
+    } catch {}
     return res.status(200).json({
       success: true,
       message: 'All notifications marked as read',
@@ -131,6 +148,10 @@ export const bulkMarkAsRead = async (req, res, next) => {
       { _id: { $in: ids }, user: req.user._id, isRead: false },
       { isRead: true, readAt: new Date() }
     );
+    try {
+      const { safeDel } = await import('../config/redis.js');
+      await safeDel(`notifications:unread:${req.user._id}`);
+    } catch {}
     return res.status(200).json({
       success: true,
       modifiedCount: result.modifiedCount

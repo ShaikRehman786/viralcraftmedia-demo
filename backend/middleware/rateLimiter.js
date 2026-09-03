@@ -1,4 +1,22 @@
 import rateLimit from 'express-rate-limit';
+import { getRedisForRateLimit } from '../config/redis.js';
+
+// Build Redis stores synchronously at import time (top-level await) so limiters are constructed with correct store from the beginning.
+// If Redis unavailable, store remains undefined -> MemoryStore (fail-safe, never disables). No new connection per request.
+let redisApiStore;
+let redisAuthStore;
+let redisWebhookStore;
+try {
+  const redisClient = await getRedisForRateLimit();
+  if (redisClient) {
+    const { RedisStore } = await import('rate-limit-redis');
+    redisApiStore = new RedisStore({ sendCommand: (...args) => redisClient.call(...args), prefix: 'rl:api:' });
+    redisAuthStore = new RedisStore({ sendCommand: (...args) => redisClient.call(...args), prefix: 'rl:auth:' });
+    redisWebhookStore = new RedisStore({ sendCommand: (...args) => redisClient.call(...args), prefix: 'rl:webhook:' });
+  }
+} catch {
+  // Redis unavailable -> remain on MemoryStore (secure fallback)
+}
 
 // Standard rate limiter for generic API requests
 export const apiLimiter = rateLimit({
@@ -8,7 +26,8 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     error: 'Too many requests from this IP, please try again after 15 minutes'
-  }
+  },
+  store: redisApiStore,
 });
 
 // Stricter rate limiter for authentication routes (login, register, forgot-password)
@@ -19,7 +38,8 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     error: 'Too many authentication attempts, please try again in an hour'
-  }
+  },
+  store: redisAuthStore,
 });
 
 // Webhook rate limiter - strict to prevent flooding and replay abuse
@@ -30,5 +50,6 @@ export const webhookLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     error: 'Too many webhook requests, please try again later'
-  }
+  },
+  store: redisWebhookStore,
 });

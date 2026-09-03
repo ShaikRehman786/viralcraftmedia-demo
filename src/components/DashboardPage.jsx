@@ -508,7 +508,7 @@ export default function DashboardPage() {
         skills: inviteSkills
       });
 
-      const { user: createdUser, invitationToken } = res.data;
+      const { user: createdUser } = res.data;
 
       // Reset
       setInviteName('');
@@ -518,28 +518,12 @@ export default function DashboardPage() {
       setInviteSkills('');
       setShowInviteModal(false);
 
-      // 2. Dispatch EmailJS browser notification from client
-      const registration_link = `${window.location.origin}/register?token=${invitationToken}`;
-      const templateParams = {
-        employee_name: createdUser.name,
-        employee_email: createdUser.email,
-        admin_name: user?.name || 'Administrator',
-        role: createdUser.role,
-        department: createdUser.department || 'N/A',
-        registration_link
-      };
-
-      try {
-        await sendEmailJS(templateParams);
-        // 3. Confirm success
-        await axios.post(`/api/auth/staff/${createdUser._id}/email-sent`);
-        addToast('Invitation sent successfully.', 'success');
-      } catch (emailErr) {
-        // 4. Log failure
-        await axios.post(`/api/auth/staff/${createdUser._id}/email-failed`, {
-          errorDetails: emailErr.message || 'EmailJS failed to deliver'
-        });
-        addToast(`Invitation created, but email dispatch failed: ${emailErr.message}`, 'error');
+      // Backend now sends invitation email securely (private key stays server-side, strict mode)
+      // No browser EmailJS call needed — prevents private key exposure
+      if (res.data.warning) {
+        addToast(res.data.message || 'Invitation created, but email delivery is pending. Use Resend to retry.', 'warning');
+      } else {
+        addToast(res.data.message || 'Invitation sent successfully.', 'success');
       }
 
       // Reload staff

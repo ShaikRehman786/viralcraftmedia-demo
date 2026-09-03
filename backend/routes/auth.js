@@ -19,6 +19,48 @@ import crypto from 'crypto';
 import { sendEmail } from '../services/emailService.js';
 import { config } from '../config/env.js';
 
+// Helper: Send EmailJS invitation securely from backend (private key never exposed to browser)
+// Uses server-side EmailJS REST API with accessToken for strict mode
+async function sendInvitationEmailSecure({ toName, toEmail, adminName, role, department, registrationLink }) {
+  const serviceId = config.emailjsServiceId;
+  const templateId = config.emailjsTemplateId;
+  const publicKey = config.emailjsPublicKey;
+  const privateKey = config.emailjsPrivateKey;
+
+  if (!serviceId || !templateId || !publicKey) {
+    throw new Error('EmailJS not configured (service/template/public key missing)');
+  }
+  if (!privateKey) {
+    throw new Error('EmailJS Private Key not configured for strict mode');
+  }
+
+  const payload = {
+    service_id: serviceId,
+    template_id: templateId,
+    user_id: publicKey,
+    accessToken: privateKey,
+    template_params: {
+      employee_name: toName,
+      employee_email: toEmail,
+      admin_name: adminName,
+      role,
+      department: department || 'N/A',
+      registration_link: registrationLink
+    }
+  };
+
+  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || `EmailJS error ${res.status}`);
+  }
+}
+
 const router = express.Router();
 
 // Public auth routes
@@ -226,12 +268,50 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
       metadata: { invitedBy: req.user.name, invitedUser: name, role: targetRole }
     });
 
-    return res.status(201).json({ 
-      success: true, 
-      message: 'Invitation record created in the database.',
-      user,
-      invitationToken // Raw token returned so frontend can send EmailJS invitation
-    });
+    // Attempt to send invitation email securely from backend (private key stays server-side, strict mode remains enabled)
+    const registrationLink = `${config.appUrl || config.clientUrl || 'http://localhost:5173'}/register?token=${invitationToken}`;
+    try {
+      await sendInvitationEmailSecure({
+        toName: name,
+        toEmail: normalizedEmail,
+        adminName: req.user?.name || 'Administrator',
+        role: targetRole,
+        department: department || 'N/A',
+        registrationLink
+      });
+      user.emailSent = true;
+      await user.save();
+      await logEvent({
+        userId: req.user._id,
+        userName: req.user.name,
+        action: 'EMAIL_SENT',
+        details: { recipientId: user._id, email: user.email, message: 'Invitation email sent via EmailJS (server-side, strict mode)' },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+      return res.status(201).json({ 
+        success: true, 
+        message: 'Invitation sent successfully.',
+        user
+      });
+    } catch (emailErr) {
+      console.error('[EmailJS] Invitation send failed:', emailErr.message);
+      // Keep invitation record - do not delete user; frontend will show safe error and allow Resend
+      await logEvent({
+        userId: req.user._id,
+        userName: req.user.name,
+        action: 'EMAIL_FAILED',
+        details: { recipientId: user._id, email: user.email, error: emailErr.message },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+      return res.status(201).json({ 
+        success: true, 
+        message: 'Invitation created, but email could not be sent. Please try Resend.',
+        user,
+        warning: 'Email delivery failed - use Resend to retry'
+      });
+    }
   } catch (err) {
     next(err);
   }
@@ -328,36 +408,18 @@ router.post('/staff/:staffId/resend', protect, authorize('SUPER_ADMIN'), async (
     await user.save();
 
     // Build registration URL
-    const registration_link = `${config.appUrl || 'http://localhost:5173'}/register?token=${invitationToken}`;
+    const registration_link = `${config.appUrl || config.clientUrl || 'http://localhost:5173'}/register?token=${invitationToken}`;
 
-    // Send invitation email using EmailJS REST API
-    const emailjsData = {
-      service_id: process.env.VITE_EMAILJS_SERVICE_ID,
-      template_id: process.env.VITE_EMAILJS_TEMPLATE_ID,
-      user_id: process.env.VITE_EMAILJS_PUBLIC_KEY,
-      template_params: {
-        employee_name: user.name,
-        employee_email: user.email,
-        admin_name: req.user?.name || 'Administrator',
+    // Send invitation email using EmailJS REST API (server-side, strict mode with private key)
+    try {
+      await sendInvitationEmailSecure({
+        toName: user.name,
+        toEmail: user.email,
+        adminName: req.user?.name || 'Administrator',
         role: user.role,
         department: user.department || 'N/A',
-        registration_link
-      }
-    };
-
-    try {
-      const emailjsResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(emailjsData)
+        registrationLink: registration_link
       });
-
-      if (!emailjsResponse.ok) {
-        const errorText = await emailjsResponse.text();
-        throw new Error(errorText || 'EmailJS returned error status: ' + emailjsResponse.status);
-      }
 
       // Mark email as successfully sent
       user.emailSent = true;

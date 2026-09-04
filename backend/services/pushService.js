@@ -207,7 +207,8 @@ export async function unsubscribe(endpoint) {
   try {
     await PushSubscription.findOneAndUpdate(
       { endpoint },
-      { active: false }
+      { active: false },
+      { returnDocument: 'after' }
     );
     return true;
   } catch (err) {

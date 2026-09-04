@@ -281,38 +281,25 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
 
-    // Establish WebSocket listener
+    // Establish WebSocket listener — single connection, debounced refresh to avoid API storm
     const socket = io(getSocketUrl(), {
-      withCredentials: true
+      withCredentials: true,
+      transports: ['websocket', 'polling']
     });
+
+    // Debounce dashboard refreshes (multiple rapid broadcasts coalesce to one fetch)
+    let debounceTimer = null;
+    const debouncedRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => refreshAllData(), 1200);
+    };
 
     // Register user
     socket.emit('register', user._id);
 
-    // Listen to real-time events
-    socket.on('Project Created', () => {
-      refreshAllData();
-    });
-
-    socket.on('project-created', () => {
-      refreshAllData();
-    });
-
-    socket.on('Task Created', () => {
-      refreshAllData();
-    });
-
-    socket.on('task-created', () => {
-      refreshAllData();
-    });
-
-    socket.on('Dashboard Updated', () => {
-      refreshAllData();
-    });
-
-    socket.on('dashboard-update', () => {
-      refreshAllData();
-    });
+    // Consolidated listeners (avoid 6 duplicate refresh triggers)
+    const refreshEvents = ['Project Created', 'project-created', 'Task Created', 'task-created', 'Dashboard Updated', 'dashboard-update'];
+    refreshEvents.forEach(ev => socket.on(ev, debouncedRefresh));
 
     socket.on('new_notification', (notification) => {
       setNotifications(prev => [notification, ...prev]);
@@ -351,9 +338,11 @@ export default function DashboardPage() {
     }
     
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      refreshEvents.forEach(ev => socket.off(ev, debouncedRefresh));
       socket.disconnect();
     };
-  }, [user]);
+  }, [user, refreshAllData]);
 
   // Load chat messages when active project chat drawer opens
   useEffect(() => {

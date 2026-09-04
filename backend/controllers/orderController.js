@@ -86,24 +86,30 @@ export const createOrder = async (req, res, next) => {
     });
     await payment.save();
 
-    await logEvent({
-      action: 'PAYMENT_ATTEMPT',
-      details: { razorpayOrderId: rzpOrder.id, amount: verifiedAmount }
+    // PERFORMANCE: Return Razorpay order immediately so checkout can open without waiting for notifications/audit
+    const _createOrderResponseId = rzpOrder.id;
+    res.status(200).json({ orderId: _createOrderResponseId });
+
+    // Background: audit + staff notification (non-blocking, never delay checkout)
+    setImmediate(() => {
+      const ioDispatcherBg = req.app.get('socketio_dispatch');
+      logEvent({
+        action: 'PAYMENT_ATTEMPT',
+        details: { razorpayOrderId: _createOrderResponseId, amount: verifiedAmount }
+      }).catch(() => {});
+      notifyStaff({
+        title: 'Payment Started',
+        message: `${req.body.name || 'A customer'} started a payment of ₹${verifiedAmount} for ${req.body.platform || 'video editing'}.`,
+        type: 'info',
+        priority: 'high',
+        referenceId: _createOrderResponseId,
+        referenceModel: 'Payment',
+        dispatcher: ioDispatcherBg,
+        metadata: { amount: verifiedAmount, customerName: req.body.name || 'Anonymous' }
+      }).catch(() => {});
     });
 
-    const ioDispatcher = req.app.get('socketio_dispatch');
-    await notifyStaff({
-      title: 'Payment Started',
-      message: `${req.body.name || 'A customer'} started a payment of ₹${verifiedAmount} for ${req.body.platform || 'video editing'}.`,
-      type: 'info',
-      priority: 'high',
-      referenceId: rzpOrder.id,
-      referenceModel: 'Payment',
-      dispatcher: ioDispatcher,
-      metadata: { amount: verifiedAmount, customerName: req.body.name || 'Anonymous' }
-    });
-
-    return res.status(200).json({ orderId: rzpOrder.id });
+    return;
   } catch (err) {
     next(err);
   }
@@ -192,231 +198,219 @@ export const verifyPayment = async (req, res, next) => {
     payment.orderId = orderId;
     await payment.save();
 
-    // Update existing lead with payment linkage - ONE lead per journey (no new Enquiry)
-    // Find the authoritative Enquiry for this customer journey
-    let linkedEnquiry = null;
-    const enquiryIdFromBody = req.body.enquiryId ? String(req.body.enquiryId).trim() : '';
-    const enquiryIdFromPayment = payment ? payment.enquiryId : '';
-    const targetEnquiryId = enquiryIdFromBody || enquiryIdFromPayment || '';
-    if (targetEnquiryId) {
-      linkedEnquiry = await Enquiry.findOne({ enquiryId: targetEnquiryId });
-    }
-    if (!linkedEnquiry) {
-      // Fallback: latest pending enquiry for this phone within 24h (same journey)
-      linkedEnquiry = await Enquiry.findOne({ phone: contact, status: 'pending_review' }).sort({ createdAt: -1 });
-      if (!linkedEnquiry) {
-        linkedEnquiry = await Enquiry.findOne({ phone: contact }).sort({ createdAt: -1 });
-      }
-    }
-    if (linkedEnquiry) {
-      // Link Order and Payment to same Enquiry for data consistency
-      const ordToLink = await Order.findOne({ orderId });
-      if (ordToLink) {
-        ordToLink.enquiry = linkedEnquiry._id;
-        ordToLink.enquiryId = linkedEnquiry.enquiryId;
-        await ordToLink.save().catch(() => {});
-      }
-      // Ensure payment also linked
-      if (payment) {
-        payment.enquiry = linkedEnquiry._id;
-        payment.enquiryId = linkedEnquiry.enquiryId;
-        await payment.save().catch(() => {});
-      }
-      // Update Enquiry timeline - single source of truth
-      linkedEnquiry.timeline.push({ activity: `Payment PAID - Order ${orderId}, Payment ${razorpay_payment_id}, Amount ₹${amount}` });
-      await linkedEnquiry.save().catch(() => {});
-
-      // Handle referral ONLY if valid and Enquiry is currently organic
-      // Do NOT create new Enquiry - update existing only when valid referral chain exists
-      let referralAttribution = null;
-      if (req.cookies && req.cookies.referral_partner_campaign) {
-        try {
-          referralAttribution = typeof req.cookies.referral_partner_campaign === 'string'
-            ? JSON.parse(req.cookies.referral_partner_campaign)
-            : req.cookies.referral_partner_campaign;
-        } catch {}
-      }
-      if (!referralAttribution && req.body.referralDetails) {
-        referralAttribution = req.body.referralDetails;
-      }
-      // Only process referral if Enquiry is not already a referral and attribution present
-      if (!linkedEnquiry.referral.isReferral && referralAttribution && (referralAttribution.campaignId || referralAttribution.referralCode)) {
-        try {
-          let campaign = null;
-          let partner = null;
-          if (referralAttribution.campaignId) {
-            campaign = await ReferralCampaign.findById(referralAttribution.campaignId);
-          } else if (referralAttribution.referralCode) {
-            campaign = await ReferralCampaign.findOne({ referralCode: referralAttribution.referralCode });
-          }
-          if (campaign) {
-            const now = new Date();
-            const isCampaignActive = campaign.status === 'ACTIVE';
-            const isCampaignNotExpired = campaign.expiryDate && new Date(campaign.expiryDate) > now;
-            if (campaign.partner) {
-              partner = await Partner.findById(campaign.partner);
-            }
-            const isPartnerActive = partner && partner.status === 'ACTIVE';
-            let visit = false;
-            if (campaign && partner && referralAttribution.visitorId) {
-              visit = await ReferralVisit.exists({ campaign: campaign._id, partner: partner._id, visitorId: referralAttribution.visitorId });
-            }
-            const referralValid = Boolean(campaign && isCampaignActive && isCampaignNotExpired && partner && isPartnerActive && visit);
-            if (referralValid && campaign && partner) {
-              // Update existing Enquiry's referral to valid partner attribution
-              linkedEnquiry.referral = {
-                isReferral: true,
-                partnerId: partner._id,
-                campaignId: campaign._id,
-                referralCode: campaign.referralCode,
-                campaignName: campaign.campaignName,
-                partnerAgency: partner.agencyName,
-                landingPage: campaign.landingPage || campaign.targetRoute || '/',
-                visitorId: referralAttribution.visitorId || '',
-                referralSource: 'referral',
-                clickedAt: referralAttribution.clickedAt ? new Date(referralAttribution.clickedAt) : new Date(),
-                submittedAt: new Date(),
-                referralStatus: 'Pending'
-              };
-              await linkedEnquiry.save().catch(() => {});
-
-              // Create ReferralBooking linked to SAME Enquiry
-              await ReferralBooking.create({
-                partner: partner._id,
-                campaign: campaign._id,
-                enquiry: linkedEnquiry._id,
-                clientName: name,
-                email: email || '',
-                phone: contact,
-                service: serviceType || 'Clip Editing',
-                referralTimestamp: referralAttribution.clickedAt ? new Date(referralAttribution.clickedAt) : new Date(),
-                status: 'Pending'
-              }).catch(() => {});
-
-              // Update Project referral to match SAME partner/campaign
-              if (project) {
-                project.referral = {
-                  isReferral: true,
-                  partnerId: partner._id,
-                  campaignId: campaign._id,
-                  enquiryId: linkedEnquiry._id,
-                  partnerAgency: partner.agencyName,
-                  campaignName: campaign.campaignName,
-                  referralCode: campaign.referralCode
-                };
-                project.source = 'Partner Referral';
-                await project.save().catch(() => {});
-              }
-
-              // Notify partner and admins (linked to same enquiryId)
-              try {
-                const admins = await User.find({ role: 'SUPER_ADMIN' });
-                for (const admin of admins) {
-                  const adminNotify = new Notification({
-                    user: admin._id,
-                    userModel: 'User',
-                    title: 'New Referral Booking',
-                    message: `New booking for "${serviceType || 'Clip Editing'}" by ${name} attributed to partner campaign "${campaign.campaignName}" (Lead ${linkedEnquiry.enquiryId}).`,
-                    type: 'success',
-                    priority: 'high',
-                    icon: 'Award',
-                    actionUrl: '/admin?tab=referrals'
-                  });
-                  await adminNotify.save().catch(() => {});
-                }
-                const partnerNotify = new Notification({
-                  user: partner._id,
-                  userModel: 'Partner',
-                  title: 'New Referral Lead Attributed',
-                  message: `A new referral lead for "${serviceType || 'Clip Editing'}" by ${name} has been attributed to your campaign "${campaign.campaignName}" (Lead ${linkedEnquiry.enquiryId}).`,
-                  type: 'success',
-                  priority: 'high',
-                  icon: 'Award',
-                  actionUrl: '/partner/commissions'
-                });
-                await partnerNotify.save().catch(() => {});
-                const dispatch = req.app.get('socketio_dispatch');
-                if (dispatch) dispatch(partner._id.toString(), 'commission-updated', { partnerId: partner._id });
-              } catch {}
-            }
-          }
-        } catch (refErr) {
-          console.error('[Referral Integration] Failed to execute referral workflow on existing lead:', refErr.message);
-        }
-      } else if (linkedEnquiry.referral.isReferral && project) {
-        // Existing referral Enquiry already has valid attribution - ensure Project matches SAME partner
-        project.referral = {
-          isReferral: true,
-          partnerId: linkedEnquiry.referral.partnerId,
-          campaignId: linkedEnquiry.referral.campaignId,
-          enquiryId: linkedEnquiry._id,
-          partnerAgency: linkedEnquiry.referral.partnerAgency || '',
-          campaignName: linkedEnquiry.referral.campaignName || '',
-          referralCode: linkedEnquiry.referral.referralCode || ''
-        };
-        project.source = 'Partner Referral';
-        await project.save().catch(() => {});
-      }
-    }
-
-    const payoutDispatcher = req.app.get('socketio_dispatch');
-    await notifyStaff({
-      title: 'Payment Received',
-      message: `₹${amount} received from ${name} for ${serviceType || 'video editing'}. (Lead ${linkedEnquiry ? linkedEnquiry.enquiryId : 'N/A'})`,
-      type: 'success',
-      priority: 'high',
-      referenceId: linkedEnquiry ? linkedEnquiry.enquiryId : orderId,
-      referenceModel: linkedEnquiry ? 'Enquiry' : 'Order',
-      actionUrl: '/admin?tab=payments',
-      dispatcher: payoutDispatcher,
-      metadata: { amount, customerName: name, paymentId: razorpay_payment_id, service: serviceType, enquiryId: linkedEnquiry ? linkedEnquiry.enquiryId : undefined, orderId }
-    });
-
-    // 5. Generate Chronological PDF Invoice base64 for client
-    const invoiceNum = orderId.replace('VCM-', 'VCM-INV-');
-    const formattedInvoiceDate = new Date().toLocaleDateString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-
-    let pdfBase64 = '';
-    try {
-      const pdfResult = await generateInvoicePdf({
-        orderId,
-        invoiceNumber: invoiceNum,
-        paymentId: razorpay_payment_id,
-        orderDate: formattedInvoiceDate,
-        name,
-        contact,
-        email: email || '',
-        service: 'Premium Video Clipping',
-        platform,
-        clipCount,
-        duration: '30-40s',
-        instructions,
-        amount,
-        razorpayOrderId: razorpay_order_id,
-        language: 'English'
-      });
-      pdfBase64 = pdfResult.base64;
-
-      // Save invoice base64 URL to order
-      const ordObj = await Order.findOne({ orderId });
-      if (ordObj) {
-        ordObj.invoiceUrl = `data:application/pdf;base64,${pdfBase64}`;
-        await ordObj.save();
-      }
-    } catch (pdfErr) {
-      console.error('Invoice generation failed in verify controller:', pdfErr.message);
-    }
-
-    return res.status(200).json({
+    // PERFORMANCE: Return success immediately — customer sees confirmation before heavy post-processing
+    // Critical data (Payment captured, Order/Project/Tasks created) already persisted in MongoDB
+    res.status(200).json({
       success: true,
       orderId,
-      pdfBase64
+      pdfBase64: '' // Invoice generated in background; frontend can request separately if needed
     });
+
+    // Background: enquiry linkage, referral, notifications, PDF invoice (non-blocking)
+    setImmediate(async () => {
+      let _linkedEnquiry = null;
+      try {
+        const enquiryIdFromBody = req.body.enquiryId ? String(req.body.enquiryId).trim() : '';
+        const enquiryIdFromPayment = payment ? payment.enquiryId : '';
+        const targetEnquiryId = enquiryIdFromBody || enquiryIdFromPayment || '';
+        if (targetEnquiryId) {
+          _linkedEnquiry = await Enquiry.findOne({ enquiryId: targetEnquiryId });
+        }
+        if (!_linkedEnquiry) {
+          _linkedEnquiry = await Enquiry.findOne({ phone: contact, status: 'pending_review' }).sort({ createdAt: -1 });
+          if (!_linkedEnquiry) {
+            _linkedEnquiry = await Enquiry.findOne({ phone: contact }).sort({ createdAt: -1 });
+          }
+        }
+        if (_linkedEnquiry) {
+          const ordToLink = await Order.findOne({ orderId });
+          if (ordToLink) {
+            ordToLink.enquiry = _linkedEnquiry._id;
+            ordToLink.enquiryId = _linkedEnquiry.enquiryId;
+            await ordToLink.save().catch(() => {});
+          }
+          if (payment) {
+            payment.enquiry = _linkedEnquiry._id;
+            payment.enquiryId = _linkedEnquiry.enquiryId;
+            await payment.save().catch(() => {});
+          }
+          _linkedEnquiry.timeline.push({ activity: `Payment PAID - Order ${orderId}, Payment ${razorpay_payment_id}, Amount ₹${amount}` });
+          await _linkedEnquiry.save().catch(() => {});
+
+          let referralAttribution = null;
+          if (req.cookies && req.cookies.referral_partner_campaign) {
+            try {
+              referralAttribution = typeof req.cookies.referral_partner_campaign === 'string'
+                ? JSON.parse(req.cookies.referral_partner_campaign)
+                : req.cookies.referral_partner_campaign;
+            } catch {}
+          }
+          if (!referralAttribution && req.body.referralDetails) {
+            referralAttribution = req.body.referralDetails;
+          }
+          if (!_linkedEnquiry.referral.isReferral && referralAttribution && (referralAttribution.campaignId || referralAttribution.referralCode)) {
+            try {
+              let campaign = null;
+              let partner = null;
+              if (referralAttribution.campaignId) {
+                campaign = await ReferralCampaign.findById(referralAttribution.campaignId);
+              } else if (referralAttribution.referralCode) {
+                campaign = await ReferralCampaign.findOne({ referralCode: referralAttribution.referralCode });
+              }
+              if (campaign) {
+                const now = new Date();
+                const isCampaignActive = campaign.status === 'ACTIVE';
+                const isCampaignNotExpired = campaign.expiryDate && new Date(campaign.expiryDate) > now;
+                if (campaign.partner) partner = await Partner.findById(campaign.partner);
+                const isPartnerActive = partner && partner.status === 'ACTIVE';
+                let visit = false;
+                if (campaign && partner && referralAttribution.visitorId) {
+                  visit = await ReferralVisit.exists({ campaign: campaign._id, partner: partner._id, visitorId: referralAttribution.visitorId });
+                }
+                const referralValid = Boolean(campaign && isCampaignActive && isCampaignNotExpired && partner && isPartnerActive && visit);
+                if (referralValid && campaign && partner) {
+                  _linkedEnquiry.referral = {
+                    isReferral: true,
+                    partnerId: partner._id,
+                    campaignId: campaign._id,
+                    referralCode: campaign.referralCode,
+                    campaignName: campaign.campaignName,
+                    partnerAgency: partner.agencyName,
+                    landingPage: campaign.landingPage || campaign.targetRoute || '/',
+                    visitorId: referralAttribution.visitorId || '',
+                    referralSource: 'referral',
+                    clickedAt: referralAttribution.clickedAt ? new Date(referralAttribution.clickedAt) : new Date(),
+                    submittedAt: new Date(),
+                    referralStatus: 'Pending'
+                  };
+                  await _linkedEnquiry.save().catch(() => {});
+                  await ReferralBooking.create({
+                    partner: partner._id,
+                    campaign: campaign._id,
+                    enquiry: _linkedEnquiry._id,
+                    clientName: name,
+                    email: email || '',
+                    phone: contact,
+                    service: serviceType || 'Clip Editing',
+                    referralTimestamp: referralAttribution.clickedAt ? new Date(referralAttribution.clickedAt) : new Date(),
+                    status: 'Pending'
+                  }).catch(() => {});
+                  if (project) {
+                    await Project.findByIdAndUpdate(project._id, {
+                      referral: {
+                        isReferral: true,
+                        partnerId: partner._id,
+                        campaignId: campaign._id,
+                        enquiryId: _linkedEnquiry._id,
+                        partnerAgency: partner.agencyName,
+                        campaignName: campaign.campaignName,
+                        referralCode: campaign.referralCode
+                      },
+                      source: 'Partner Referral'
+                    }).catch(() => {});
+                  }
+                  try {
+                    const admins = await User.find({ role: 'SUPER_ADMIN' }).select('_id').lean();
+                    for (const admin of admins) {
+                      const adminNotify = new Notification({
+                        user: admin._id,
+                        userModel: 'User',
+                        title: 'New Referral Booking',
+                        message: `New booking for "${serviceType || 'Clip Editing'}" by ${name} attributed to partner campaign "${campaign.campaignName}" (Lead ${_linkedEnquiry.enquiryId}).`,
+                        type: 'success',
+                        priority: 'high',
+                        icon: 'Award',
+                        actionUrl: '/admin?tab=referrals'
+                      });
+                      await adminNotify.save().catch(() => {});
+                    }
+                    const partnerNotify = new Notification({
+                      user: partner._id,
+                      userModel: 'Partner',
+                      title: 'New Referral Lead Attributed',
+                      message: `A new referral lead for "${serviceType || 'Clip Editing'}" by ${name} has been attributed to your campaign "${campaign.campaignName}" (Lead ${_linkedEnquiry.enquiryId}).`,
+                      type: 'success',
+                      priority: 'high',
+                      icon: 'Award',
+                      actionUrl: '/partner/commissions'
+                    });
+                    await partnerNotify.save().catch(() => {});
+                    const dispatch = req.app.get('socketio_dispatch');
+                    if (dispatch) try { dispatch(partner._id.toString(), 'commission-updated', { partnerId: partner._id }); } catch {}
+                  } catch {}
+                }
+              }
+            } catch (refErr) {
+              console.error('[Referral Integration] Background failed:', refErr.message);
+            }
+          } else if (_linkedEnquiry.referral.isReferral && project) {
+            await Project.findByIdAndUpdate(project._id, {
+              referral: {
+                isReferral: true,
+                partnerId: _linkedEnquiry.referral.partnerId,
+                campaignId: _linkedEnquiry.referral.campaignId,
+                enquiryId: _linkedEnquiry._id,
+                partnerAgency: _linkedEnquiry.referral.partnerAgency || '',
+                campaignName: _linkedEnquiry.referral.campaignName || '',
+                referralCode: _linkedEnquiry.referral.referralCode || ''
+              },
+              source: 'Partner Referral'
+            }).catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.error('[verifyPayment bg] Enquiry linkage failed:', e.message);
+      }
+
+      // Payment-received notification (staff) — background
+      try {
+        const payoutDispatcher = req.app.get('socketio_dispatch');
+        await notifyStaff({
+          title: 'Payment Received',
+          message: `₹${amount} received from ${name} for ${serviceType || 'video editing'}. (Lead ${_linkedEnquiry ? _linkedEnquiry.enquiryId : 'N/A'})`,
+          type: 'success',
+          priority: 'high',
+          referenceId: _linkedEnquiry ? _linkedEnquiry.enquiryId : orderId,
+          referenceModel: _linkedEnquiry ? 'Enquiry' : 'Order',
+          actionUrl: '/admin?tab=payments',
+          dispatcher: payoutDispatcher,
+          metadata: { amount, customerName: name, paymentId: razorpay_payment_id, service: serviceType, enquiryId: _linkedEnquiry ? _linkedEnquiry.enquiryId : undefined, orderId }
+        }).catch(() => {});
+      } catch {}
+
+      // Invoice PDF generation — background (CPU/network heavy, never block customer response)
+      try {
+        const invoiceNum = orderId.replace('VCM-', 'VCM-INV-');
+        const formattedInvoiceDate = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const pdfResult = await generateInvoicePdf({
+          orderId,
+          invoiceNumber: invoiceNum,
+          paymentId: razorpay_payment_id,
+          orderDate: formattedInvoiceDate,
+          name,
+          contact,
+          email: email || '',
+          service: 'Premium Video Clipping',
+          platform,
+          clipCount,
+          duration: '30-40s',
+          instructions,
+          amount,
+          razorpayOrderId: razorpay_order_id,
+          language: 'English'
+        });
+        const pdfBase64Bg = pdfResult.base64;
+        const ordObj = await Order.findOne({ orderId });
+        if (ordObj) {
+          ordObj.invoiceUrl = `data:application/pdf;base64,${pdfBase64Bg}`;
+          await ordObj.save().catch(() => {});
+        }
+      } catch (pdfErr) {
+        console.error('Background invoice generation failed:', pdfErr.message);
+      }
+    });
+
+    return;
   } catch (err) {
     next(err);
   }
@@ -496,7 +490,8 @@ export const handleRazorpayWebhook = async (req, res, next) => {
         if (!existingPayment || existingPayment.status !== 'captured') {
           await Payment.findOneAndUpdate(
             { razorpayPaymentId },
-            { status: 'failed' }
+            { status: 'failed' },
+            { returnDocument: 'after' }
           );
         }
         await logEvent({
@@ -510,7 +505,8 @@ export const handleRazorpayWebhook = async (req, res, next) => {
         if (!existingPayment || existingPayment.status !== 'refunded') {
           await Payment.findOneAndUpdate(
             { razorpayPaymentId },
-            { status: 'refunded' }
+            { status: 'refunded' },
+            { returnDocument: 'after' }
           );
 
           // Also update the linked order
@@ -518,7 +514,8 @@ export const handleRazorpayWebhook = async (req, res, next) => {
           if (refundedPayment?.orderId) {
             await Order.findOneAndUpdate(
               { orderId: refundedPayment.orderId },
-              { paymentStatus: 'refunded' }
+              { paymentStatus: 'refunded' },
+              { returnDocument: 'after' }
             );
           }
         }

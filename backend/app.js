@@ -9,6 +9,9 @@ import { preventMongoInjection, sanitizeObject, validateCsrfToken } from './midd
 import errorHandler from './middleware/error.js';
 
 const app = express();
+// Trust Render proxy (fixes ERR_ERL_UNEXPECTED_X_FORWARDED_FOR while preserving IP correctness)
+// Render terminates TLS and forwards via X-Forwarded-For; trust only 1 hop prevents spoofing
+app.set('trust proxy', 1);
 app.use(compression());
 
 // Security Headers via Helmet - enterprise hardening (CSP must allow Razorpay checkout)

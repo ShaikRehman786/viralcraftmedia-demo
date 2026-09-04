@@ -283,13 +283,14 @@ export default function PodcastEditingPage() {
           overflow: 'hidden',
           background: '#0B0B0C'
         }}>
-          {/* Background Video */}
+          {/* Background Video — lazy poster, metadata preload to avoid blocking mobile LCP */}
           <video
             autoPlay
             muted
             loop
             playsInline
-            preload="auto"
+            preload="metadata"
+            poster="/podcast_editing_bg.png"
             className="podcast-video-bg"
           >
             <source src="/pod_service1.mp4" type="video/mp4" />

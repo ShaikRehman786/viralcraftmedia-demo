@@ -118,11 +118,15 @@ export default function ClipEditingPage() {
   const handlePay = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+    if (status === 'loading') return;
     setStatus('loading');
     setPayId('');
     try {
-      const cRes = await axios.get('/api/config');
-      const oRes = await axios.post('/api/create-order', { amount: price });
+      // Parallelize config + order (saves waterfall) + clipCount for tamper-proof pricing
+      const [cRes, oRes] = await Promise.all([
+        axios.get('/api/config'),
+        axios.post('/api/create-order', { amount: price, clipCount: jobs })
+      ]);
       
       if (typeof window.Razorpay === 'undefined') {
         throw new Error('Razorpay checkout SDK failed to load.');
@@ -193,6 +197,7 @@ export default function ClipEditingPage() {
   const handleSendQuery = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+    if (status === 'loading') return;
     setStatus('loading');
     try {
       await axios.post('/api/enquiries', {

@@ -243,13 +243,14 @@ export default function MarketingPage() {
 
         {/* 1. EDITORIAL HERO — Left-aligned */}
         <section className="sp-hero">
-          {/* Background Video */}
+          {/* Background Video — metadata preload + poster to avoid mobile LCP blocking */}
           <video
             autoPlay
             muted
             loop
             playsInline
-            preload="auto"
+            preload="metadata"
+            poster="/social_marketing_bg.png"
             className="marketing-video-bg"
           >
             <source src="/market_service.mp4" type="video/mp4" />

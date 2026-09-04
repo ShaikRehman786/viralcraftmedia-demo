@@ -59,28 +59,32 @@ function ReelVideo({ src }) {
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-
+    // Respect reduced-motion: don't autoplay heavy videos
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) {
         setInView(true);
         observer.disconnect();
       }
-    }, { rootMargin: '100px' });
-
+    }, { rootMargin: '200px' });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
+  // Mobile: avoid decoding 10 videos at once; only load when in viewport
   return (
     <video
       ref={videoRef}
       src={inView ? src : undefined}
-      preload="metadata"
-      autoPlay
+      preload="none"
+      autoPlay={inView}
       muted
       loop
       playsInline
+      disablePictureInPicture
+      poster="/website header.png"
       className="reel-video-element"
+      style={{ contentVisibility: 'auto' }}
     />
   );
 }
@@ -89,21 +93,49 @@ function useSmoothScroll(ref, speed, initialOffset = 0) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Mobile perf: disable continuous RAF on small screens / reduced-motion
+    const isMobile = window.innerWidth < 768;
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced || (isMobile && speed > 0.3)) {
+      // On mobile, keep static to avoid 60fps JS + 10 video decodes
+      el.style.transform = `translate3d(0, ${initialOffset}px, 0)`;
+      return;
+    }
     let y = initialOffset;
     let running = false;
     let frameId;
-
-    const getSetHeight = () => {
+    let cachedSetH = 0;
+    const calcSetHeight = () => {
       const firstSet = el.querySelector('.showcase-set');
-      return firstSet ? firstSet.offsetHeight : el.scrollHeight / 2;
+      cachedSetH = firstSet ? firstSet.offsetHeight : el.scrollHeight / 2;
     };
+    calcSetHeight();
+    // Cache height via ResizeObserver instead of per-frame offsetHeight (layout thrash)
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => calcSetHeight());
+      const firstSet = el.querySelector('.showcase-set');
+      if (firstSet) ro.observe(firstSet);
+    } else {
+      window.addEventListener('resize', calcSetHeight, { passive: true });
+    }
 
-    const animate = () => {
+    let lastTs = 0;
+    const targetInterval = isMobile ? 33 : 16; // 30fps mobile, 60fps desktop
+    const animate = (ts) => {
       if (!running) return;
+      if (ts - lastTs < targetInterval) {
+        frameId = requestAnimationFrame(animate);
+        return;
+      }
+      lastTs = ts;
+      if (document.hidden) {
+        frameId = requestAnimationFrame(animate);
+        return;
+      }
       y -= speed;
-      const setH = getSetHeight();
-      if (setH > 0 && Math.abs(y) >= setH) {
-        y += setH;
+      if (cachedSetH > 0 && Math.abs(y) >= cachedSetH) {
+        y += cachedSetH;
       }
       el.style.transform = `translate3d(0, ${y}px, 0)`;
       frameId = requestAnimationFrame(animate);
@@ -130,10 +162,29 @@ function useSmoothScroll(ref, speed, initialOffset = 0) {
       frameId = requestAnimationFrame(animate);
     }
 
+    const onVis = () => {
+      if (document.hidden && frameId) {
+        running = false;
+        cancelAnimationFrame(frameId);
+      } else if (!document.hidden && !running && heroSection) {
+        // resume if still intersecting
+        const rect = heroSection.getBoundingClientRect();
+        const inView = rect.top < window.innerHeight && rect.bottom > 0;
+        if (inView) {
+          running = true;
+          frameId = requestAnimationFrame(animate);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+
     return () => {
       running = false;
       if (frameId) cancelAnimationFrame(frameId);
       if (observer) observer.disconnect();
+      if (ro) ro.disconnect();
+      else window.removeEventListener('resize', calcSetHeight);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [ref, speed, initialOffset]);
 }
@@ -423,6 +474,7 @@ export default function LandingPage() {
   const sendQuery = async (e) => {
     e.preventDefault();
     if (!validate()) { toast('Please fix form errors', 'error'); return; }
+    if (status === 'loading') return; // idempotency: prevent double taps
     setStatus('loading');
     try {
       const res = await fetch(`${API_BASE}/api/enquiries`, {
@@ -441,11 +493,8 @@ export default function LandingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Submission failed');
 
-      // Still post to Google Form for backwards compatibility
-      try {
-        await submitQuery();
-      } catch (gErr) {
-      }
+      // Google Form backwards compatibility — fire-and-forget (never block customer success)
+      submitQuery().catch(() => {});
 
       const oid = data.orderId || '';
       setVcmId(oid);
@@ -460,11 +509,11 @@ export default function LandingPage() {
   const handlePay = async (e) => {
     e.preventDefault();
     if (!validate()) { toast('Please fix form errors', 'error'); return; }
+    if (status === 'loading') return; // idempotency: prevent double taps / mobile double-click
     setStatus('loading');
     setPayId('');
     try {
       // Persist customer details BEFORE payment - ONE lead per journey (idempotent)
-      // Captures enquiryId and reuses it for payment linkage to prevent duplicate leads
       let activeEnquiryId = enquiryId;
       try {
         if (!activeEnquiryId) {
@@ -485,9 +534,7 @@ export default function LandingPage() {
           if (enqRes.ok && enqData.enquiryId) {
             activeEnquiryId = enqData.enquiryId;
             setEnquiryId(activeEnquiryId);
-            // Clear referral attribution after ONE lead creation - prevents next direct booking in same browser from being misattributed
             try { clearReferralAttribution(); } catch {}
-            // Also clear the cookie via expiry (backend already clears cookie, but ensure client fallback cleared)
           } else if (!enqRes.ok) {
             console.warn('Pre-payment enquiry save response not ok:', enqData.error);
           }
@@ -496,13 +543,31 @@ export default function LandingPage() {
         console.warn('Pre-payment enquiry save failed (non-blocking):', preErr.message);
       }
       toast('Creating order...', 'info');
-      const cRes = await fetch(`${API_BASE}/api/config`);
+      // PERFORMANCE: Parallelize config + create-order (saves ~150-300ms vs sequential)
+      const [cRes, oRes] = await Promise.all([
+        fetch(`${API_BASE}/api/config`),
+        fetch(`${API_BASE}/api/create-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: price, clipCount: jobs, enquiryId: activeEnquiryId }) })
+      ]);
       if (!cRes.ok) throw new Error('Config fetch failed');
+      if (!oRes.ok) {
+        const errBody = await oRes.json().catch(() => ({}));
+        throw new Error(errBody.error || 'Order creation failed');
+      }
       const cData = await cRes.json();
-      const oRes = await fetch(`${API_BASE}/api/create-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: price, clipCount: jobs, enquiryId: activeEnquiryId }) });
-      if (!oRes.ok) throw new Error('Order creation failed');
       const oData = await oRes.json();
-      if (typeof window.Razorpay === 'undefined') throw new Error('Razorpay unavailable');
+      if (typeof window.Razorpay === 'undefined') {
+        // Lazy-load Razorpay if async script not yet ready (mobile slow network)
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          s.async = true;
+          s.onload = resolve;
+          s.onerror = () => reject(new Error('Razorpay unavailable'));
+          document.head.appendChild(s);
+          setTimeout(() => reject(new Error('Razorpay unavailable')), 5000);
+        });
+        if (typeof window.Razorpay === 'undefined') throw new Error('Razorpay unavailable');
+      }
       toast('Opening checkout...', 'info');
       const opts = {
         key: cData.key, amount: price * 100, currency: 'INR', name: 'ViralCraftMedia',
@@ -534,9 +599,9 @@ export default function LandingPage() {
                 }
               }
               try {
-                await submitPayment(oid, resp.razorpay_payment_id, resp.razorpay_signature);
-              } catch (formErr) {
-              }
+                // Google Form payment log — fire-and-forget, never block success UI
+                submitPayment(oid, resp.razorpay_payment_id, resp.razorpay_signature).catch(() => {});
+              } catch (formErr) {}
               setStatus('success');
               toast('Payment successful!', 'success');
             } else {

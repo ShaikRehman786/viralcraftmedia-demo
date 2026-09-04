@@ -183,123 +183,110 @@ export const createEnquiry = async (req, res, next) => {
       });
     }
 
-    // If and ONLY IF referral is valid, create ReferralBooking & notifications
-    if (referralValid && campaign && partner) {
-      try {
-        const clickedAt = referralAttribution.clickedAt || referralAttribution.timestamp;
+    // --- PERFORMANCE: Persisted before response — return immediately, defer non-critical work ---
+    // Capture values for background closure (enquiry already persisted to MongoDB)
+    const _enquiryDocId = enquiry._id;
+    const _ioDispatcherRef = req.app.get('socketio_dispatch');
+    const _referralCtx = { referralValid, campaign, partner, referralAttribution, name, email, phone, serviceCategory, enquiryId: enquiry.enquiryId };
+    const _notifyMeta = { customerName: name, service: serviceCategory, phone };
+    const _descriptionSnapshot = description || '';
 
-        await ReferralBooking.create({
-          partner: partner._id,
-          campaign: campaign._id,
-          enquiry: enquiry._id,
-          clientName: name,
-          email: email || '',
-          phone,
-          service: serviceCategory,
-          referralTimestamp: clickedAt ? new Date(clickedAt) : new Date(),
-          status: 'Pending'
-        });
-
-        // Notify admins of new booking
-        const admins = await User.find({ role: 'SUPER_ADMIN' });
-        for (const admin of admins) {
-          const adminNotify = new Notification({
-            user: admin._id,
-            userModel: 'User',
-            title: 'New Referral Booking',
-            message: `New booking for "${serviceCategory}" by ${name} attributed to partner campaign "${campaign.campaignName}".`,
-            type: 'success',
-            priority: 'high',
-            icon: 'Award',
-            actionUrl: '/admin?tab=referrals'
-          });
-          await adminNotify.save();
-        }
-
-        // Notify partner of new lead attribution
-        const partnerNotify = new Notification({
-          user: partner._id,
-          userModel: 'Partner',
-          title: 'New Referral Lead Attributed',
-          message: `A new referral lead for "${serviceCategory}" by ${name} has been attributed to your campaign "${campaign.campaignName}".`,
-          type: 'success',
-          priority: 'high',
-          icon: 'Award',
-          actionUrl: '/partner/commissions'
-        });
-        await partnerNotify.save();
-
-        const dispatch = req.app.get('socketio_dispatch');
-        if (dispatch) {
-          dispatch(partner._id.toString(), 'commission-updated', { partnerId: partner._id });
-        }
-      } catch (attrErr) {
-        console.error('[Enquiry Attribution] Booking creation failed:', attrErr.message);
-      }
-    }
-
-    // 1. Send confirmation and admin emails using Resend
-    if (email) {
-      sendEmail({
-        to: email,
-        subject: 'We have received your enquiry — ViralCraft Media',
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
-            <h3 style="color: #FF6A00;">Enquiry Received</h3>
-            <p>Hello ${name},</p>
-            <p>Thank you for reaching out to ViralCraft Media. We have received your project enquiry.</p>
-            <p><strong>Enquiry ID:</strong> ${enquiryId}</p>
-            <p><strong>Service Category:</strong> ${serviceCategory}</p>
-            <p>A member of our creative production team will connect with you via email or WhatsApp within the next 24 hours.</p>
-          </div>
-        `
-      }).catch(console.error);
-    }
-
-    sendEmail({
-      to: config.adminEmail,
-      subject: `[ADMIN ALERT] New Lead Enquiry Received: ${enquiryId}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
-          <h3 style="color: #FF6A00;">New Enquiry Received</h3>
-          <p><strong>Enquiry ID:</strong> ${enquiryId}</p>
-          <p><strong>Client Name:</strong> ${name}</p>
-          <p><strong>Service:</strong> ${serviceCategory}</p>
-          <p><strong>Description:</strong> ${description || 'No description provided.'}</p>
-        </div>
-      `
-    }).catch(console.error);
-
-    // 2. Log event
-    await logEvent({
-      action: 'ORDER_CREATION',
-      details: { message: 'New lead enquiry submitted', enquiryId, serviceCategory, customerName: name }
-    });
-
-    // 2. Notify Super Admins and Managers
-    const ioDispatcher = req.app.get('socketio_dispatch');
-
-    await notifyStaff({
-      title: 'New Service Lead',
-      message: `${name} enquired about ${serviceCategory}.`,
-      type: 'info',
-      priority: 'high',
-      referenceId: enquiryId,
-      referenceModel: 'Enquiry',
-      actionUrl: '/admin?tab=enquiries',
-      dispatcher: ioDispatcher,
-      metadata: { customerName: name, service: serviceCategory, phone }
-    });
-
-    if (ioDispatcher) {
-      ioDispatcher('all', 'enquiry_submitted', { enquiryId, serviceCategory, name });
-    }
-
-    return res.status(201).json({
+    // Respond immediately — customer sees success before emails/notifications
+    res.status(201).json({
       success: true,
       message: 'Enquiry submitted successfully. We will contact you shortly.',
       enquiryId
     });
+
+    // Background: referral booking, emails, audit, notifications, socket broadcast (non-blocking)
+    setImmediate(async () => {
+      // Referral booking & partner notifications (only if valid)
+      if (_referralCtx.referralValid && _referralCtx.campaign && _referralCtx.partner) {
+        try {
+          const clickedAt = _referralCtx.referralAttribution?.clickedAt || _referralCtx.referralAttribution?.timestamp;
+          await ReferralBooking.create({
+            partner: _referralCtx.partner._id,
+            campaign: _referralCtx.campaign._id,
+            enquiry: _enquiryDocId,
+            clientName: _referralCtx.name,
+            email: _referralCtx.email || '',
+            phone: _referralCtx.phone,
+            service: _referralCtx.serviceCategory,
+            referralTimestamp: clickedAt ? new Date(clickedAt) : new Date(),
+            status: 'Pending'
+          });
+          const admins = await User.find({ role: 'SUPER_ADMIN' }).select('_id').lean();
+          for (const admin of admins) {
+            const adminNotify = new Notification({
+              user: admin._id,
+              userModel: 'User',
+              title: 'New Referral Booking',
+              message: `New booking for "${_referralCtx.serviceCategory}" by ${_referralCtx.name} attributed to partner campaign "${_referralCtx.campaign.campaignName}".`,
+              type: 'success',
+              priority: 'high',
+              icon: 'Award',
+              actionUrl: '/admin?tab=referrals'
+            });
+            await adminNotify.save().catch(() => {});
+          }
+          const partnerNotify = new Notification({
+            user: _referralCtx.partner._id,
+            userModel: 'Partner',
+            title: 'New Referral Lead Attributed',
+            message: `A new referral lead for "${_referralCtx.serviceCategory}" by ${_referralCtx.name} has been attributed to your campaign "${_referralCtx.campaign.campaignName}".`,
+            type: 'success',
+            priority: 'high',
+            icon: 'Award',
+            actionUrl: '/partner/commissions'
+          });
+          await partnerNotify.save().catch(() => {});
+          const dispatch = _ioDispatcherRef;
+          if (dispatch) {
+            try { dispatch(_referralCtx.partner._id.toString(), 'commission-updated', { partnerId: _referralCtx.partner._id }); } catch {}
+          }
+        } catch (attrErr) {
+          console.error('[Enquiry Attribution] Background booking failed:', attrErr.message);
+        }
+      }
+
+      // Emails (fire-and-forget, non-blocking)
+      if (_referralCtx.email) {
+        sendEmail({
+          to: _referralCtx.email,
+          subject: 'We have received your enquiry — ViralCraft Media',
+          html: `<div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;"><h3 style="color: #FF6A00;">Enquiry Received</h3><p>Hello ${_referralCtx.name},</p><p>Thank you for reaching out to ViralCraft Media. We have received your project enquiry.</p><p><strong>Enquiry ID:</strong> ${_referralCtx.enquiryId}</p><p><strong>Service Category:</strong> ${_referralCtx.serviceCategory}</p><p>A member of our creative production team will connect with you via email or WhatsApp within the next 24 hours.</p></div>`
+        }).catch(() => {});
+      }
+      sendEmail({
+        to: config.adminEmail,
+        subject: `[ADMIN ALERT] New Lead Enquiry Received: ${_referralCtx.enquiryId}`,
+        html: `<div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;"><h3 style="color: #FF6A00;">New Enquiry Received</h3><p><strong>Enquiry ID:</strong> ${_referralCtx.enquiryId}</p><p><strong>Client Name:</strong> ${_referralCtx.name}</p><p><strong>Service:</strong> ${_referralCtx.serviceCategory}</p><p><strong>Description:</strong> ${_descriptionSnapshot || 'No description provided.'}</p></div>`
+      }).catch(() => {});
+
+      logEvent({
+        action: 'ORDER_CREATION',
+        details: { message: 'New lead enquiry submitted', enquiryId: _referralCtx.enquiryId, serviceCategory: _referralCtx.serviceCategory, customerName: _referralCtx.name }
+      }).catch(() => {});
+
+      notifyStaff({
+        title: 'New Service Lead',
+        message: `${_referralCtx.name} enquired about ${_referralCtx.serviceCategory}.`,
+        type: 'info',
+        priority: 'high',
+        referenceId: _referralCtx.enquiryId,
+        referenceModel: 'Enquiry',
+        actionUrl: '/admin?tab=enquiries',
+        dispatcher: _ioDispatcherRef,
+        metadata: _notifyMeta
+      }).catch(() => {});
+
+      if (_ioDispatcherRef) {
+        try { _ioDispatcherRef(null, 'enquiry_submitted', { enquiryId: _referralCtx.enquiryId, serviceCategory: _referralCtx.serviceCategory, name: _referralCtx.name }); } catch {}
+        // Alias broadcast kept for backward compatibility but targeted in future
+      }
+    });
+
+    return;
   } catch (err) {
     next(err);
   }

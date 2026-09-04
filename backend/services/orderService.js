@@ -7,8 +7,6 @@ import { logEvent } from './loggingService.js';
 import { createFolder, generateShareableLink } from './driveService.js';
 import { sendOrderConfirmationWhatsApp } from './whatsappService.js';
 import { notifyStaff } from './notificationService.js';
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { sendOrderSuccessEmail, sendEmail } from './emailService.js';
 import { getSuggestedEmployee } from './routingService.js';
@@ -40,35 +38,18 @@ export const validatePrice = (clipCount, clientPrice) => {
  * Uses timestamp-based IDs for serverless compatibility
  */
 export const generateSequentialOrderId = async () => {
-  const dateObj = new Date();
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const hours = String(dateObj.getHours()).padStart(2, '0');
-  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-  const seconds = String(dateObj.getSeconds()).padStart(2, '0');
-
-  // Try file-based counter for local development
-  // Fallback to timestamp-based ID for serverless (Vercel)
-  let orderNumber = 1;
-
-  try {
-    const counterPath = path.resolve(process.cwd(), 'order-counter.json');
-    if (fs.existsSync(counterPath)) {
-      const data = fs.readFileSync(counterPath, 'utf8');
-      const parsed = JSON.parse(data);
-      orderNumber = (parsed.count || 0) + 1;
-      fs.writeFileSync(counterPath, JSON.stringify({ count: orderNumber }), 'utf8');
-    } else {
-      // Use timestamp-based for high concurrency safety
-      return `VCM-${year}${month}${day}-${hours}${minutes}${seconds}`;
-    }
-  } catch (e) {
-    // Fail-safe: use timestamp-based
-    return `VCM-${year}${month}${day}-${hours}${minutes}${seconds}`;
-  }
-
-  return `VCM-${String(orderNumber).padStart(4, '0')}`;
+  // High-performance non-blocking ID: timestamp + random entropy (no sync FS on event loop)
+  // Preserves chronology, avoids fs.existsSync/readFileSync/writeFileSync blocking
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const s = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  const rnd = crypto.randomBytes(2).toString('hex').toUpperCase();
+  return `VCM-${y}${m}${day}-${h}${min}${s}${ms}-${rnd}`;
 };
 
 /**
@@ -183,22 +164,12 @@ export const ingestVerifiedOrder = async (orderDetails, socketDispatcher = null)
     await client.save();
   }
 
-  // 4. Create Drive Project Folders asynchronously (or virtually)
-  const clientFolderName = `Client - ${name}`;
-  const clientFolderId = await createFolder(clientFolderName);
+  // 4. Drive folders — deferred to background (never block payment verification)
+  // Placeholder links ensure immediate response; real Drive API runs after customer sees success
+  const placeholderDriveLink = `https://drive.google.com/drive/folders/pending-${orderId}`;
+  const placeholderFolderId = `pending_${orderId}`;
 
-  const projectFolderName = `Project - ${orderId}`;
-  const projectFolderId = await createFolder(projectFolderName, clientFolderId);
-
-  // Generate CRM subfolders
-  const rawFolderId = await createFolder('Raw Videos', projectFolderId);
-  const editedFolderId = await createFolder('Edited Videos', projectFolderId);
-  const assetsFolderId = await createFolder('Assets', projectFolderId);
-  const finalFolderId = await createFolder('Final Delivery', projectFolderId);
-  
-  const driveShareableLink = await generateShareableLink(finalFolderId); // final delivery link is the shareable link!
-
-  // 5. Create Project record
+  // 5. Create Project record (with placeholders, updated in background when Drive completes)
   const suggestedId = await getSuggestedEmployee(serviceType || 'Short Form Editing');
 
   const project = new Project({
@@ -207,15 +178,15 @@ export const ingestVerifiedOrder = async (orderDetails, socketDispatcher = null)
     name: `Project for ${name} (${orderId})`,
     description: `Raw Link: ${videoLink}\n\nInstructions: ${instructions}`,
     status: 'pending',
-    driveFolderId: projectFolderId,
-    driveShareableLink,
+    driveFolderId: placeholderFolderId,
+    driveShareableLink: placeholderDriveLink,
     driveFolders: {
-      clientFolderId,
-      projectFolderId,
-      rawFolderId,
-      editedFolderId,
-      assetsFolderId,
-      finalFolderId
+      clientFolderId: placeholderFolderId,
+      projectFolderId: placeholderFolderId,
+      rawFolderId: placeholderFolderId,
+      editedFolderId: placeholderFolderId,
+      assetsFolderId: placeholderFolderId,
+      finalFolderId: placeholderFolderId
     },
     category: serviceType || 'Short Form Editing',
     suggestedEmployee: suggestedId,
@@ -227,8 +198,8 @@ export const ingestVerifiedOrder = async (orderDetails, socketDispatcher = null)
   // Link client and project inside Order
   order.client = client._id;
   order.project = project._id;
-  order.driveFolderId = projectFolderId;
-  order.deliveryLink = driveShareableLink;
+  order.driveFolderId = placeholderFolderId;
+  order.deliveryLink = placeholderDriveLink;
   await order.save();
 
   // Add order to Client tracking logs
@@ -241,102 +212,121 @@ export const ingestVerifiedOrder = async (orderDetails, socketDispatcher = null)
   });
   client.driveLinks.push({
     name: `Project Delivery - ${orderId}`,
-    link: driveShareableLink,
+    link: placeholderDriveLink,
     date: new Date()
   });
   await client.save();
 
-  // 6. Auto-generate Tasks (1 task per video clip)
-  const taskCount = parseInt(clipCount, 10);
-  const tasksCreated = [];
+  // 6. Auto-generate Tasks — bulk insert (single DB round-trip instead of N sequential saves)
+  const taskCount = Math.max(1, Math.min(100, parseInt(clipCount, 10) || 1));
+  const deadline = new Date(Date.now() + 36 * 60 * 60 * 1000);
+  const tasksToInsert = [];
   for (let i = 1; i <= taskCount; i++) {
-    const task = new Task({
+    tasksToInsert.push({
       project: project._id,
       name: `Edit Clip ${String(i).padStart(2, '0')} - ${orderId}`,
       description: `Edit video clip #${i} based on timestamps / reference notes. Link: ${videoLink}`,
       priority: project.priority,
       status: 'pending',
       taskId: `${orderId}-T${String(i).padStart(2, '0')}`,
-      deadline: new Date(Date.now() + 36 * 60 * 60 * 1000) // 36 hours deadline for editor review
+      deadline
     });
-    await task.save();
-    tasksCreated.push(task._id);
   }
-
-  // Bind tasks references to project
-  // In our model we reference project in Task, but we can also log this
+  let tasksCreated = [];
+  try {
+    const inserted = await Task.insertMany(tasksToInsert, { ordered: false });
+    tasksCreated = inserted.map(t => t._id);
+  } catch (e) {
+    // Fallback sequential if bulk fails (duplicate key etc.)
+    for (const doc of tasksToInsert) {
+      try { const t = await new Task(doc).save(); tasksCreated.push(t._id); } catch {}
+    }
+  }
   console.log(`Auto-generated ${taskCount} tasks for Project ${project.name}`);
 
-  // 7. Create internal alerts for all Admin & Manager users
-  await notifyStaff({
-    title: 'New Order Received',
-    message: `Project ${orderId} has been auto-created. Please assign editors.`,
-    type: 'info',
-    priority: 'high',
-    referenceId: orderId,
-    referenceModel: 'Order',
-    actionUrl: '/admin?tab=projects',
-    dispatcher: socketDispatcher,
-    metadata: { orderId, customerName: name, amount }
+  const driveShareableLink = placeholderDriveLink;
+
+  // Background: Google Drive folder creation (6 network calls) — never block customer
+  setImmediate(async () => {
+    try {
+      const clientFolderName = `Client - ${name}`;
+      const clientFolderId = await createFolder(clientFolderName);
+      const projectFolderName = `Project - ${orderId}`;
+      const projectFolderId = await createFolder(projectFolderName, clientFolderId);
+      const rawFolderId = await createFolder('Raw Videos', projectFolderId);
+      const editedFolderId = await createFolder('Edited Videos', projectFolderId);
+      const assetsFolderId = await createFolder('Assets', projectFolderId);
+      const finalFolderId = await createFolder('Final Delivery', projectFolderId);
+      const realLink = await generateShareableLink(finalFolderId);
+      // Update Project/Order/Client with real Drive links
+      try {
+        const proj = await Project.findById(project._id);
+        if (proj) {
+          proj.driveFolderId = projectFolderId;
+          proj.driveShareableLink = realLink;
+          proj.driveFolders = { clientFolderId, projectFolderId, rawFolderId, editedFolderId, assetsFolderId, finalFolderId };
+          await proj.save().catch(() => {});
+        }
+        const ord = await Order.findById(order._id);
+        if (ord) {
+          ord.driveFolderId = projectFolderId;
+          ord.deliveryLink = realLink;
+          await ord.save().catch(() => {});
+        }
+        const cli = await Client.findById(client._id);
+        if (cli) {
+          const dl = cli.driveLinks.find(d => d.name === `Project Delivery - ${orderId}`);
+          if (dl) dl.link = realLink;
+          await cli.save().catch(() => {});
+        }
+      } catch {}
+    } catch (e) {
+      console.error('[Drive bg] Folder creation failed:', e.message);
+    }
   });
 
-  // 8. Trigger Email & WhatsApp automation in background
-  sendOrderConfirmationWhatsApp(name, contact, orderId, clipCount, amount).catch(console.error);
-  
-  if (email) {
-    sendOrderSuccessEmail(name, email, orderId, amount, null, orderId.replace('VCM-', 'VCM-INV-'), client.userId, project._id).catch(console.error);
-    
+  // 7. Create internal alerts — background (never block payment response)
+  setImmediate(() => {
+    notifyStaff({
+      title: 'New Order Received',
+      message: `Project ${orderId} has been auto-created. Please assign editors.`,
+      type: 'info',
+      priority: 'high',
+      referenceId: orderId,
+      referenceModel: 'Order',
+      actionUrl: '/admin?tab=projects',
+      dispatcher: socketDispatcher,
+      metadata: { orderId, customerName: name, amount }
+    }).catch(() => {});
+  });
+
+  // 8. Trigger Email & WhatsApp automation in background (already fire-and-forget)
+  setImmediate(() => {
+    sendOrderConfirmationWhatsApp(name, contact, orderId, clipCount, amount).catch(() => {});
+    if (email) {
+      sendOrderSuccessEmail(name, email, orderId, amount, null, orderId.replace('VCM-', 'VCM-INV-'), client.userId, project._id).catch(() => {});
+      sendEmail({
+        to: email,
+        subject: `Project Started — Order ${orderId}`,
+        html: `<div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;"><h3 style="color: #FF6A00;">Project Started</h3><p>Hello ${name},</p><p>We are glad to inform you that work on your project <strong>${project.name}</strong> has started.</p><p><strong>Order ID:</strong> ${orderId}</p><p>You can track the progress inside your client dashboard:</p><p><a href="${(() => { try { return getFrontendBaseUrl(); } catch { return 'https://viralcraftmedia.com'; } })()}/login" style="display: inline-block; padding: 10px 20px; background: #FF6A00; color: #FFF; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In to Portal</a></p></div>`
+      }).catch(() => {});
+    }
     sendEmail({
-      to: email,
-      subject: `Project Started — Order ${orderId}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
-          <h3 style="color: #FF6A00;">Project Started</h3>
-          <p>Hello ${name},</p>
-          <p>We are glad to inform you that work on your project <strong>${project.name}</strong> has started.</p>
-          <p><strong>Order ID:</strong> ${orderId}</p>
-          <p>You can track the progress inside your client dashboard:</p>
-          <p><a href="${(() => { try { return getFrontendBaseUrl(); } catch { return 'https://viralcraftmedia.com'; } })()}/login" style="display: inline-block; padding: 10px 20px; background: #FF6A00; color: #FFF; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In to Portal</a></p>
-        </div>
-      `
-    }).catch(console.error);
-  }
-
-  // Notify admin of new order & payment
-  sendEmail({
-    to: config.adminEmail,
-    subject: `[ADMIN ALERT] New Client Order Placed: ${orderId}`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
-        <h3 style="color: #FF6A00;">New Order Placed</h3>
-        <p><strong>Order ID:</strong> ${orderId}</p>
-        <p><strong>Client:</strong> ${name}</p>
-        <p><strong>Platform:</strong> ${platform}</p>
-        <p><strong>Service Type:</strong> ${serviceType || 'Premium Video Clipping'}</p>
-      </div>
-    `
-  }).catch(console.error);
-
-  sendEmail({
-    to: config.adminEmail,
-    subject: `[ADMIN ALERT] Payment Logged Successfully: ${orderId}`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
-        <h3 style="color: #FF6A00;">Payment Logged</h3>
-        <p><strong>Order ID:</strong> ${orderId}</p>
-        <p><strong>Client:</strong> ${name}</p>
-        <p><strong>Payment ID:</strong> ${razorpay_payment_id || 'N/A'}</p>
-        <p><strong>Amount:</strong> INR ${amount}</p>
-      </div>
-    `
-  }).catch(console.error);
-
-  // 9. Write Audit Log
-  await logEvent({
-    userId: client.userId || null,
-    userName: name,
-    action: 'PAYMENT_SUCCESS',
-    details: { orderId, amount, clipCount, platform }
+      to: config.adminEmail,
+      subject: `[ADMIN ALERT] New Client Order Placed: ${orderId}`,
+      html: `<div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;"><h3 style="color: #FF6A00;">New Order Placed</h3><p><strong>Order ID:</strong> ${orderId}</p><p><strong>Client:</strong> ${name}</p><p><strong>Platform:</strong> ${platform}</p><p><strong>Service Type:</strong> ${serviceType || 'Premium Video Clipping'}</p></div>`
+    }).catch(() => {});
+    sendEmail({
+      to: config.adminEmail,
+      subject: `[ADMIN ALERT] Payment Logged Successfully: ${orderId}`,
+      html: `<div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;"><h3 style="color: #FF6A00;">Payment Logged</h3><p><strong>Order ID:</strong> ${orderId}</p><p><strong>Client:</strong> ${name}</p><p><strong>Payment ID:</strong> ${razorpay_payment_id || 'N/A'}</p><p><strong>Amount:</strong> INR ${amount}</p></div>`
+    }).catch(() => {});
+    logEvent({
+      userId: client.userId || null,
+      userName: name,
+      action: 'PAYMENT_SUCCESS',
+      details: { orderId, amount, clipCount, platform }
+    }).catch(() => {});
   });
 
   return { orderId, project, driveShareableLink };

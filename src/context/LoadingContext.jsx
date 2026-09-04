@@ -33,14 +33,18 @@ export function LoadingProvider({ children }) {
     }
   };
 
-  // Axios interceptor setup for API calls taking > 150ms
+  // Axios interceptor setup for API calls taking > 350ms (higher threshold avoids flash on fast mobile)
   useEffect(() => {
     let pendingCount = 0;
+    // Customer-facing endpoints must never trigger global blocking loader (use component spinners instead)
+    const SILENT_PATTERNS = ['/api/enquiries', '/api/create-order', '/api/verify-payment', '/api/config', '/api/auth/me', '/api/push/'];
+    const isCustomerEndpoint = (url = '') => SILENT_PATTERNS.some(p => url.includes(p));
 
     const requestInterceptor = axios.interceptors.request.use(
       (config) => {
         // Skip background silent requests if marked with silent: true
         if (config?.silent) return config;
+        if (isCustomerEndpoint(config?.url || '')) return config;
 
         pendingCount++;
         setActiveRequests(pendingCount);
@@ -48,7 +52,7 @@ export function LoadingProvider({ children }) {
         if (!timerRef.current && pendingCount === 1) {
           timerRef.current = setTimeout(() => {
             setVisible(true);
-          }, 150);
+          }, 350);
         }
         return config;
       },

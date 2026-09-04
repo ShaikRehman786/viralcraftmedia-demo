@@ -46,7 +46,8 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
 
   const handleNav = (tab) => {
     setActiveTab(tab);
-    setSidebarOpen(false);
+    // Defer close to next frame so navigate completes before transform transition
+    requestAnimationFrame(() => setSidebarOpen(false));
   };
 
   return (
@@ -62,7 +63,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
             <div className="sidebar-group-title">Main</div>
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER' || user.role === 'EMPLOYEE') && (
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'overview' ? ' active' : ''}`}
                 onClick={() => handleNav('overview')}
               >
@@ -72,7 +73,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
             )}
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER' || user.role === 'EMPLOYEE' || user.role === 'CLIENT') && (
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'projects' ? ' active' : ''}`}
                 onClick={() => handleNav('projects')}
               >
@@ -82,7 +83,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
             )}
 
             {user.role === 'SUPER_ADMIN' && (
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'calendar' ? ' active' : ''}`}
                 onClick={() => handleNav('calendar')}
               >
@@ -95,7 +96,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
             <div className="sidebar-group">
               <div className="sidebar-group-title">Admin</div>
 
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'staff' ? ' active' : ''}`}
                 onClick={() => handleNav('staff')}
               >
@@ -103,7 +104,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
               </button>
 
               {user.role === 'SUPER_ADMIN' && (
-                <button
+                <button type="button"
                   className={`sidebar-link${activeTab === 'logs' ? ' active' : ''}`}
                   onClick={() => handleNav('logs')}
                 >
@@ -117,28 +118,28 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
             <div className="sidebar-group">
               <div className="sidebar-group-title">CRM</div>
 
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'enquiries' ? ' active' : ''}`}
                 onClick={() => handleNav('enquiries')}
               >
                 <UserPlus /> Inbound Leads
               </button>
 
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'referrals' ? ' active' : ''}`}
                 onClick={() => handleNav('referrals')}
               >
                 <Users /> Referral Management
               </button>
 
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'whatsapp' ? ' active' : ''}`}
                 onClick={() => handleNav('whatsapp')}
               >
                 <MessageCircle /> WhatsApp
               </button>
 
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'notification-center' ? ' active' : ''}`}
                 onClick={() => handleNav('notification-center')}
               >
@@ -151,7 +152,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
             <div className="sidebar-group">
               <div className="sidebar-group-title">Finance</div>
 
-              <button
+              <button type="button"
                 className={`sidebar-link${activeTab === 'payments' ? ' active' : ''}`}
                 onClick={() => handleNav('payments')}
               >
@@ -171,7 +172,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
               <div className="sidebar-user-role">{user.role.replace(/_/g, ' ')}</div>
             </div>
           </div>
-          <button className="sidebar-link" onClick={handleLogout} title="Logout">
+          <button type="button" className="sidebar-link" onClick={handleLogout} title="Logout">
             <LogOut /> Logout
           </button>
         </div>

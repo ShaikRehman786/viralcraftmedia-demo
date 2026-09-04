@@ -175,7 +175,7 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
     <>
       <header className="app-header">
         <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
+          <button type="button"
             className="header-btn menu-toggle-btn"
             onClick={() => setSidebarOpen(prev => !prev)}
             aria-label="Toggle menu"

@@ -140,8 +140,8 @@ export default function EnquiriesPage({
                     </span>
                     {enq.budget > 0 && (
                       <span className="badge badge-success flex-row gap-1">
-                        <DollarSign size={10} />
-                        ₹{enq.budget}
+                        <span aria-hidden>₹</span>
+                        {new Intl.NumberFormat('en-IN').format(enq.budget)}
                       </span>
                     )}
                   </div>

@@ -108,6 +108,8 @@ const startServer = async () => {
         console.log(`User ${userId} not active. WebSocket dispatch skipped.`);
       }
     });
+    app.set('socketio_io', io);
+    app.set('socketio_clients', activeClients);
 
     server.listen(PORT, () => {
       console.log(`=================================================`);

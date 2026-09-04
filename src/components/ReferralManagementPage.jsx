@@ -728,54 +728,21 @@ export default function ReferralManagementPage({ user, addToast }) {
                       )}
                     </div>
 
-                    {/* Actions Grid */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: 'auto', borderTop: '1px solid var(--gray-100)', paddingTop: '12px' }}>
-                      <button 
-                        onClick={() => handleCopyLogin(p)}
-                        className="btn btn-secondary btn-sm flex-1"
-                        style={{ minWidth: 'calc(50% - 3px)' }}
-                      >
-                        Copy Login
-                      </button>
-                      <button 
-                        onClick={() => openResetPasswordModal(p)}
-                        className="btn btn-secondary btn-sm flex-1"
-                        style={{ minWidth: 'calc(50% - 3px)' }}
-                      >
-                        Reset PW
-                      </button>
-                      <button 
-                        onClick={() => openEditPartner(p)}
-                        className="btn btn-secondary btn-sm flex-1"
-                        style={{ minWidth: 'calc(50% - 3px)' }}
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleTogglePartnerStatus(p)}
-                        className="btn btn-secondary btn-sm flex-1"
-                        style={{ 
-                          minWidth: 'calc(50% - 3px)',
-                          color: p.status === 'ACTIVE' ? 'var(--warning)' : 'var(--success)'
-                        }}
-                      >
-                        {p.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}
-                      </button>
-                      <button 
-                        onClick={() => handleDeletePartner(p._id)}
-                        className="btn btn-danger btn-sm w-full"
-                        style={{ width: '100%', marginTop: '4px' }}
-                      >
-                        Delete Partner
-                      </button>
-
-                      <button 
-                        onClick={handleGenerateLinkPlaceholder}
-                        className="btn btn-outline btn-sm w-full"
-                        style={{ width: '100%', marginTop: '2px', borderStyle: 'dashed', color: 'var(--gray-400)' }}
-                      >
-                        Generate Referral Link (Future Use)
-                      </button>
+                    {/* Actions — single primary + contextual menu (no dense grid) */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', borderTop: '1px solid var(--gray-100)', paddingTop: '12px' }}>
+                      <button onClick={() => openEditPartner(p)} className="btn btn-primary btn-sm flex-1">Manage</button>
+                      <div style={{ position: 'relative' }}>
+                        <button onClick={(e) => { e.stopPropagation(); setActiveDropdownCampaignId(activeDropdownCampaignId === `p-${p._id}` ? null : `p-${p._id}`); }} className="btn btn-secondary btn-sm" style={{ minWidth: '44px' }}>⋯</button>
+                        {activeDropdownCampaignId === `p-${p._id}` && (
+                          <div onClick={e=>e.stopPropagation()} style={{ position: 'absolute', right: 0, top: '36px', background: 'var(--white)', border: '1px solid var(--gray-200)', borderRadius: '10px', boxShadow: 'var(--shadow-lg)', padding: '6px', minWidth: '180px', zIndex: 20, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <button onClick={() => { handleCopyLogin(p); setActiveDropdownCampaignId(null); }} className="btn btn-ghost btn-sm justify-start">Copy Login</button>
+                            <button onClick={() => { openResetPasswordModal(p); setActiveDropdownCampaignId(null); }} className="btn btn-ghost btn-sm justify-start">Reset Password</button>
+                            <button onClick={() => { handleTogglePartnerStatus(p); setActiveDropdownCampaignId(null); }} className="btn btn-ghost btn-sm justify-start" style={{ color: p.status==='ACTIVE'?'var(--warning)':'var(--success)' }}>{p.status==='ACTIVE'?'Deactivate':'Reactivate'}</button>
+                            <hr style={{ border: 'none', borderTop: '1px solid var(--gray-100)', margin: '2px 0' }} />
+                            <button onClick={() => { handleDeletePartner(p._id); setActiveDropdownCampaignId(null); }} className="btn btn-ghost btn-sm justify-start" style={{ color: 'var(--error)' }}>Delete Partner</button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                   </div>

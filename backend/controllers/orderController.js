@@ -107,6 +107,7 @@ export const createOrder = async (req, res, next) => {
         dispatcher: ioDispatcherBg,
         metadata: { amount: verifiedAmount, customerName: req.body.name || 'Anonymous' }
       }).catch(() => {});
+      import('../services/realtimeService.js').then(({emitToRoles})=> emitToRoles(req.app, 'payment.created', { razorpayOrderId: _createOrderResponseId, amount: verifiedAmount }, ['SUPER_ADMIN']).catch(()=>{})).catch(()=>{});
     });
 
     return;
@@ -376,6 +377,10 @@ export const verifyPayment = async (req, res, next) => {
           dispatcher: payoutDispatcher,
           metadata: { amount, customerName: name, paymentId: razorpay_payment_id, service: serviceType, enquiryId: _linkedEnquiry ? _linkedEnquiry.enquiryId : undefined, orderId }
         }).catch(() => {});
+        // Realtime payment — role-aware (SUPER_ADMIN only)
+        const { emitToRoles } = await import('../services/realtimeService.js');
+        emitToRoles(req.app, 'payment.updated', { orderId, amount }, ['SUPER_ADMIN']).catch(()=>{});
+        emitToRoles(req.app, 'order.updated', { orderId }, ['SUPER_ADMIN','MANAGER']).catch(()=>{});
       } catch {}
 
       // Invoice PDF generation — background (CPU/network heavy, never block customer response)

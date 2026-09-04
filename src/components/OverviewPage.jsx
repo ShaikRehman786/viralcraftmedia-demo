@@ -647,8 +647,27 @@ export default function OverviewPage({
 
   const resolvedName = (user?.name && (user.name.includes('vcm') || user.name.includes('Admin') || user.name.includes('admin') || user.email === 'vcmAdmin@gmail.com')) ? 'Sri Harsha' : (user?.name ? user.name.split(' ')[0] : 'Sri Harsha');
 
+  // Filtered analytics — real backend query, updates all metrics/charts/timeline when date changes
+  const [filteredAnalytics, setFilteredAnalytics] = React.useState(null);
+  const [filterLoading, setFilterLoading] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setFilterLoading(true);
+        const { start, end } = getISTDateRange(activeFilter === 'Month' ? 'This Month' : activeFilter, customRange);
+        const params = new URLSearchParams({ startDate: start.toISOString(), endDate: end.toISOString() });
+        const res = await axios.get(`/api/analytics/dashboard?${params.toString()}`);
+        if (!cancelled && res.data?.stats) setFilteredAnalytics(res.data.stats);
+      } catch {}
+      if (!cancelled) setFilterLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [activeFilter, customRange, getISTDateRange]);
+  const displayAnalytics = filteredAnalytics || analytics;
+
   const filteredProjects = useMemo(() => {
-    const { start, end } = getISTDateRange(activeFilter, customRange);
+    const { start, end } = getISTDateRange(activeFilter === 'Month' ? 'This Month' : activeFilter, customRange);
     return projects.filter(p => {
       const pDate = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
       return pDate >= start && pDate <= end;
@@ -954,7 +973,39 @@ export default function OverviewPage({
                 </div>
               </div>
             ) : (
-              <div className="revenue-executive-center animate-slide-up">
+              <>
+              {/* Financial Overview — confirmed vs pending (real DB state, realtime, date-filtered) */}
+              <div className="card animate-slide-up" style={{ marginTop: '16px', opacity: filterLoading ? 0.7 : 1 }}>
+                <div className="card-header" style={{ paddingBottom: '12px' }}>
+                  <div>
+                    <h3 className="section-title">Financial Overview</h3>
+                    <p className="section-subtitle">Confirmed budget only after verified payment — pending is not revenue {filterLoading ? '· Updating…' : ''}</p>
+                  </div>
+                  <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>Live</span>
+                </div>
+                <div className="card-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div style={{ background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Confirmed Budget</div>
+                    <div style={{ fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginTop: '6px' }}>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics?.confirmedRevenue ?? displayAnalytics?.totalRevenue ?? 0)}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: '4px', fontWeight: 500 }}>Received & verified {displayAnalytics?.outstandingAmount ? `· Outstanding ${new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics.outstandingAmount)}` : ''}</div>
+                  </div>
+                  <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Pending Payments</div>
+                    <div style={{ fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginTop: '6px' }}>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics?.pendingRevenue ?? 0)}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '4px', fontWeight: 500 }}>Not confirmed — enquiry/booking/started only {displayAnalytics?.avgDealValue ? `· Avg ${new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics.avgDealValue)}` : ''}</div>
+                  </div>
+                </div>
+                {/* Budget Timeline — real state */}
+                <div style={{ padding: '0 16px 16px', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.75rem', color: 'var(--gray-500)', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--gray-300)', display: 'inline-block' }}></span>Booking Created → Pending</span>
+                  <span>→</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }}></span>Payment Started → Pending</span>
+                  <span>→</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontWeight: 600 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }}></span>Payment Verified → Confirmed</span>
+                  <span style={{ color: 'var(--gray-400)' }}>· Failed/Abandoned never confirms</span>
+                </div>
+              </div>
+              <div className="revenue-executive-center animate-slide-up" style={{ marginTop: '16px' }}>
                 {/* TOP BAR: Revenue Analytics Workspace */}
                 <div className="card-header revenue-card-header">
                   <div>
@@ -1310,6 +1361,7 @@ export default function OverviewPage({
                   </div>
                 )}
               </div>
+              </>
             )
           )}
 

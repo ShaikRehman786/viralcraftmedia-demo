@@ -297,9 +297,22 @@ export default function DashboardPage() {
     // Register user
     socket.emit('register', user._id);
 
-    // Consolidated listeners (avoid 6 duplicate refresh triggers)
-    const refreshEvents = ['Project Created', 'project-created', 'Task Created', 'task-created', 'Dashboard Updated', 'dashboard-update'];
+    // Consolidated listeners (avoid duplicate refresh triggers) — covers legacy + new granular events
+    const refreshEvents = ['Project Created', 'project-created', 'Task Created', 'task-created', 'Dashboard Updated', 'dashboard-update',
+      'project.created','project.updated','project.deleted','task.created','task.updated','task.deleted','order.updated','payment.created','payment.updated'];
     refreshEvents.forEach(ev => socket.on(ev, debouncedRefresh));
+
+    // Targeted realtime — enquiry/referral/commission without full dashboard reload
+    let enquiryTimer = null;
+    const debouncedEnquiry = () => { if (enquiryTimer) clearTimeout(enquiryTimer); enquiryTimer = setTimeout(()=> { if (user?.role==='SUPER_ADMIN' || user?.role==='MANAGER') loadEnquiries?.(); }, 800); };
+    ['enquiry.created','enquiry.updated','enquiry.deleted','enquiry_submitted'].forEach(ev => socket.on(ev, debouncedEnquiry));
+
+    let referralTimer = null;
+    const debouncedReferral = () => { if (referralTimer) clearTimeout(referralTimer); referralTimer = setTimeout(()=> { /* referral tab lazy fetches on next visit; keep lightweight */ }, 600); };
+    ['referral.created','referral.updated','commission.created','commission.updated','commission-updated'].forEach(ev => socket.on(ev, debouncedReferral));
+
+    // Reconnect lightweight sync — bring stale UI up to date without full reload
+    socket.on('connect', () => { debouncedRefresh(); debouncedEnquiry(); });
 
     socket.on('new_notification', (notification) => {
       setNotifications(prev => [notification, ...prev]);
@@ -339,7 +352,12 @@ export default function DashboardPage() {
     
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
+      if (enquiryTimer) clearTimeout(enquiryTimer);
+      if (referralTimer) clearTimeout(referralTimer);
       refreshEvents.forEach(ev => socket.off(ev, debouncedRefresh));
+      ['enquiry.created','enquiry.updated','enquiry.deleted','enquiry_submitted'].forEach(ev => socket.off(ev, debouncedEnquiry));
+      ['referral.created','referral.updated','commission.created','commission.updated','commission-updated'].forEach(ev => socket.off(ev, debouncedReferral));
+      socket.off('connect');
       socket.disconnect();
     };
   }, [user, refreshAllData]);

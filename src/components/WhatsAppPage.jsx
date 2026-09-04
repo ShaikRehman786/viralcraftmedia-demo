@@ -355,8 +355,8 @@ export default function WhatsAppPage() {
 
       <div className="wa-header">
         <div className="wa-header-left">
-          <h1>WhatsApp Business Control</h1>
-          <p>Configure your business WhatsApp automation, track messages, and monitor link health</p>
+          <h1>WhatsApp</h1>
+          <p>Connect your official Admin WhatsApp number — CRM automation uses this number</p>
         </div>
         <div className="wa-header-right">
           <button className="wa-btn wa-btn-ghost wa-header-refresh-btn" onClick={fetchData} disabled={loading || !!actionLoading}>
@@ -489,38 +489,22 @@ export default function WhatsAppPage() {
               )}
             </div>
           ) : (
-            <div className="wa-metric-grid">
+            <div className="wa-metric-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              <div className="wa-metric">
+                <span className="wa-metric-value">+{state.phoneNumber || '—'}</span>
+                <span className="wa-metric-label">Admin WhatsApp Number</span>
+              </div>
               <div className="wa-metric">
                 <span className="wa-metric-value">{state.pushName || '—'}</span>
                 <span className="wa-metric-label">Business Name</span>
               </div>
               <div className="wa-metric">
-                <span className="wa-metric-value">+{state.phoneNumber || '—'}</span>
-                <span className="wa-metric-label">Connected Number</span>
+                <span className="wa-metric-value">{formatTS(state.lastConnectedAt)}</span>
+                <span className="wa-metric-label">Connected Since</span>
               </div>
               <div className="wa-metric">
                 <span className="wa-metric-value">{connectionHealth}</span>
                 <span className="wa-metric-label">Connection Health</span>
-              </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{businessAccountType}</span>
-                <span className="wa-metric-label">Business Account</span>
-              </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{sentToday}</span>
-                <span className="wa-metric-label">Messages Sent Today</span>
-              </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{receivedToday}</span>
-                <span className="wa-metric-label">Messages Received Today</span>
-              </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{messages.length}</span>
-                <span className="wa-metric-label">Messages Processed</span>
-              </div>
-              <div className="wa-metric">
-                <span className="wa-metric-value">{formatTS(state.lastConnectedAt)}</span>
-                <span className="wa-metric-label">Connected Since</span>
               </div>
             </div>
           )}
@@ -652,45 +636,8 @@ export default function WhatsAppPage() {
           </div>
         </div>
 
-        {/* RECENT ACTIVITY CARD */}
-        <div className="wa-card wa-card-full">
-          <div className="wa-card-header">
-            <div className="wa-card-title">
-              <MessageCircle size={16} />
-              Recent Activity
-            </div>
-          </div>
-          {recentMsgs.length === 0 ? (
-            <div className="wa-empty">
-              <MessageCircle size={32} />
-              <p>No messages processed today. Automation logs will appear here in real-time.</p>
-            </div>
-          ) : (
-            <div className="wa-messages-list">
-              {recentMsgs.map((msg, i) => (
-                <div key={msg._id || i} className="wa-activity-card">
-                  <div className="wa-activity-row-1">
-                    <div className={`wa-activity-avatar ${msg.type === 'out' ? 'outgoing' : 'incoming'}`}>
-                      <MessageCircle size={14} />
-                    </div>
-                    <span className={`wa-message-badge ${msg.type === 'out' ? 'sent' : 'received'}`}>
-                      {msg.type === 'out' ? 'Outgoing' : 'Incoming'}
-                    </span>
-                    <span className="wa-activity-time">
-                      <Clock size={10} />
-                      <span>{relativeTime(msg.timestamp || msg.createdAt)}</span>
-                    </span>
-                  </div>
-                  <div className="wa-activity-row-2">
-                    <p className="wa-activity-message" title={msg.body}>
-                      {msg.body || '—'}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* WhatsApp automation is connection-only — chat history removed per product spec */}
+        {/* Backend automation (message triggers, delivery) remains intact via whatsappService */}
 
       </div>
     </div>

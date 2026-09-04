@@ -13,6 +13,7 @@ import { generateSequentialOrderId } from '../services/orderService.js';
 import { getSuggestedEmployee } from '../services/routingService.js';
 import { sendEmail } from '../services/emailService.js';
 import { notifyStaff, notifyUser } from '../services/notificationService.js';
+import { emitToRoles, emitToUser } from '../services/realtimeService.js';
 import crypto from 'crypto';
 import { config, getFrontendBaseUrl } from '../config/env.js';
 
@@ -280,10 +281,12 @@ export const createEnquiry = async (req, res, next) => {
         metadata: _notifyMeta
       }).catch(() => {});
 
+      // Realtime: targeted role-based (SUPER_ADMIN/MANAGER only) + legacy broadcast coalesced
       if (_ioDispatcherRef) {
         try { _ioDispatcherRef(null, 'enquiry_submitted', { enquiryId: _referralCtx.enquiryId, serviceCategory: _referralCtx.serviceCategory, name: _referralCtx.name }); } catch {}
-        // Alias broadcast kept for backward compatibility but targeted in future
       }
+      // New granular event — role-aware, batched on frontend
+      emitToRoles(req.app, 'enquiry.created', { enquiryId: _referralCtx.enquiryId, serviceCategory: _referralCtx.serviceCategory }, ['SUPER_ADMIN','MANAGER']).catch(()=>{});
     });
 
     return;
@@ -388,6 +391,8 @@ export const assignEnquiryManager = async (req, res, next) => {
       action: 'SYSTEM_SETTING_CHANGE',
       details: { message: `Assigned lead ${enquiry.enquiryId} to manager ${manager.name}` }
     });
+
+    emitToRoles(req.app, 'enquiry.updated', { enquiryId: enquiry.enquiryId, status: enquiry.status }).catch(()=>{});
 
     return res.status(200).json({ success: true, message: 'Manager assigned successfully.', data: enquiry });
   } catch (err) {

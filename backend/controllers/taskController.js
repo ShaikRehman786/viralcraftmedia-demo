@@ -13,6 +13,7 @@ import { sendDeliveryEmail, sendEmployeeTaskAlertEmail, sendEmail } from '../ser
 import { uploadFileToFolder } from '../services/driveService.js';
 import { config } from '../config/env.js';
 import { notifyStaff, notifyUser, sendProjectAssignmentNotifications } from '../services/notificationService.js';
+import { emitToRoles, emitToUsers } from '../services/realtimeService.js';
 
 /**
  * Lists all projects
@@ -1313,6 +1314,8 @@ export const createProject = async (req, res, next) => {
       ioDispatcher(null, 'project-created', { projectId: project._id, name: project.name });
       ioDispatcher(null, 'Project Created', { projectId: project._id, name: project.name });
     }
+    // New granular realtime — role-aware
+    emitToRoles(req.app, 'project.created', { projectId: project._id }, ['SUPER_ADMIN','MANAGER','EMPLOYEE']).catch(()=>{});
 
     await logEvent({
       userId: req.user?._id || null,

@@ -11,7 +11,21 @@ import Enquiry from '../models/Enquiry.js';
 export const getDashboardStats = async (req, res, next) => {
   try {
     const userRole = (req.user?.role || '').toUpperCase();
-    const cacheKey = `analytics:dashboard:${userRole}:${req.user._id}`;
+    // Date filter — validated ISO dates from frontend (Today/Yesterday/7D etc.)
+    let dateFilter = null;
+    const { startDate, endDate } = req.query;
+    if (startDate && endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      if (!isNaN(s.getTime()) && !isNaN(e.getTime()) && s <= e) {
+        // Cap range to 2 years to avoid huge scans
+        const maxRange = 730 * 24 * 60 * 60 * 1000;
+        if (e.getTime() - s.getTime() <= maxRange) {
+          dateFilter = { $gte: s, $lte: e };
+        }
+      }
+    }
+    const cacheKey = `analytics:dashboard:${userRole}:${req.user._id}:${dateFilter ? `${dateFilter.$gte.toISOString()}_${dateFilter.$lte.toISOString()}` : 'all'}`;
     const { safeGet, safeSet } = await import('../config/redis.js');
     try {
       const cached = await safeGet(cacheKey);
@@ -44,9 +58,16 @@ export const getDashboardStats = async (req, res, next) => {
     const projectsDueToday = await Project.countDocuments({ estimatedCompletion: { $gte: today, $lte: endOfToday } });
     const projectsDelayed = await Project.countDocuments({ estimatedCompletion: { $lt: today }, status: { $ne: 'completed' } });
 
-    // 5. Success Payments & Revenue Overview
-    const successOrders = await Order.find({ paymentStatus: 'success' }).select('amount').lean();
-    const totalRevenue = successOrders.reduce((sum, ord) => sum + ord.amount, 0);
+    // 5. Success Payments & Revenue Overview — confirmed vs pending separation (dateFilter aware, uses createdAt = verified date)
+    const successMatch = dateFilter ? { paymentStatus: 'success', createdAt: dateFilter } : { paymentStatus: 'success' };
+    const pendingMatch = dateFilter ? { paymentStatus: { $in: ['pending', 'enquiry'] }, createdAt: dateFilter } : { paymentStatus: { $in: ['pending', 'enquiry'] } };
+    const successOrders = await Order.find(successMatch).select('amount createdAt').lean();
+    const totalRevenue = successOrders.reduce((sum, ord) => sum + (ord.amount || 0), 0);
+    const pendingOrdersRaw = await Order.find(pendingMatch).select('amount createdAt').lean();
+    const pendingRevenue = pendingOrdersRaw.reduce((sum, ord) => sum + (ord.amount || 0), 0);
+    const outstandingOrdersRaw = await Order.find(dateFilter ? { paymentStatus: { $in: ['pending','enquiry','failed'] }, createdAt: dateFilter } : { paymentStatus: { $in: ['pending','enquiry','failed'] } }).select('amount').lean();
+    const outstandingAmount = outstandingOrdersRaw.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const avgDealValue = successOrders.length > 0 ? Math.round(totalRevenue / successOrders.length) : 0;
 
     // 6. Turnaround Speed (TAT)
     const completedProjects = await Project.find({ status: 'completed' }).select('createdAt updatedAt').lean();
@@ -235,7 +256,8 @@ export const getDashboardStats = async (req, res, next) => {
       };
     });
 
-    const recentOrders = await Order.find({ paymentStatus: 'success' })
+    const recentOrdersFilter = dateFilter ? { paymentStatus: 'success', createdAt: dateFilter } : { paymentStatus: 'success' };
+    const recentOrders = await Order.find(recentOrdersFilter)
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
@@ -304,6 +326,10 @@ export const getDashboardStats = async (req, res, next) => {
       success: true,
       stats: {
         totalRevenue,
+        pendingRevenue,
+        confirmedRevenue: totalRevenue,
+        outstandingAmount,
+        avgDealValue,
         ordersToday,
         revenueToday,
         pendingOrders,

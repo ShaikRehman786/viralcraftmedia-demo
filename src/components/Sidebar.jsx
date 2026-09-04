@@ -45,9 +45,9 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
     name.split(' ').map(n => n[0]).join('').toUpperCase();
 
   const handleNav = (tab) => {
+    // Authoritative navigation first, then close menu — same mechanism as desktop
     setActiveTab(tab);
-    // Defer close to next frame so navigate completes before transform transition
-    requestAnimationFrame(() => setSidebarOpen(false));
+    setSidebarOpen(false);
   };
 
   return (

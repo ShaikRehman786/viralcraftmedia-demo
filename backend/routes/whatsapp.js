@@ -1,5 +1,7 @@
 import express from 'express';
 import { protect, authorize } from '../middleware/auth.js';
+import { webhookLimiter } from '../middleware/rateLimiter.js';
+import { body, validationResult } from 'express-validator';
 import whatsappService from '../services/whatsappService.js';
 import WhatsAppMessage from '../models/WhatsAppMessage.js';
 import WhatsAppSession from '../models/WhatsAppSession.js';
@@ -43,13 +45,16 @@ router.get('/qr', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res,
 });
 
 // 3. Send a message manually
-router.post('/send', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res, next) => {
+router.post('/send', protect, authorize('SUPER_ADMIN'), webhookLimiter, [
+  body('phoneNumber').trim().isLength({ min: 10, max: 15 }).withMessage('Phone number must be 10-15 digits'),
+  body('text').trim().isLength({ min: 1, max: 2048 }).withMessage('Message text must be 1-2048 characters')
+], async (req, res, next) => {
   try {
-    const { phoneNumber, text } = req.body;
-    if (!phoneNumber || !text) {
-      return res.status(400).json({ error: 'Phone number and message text are required.' });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'Validation failed', details: errors.array() });
     }
-
+    const { phoneNumber, text } = req.body;
     const savedMsg = await whatsappService.sendMessage(phoneNumber, text);
     return res.status(200).json({
       success: true,

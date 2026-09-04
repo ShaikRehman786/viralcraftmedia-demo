@@ -50,6 +50,28 @@ export default function PartnerDashboardPage() {
   // Responsive sidebar toggler state
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Close sidebar on Escape and lock body scroll — parity with CRM Sidebar
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e) => { if (e.key === 'Escape') setSidebarOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (sidebarOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [sidebarOpen]);
+
+  const handlePartnerNav = (tabId) => {
+    // Authoritative local tab state — same mechanism desktop uses
+    setActiveTab(tabId);
+    setSidebarOpen(false);
+  };
+
   const { toasts, addToast, removeToast } = useToast();
 
   const tabsContainerRef = React.useRef(null);
@@ -286,33 +308,33 @@ export default function PartnerDashboardPage() {
               <div className="sidebar-group">
                 <div className="sidebar-group-title">Hub Workspace</div>
                 
-                <button
+                <button type="button"
                   className={`sidebar-link${activeTab === 'dashboard' ? ' active' : ''}`}
-                  onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}
+                  onClick={() => handlePartnerNav('dashboard')}
                 >
                   <LayoutDashboard size={18} />
                   Dashboard
                 </button>
 
-                <button
+                <button type="button"
                   className={`sidebar-link${activeTab === 'campaigns' ? ' active' : ''}`}
-                  onClick={() => { setActiveTab('campaigns'); setSidebarOpen(false); }}
+                  onClick={() => handlePartnerNav('campaigns')}
                 >
                   <Layers size={18} />
                   Campaign Links
                 </button>
 
-                <button
+                <button type="button"
                   className={`sidebar-link${activeTab === 'commissions' ? ' active' : ''}`}
-                  onClick={() => { setActiveTab('commissions'); setSidebarOpen(false); }}
+                  onClick={() => handlePartnerNav('commissions')}
                 >
                   <Wallet size={18} />
                   Commission History
                 </button>
 
-                <button
+                <button type="button"
                   className={`sidebar-link${activeTab === 'profile' ? ' active' : ''}`}
-                  onClick={() => { setActiveTab('profile'); setSidebarOpen(false); }}
+                  onClick={() => handlePartnerNav('profile')}
                 >
                   <User size={18} />
                   Profile Settings
@@ -348,10 +370,11 @@ export default function PartnerDashboardPage() {
           {/* Sticky Header TopBar */}
           <header className="app-header">
             <div className="header-left">
-              <button
+              <button type="button"
                 className="header-btn menu-toggle-btn"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
+                onClick={() => setSidebarOpen(prev => !prev)}
                 aria-label="Toggle menu"
+                aria-expanded={sidebarOpen}
               >
                 <Menu size={18} />
               </button>

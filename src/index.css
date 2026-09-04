@@ -11704,7 +11704,6 @@ a { transition: color var(--tr-fast); }
 .tab.active { font-weight: 600; }
 
 /* Z-index system — coherent */
-.app-sidebar { z-index: 30; }
 .app-header { z-index: 20; }
 .dialog-overlay { z-index: 60; }
 .notif-panel { z-index: 50; }

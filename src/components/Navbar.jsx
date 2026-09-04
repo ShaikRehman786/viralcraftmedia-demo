@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const isHome = location.pathname === '/';
 
   const navLinks = [
@@ -15,28 +16,57 @@ export default function Navbar() {
     { label: 'Contact', hash: '#contact' }
   ];
 
+  // Centralized hash navigation — deterministic, no arbitrary timeouts, same SPA mechanism for desktop and mobile
   const handleLinkClick = (e, hash) => {
+    e.preventDefault();
+    navigate(`/${hash}`, { replace: false });
     setMobileOpen(false);
+    // Same-page hash: element already in DOM, scroll immediately (deterministic)
+    // Cross-page hash (service → home#hash): home has not mounted yet, so the effect below handles scroll after route change
     if (isHome) {
-      e.preventDefault();
       const el = document.querySelector(hash);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth' });
-      }
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
-  // Listen to hash on load or page mount to auto-scroll if landing from service pages
+  const handleBrandClick = (e) => {
+    if (isHome) {
+      e.preventDefault();
+      navigate('/#top', { replace: false });
+      setMobileOpen(false);
+      const el = document.querySelector('#top');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      setMobileOpen(false);
+    }
+  };
+
+  // Auto-scroll when landing from service pages or direct hash URL — deterministic, no timeout hack
   useEffect(() => {
     if (isHome && location.hash) {
-      setTimeout(() => {
-        const el = document.querySelector(location.hash);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 100);
+      const el = document.querySelector(location.hash);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
   }, [isHome, location.hash]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+
+  // Lock body scroll when drawer open (avoid background scroll stealing taps)
+  useEffect(() => {
+    if (mobileOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [mobileOpen]);
 
   const [activeSection, setActiveSection] = useState('top');
 
@@ -70,7 +100,7 @@ export default function Navbar() {
     <>
       <nav className="navbar">
         <div className="nav-inner">
-          <Link to="/" className="brand" onClick={(e) => { if (isHome) { e.preventDefault(); const el = document.querySelector('#top'); if (el) el.scrollIntoView({ behavior: 'smooth' }); } }}>
+          <Link to="/" className="brand" onClick={handleBrandClick}>
             <img className="brand-logo" src="/logoooooooooo.png" alt="ViralCraftMedia" fetchPriority="high" loading="eager" decoding="async" />
           </Link>
           <div className="nav-center">
@@ -96,17 +126,17 @@ export default function Navbar() {
             <Link to="/login" className="nav-instagram" aria-label="Login" style={{ marginLeft: '12px', display: 'flex', alignItems: 'center' }}>
               <Lock size={16} />
             </Link>
-            <Link to={isHome ? '#pricing' : '/#pricing'} className="btn-nav-cta" onClick={(e) => handleLinkClick(e, '#pricing')}>
+            <Link to="/#pricing" className="btn-nav-cta" onClick={(e) => handleLinkClick(e, '#pricing')}>
               Start Project <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
             </Link>
-            <button className={`mobile-toggle ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(p => !p)} aria-label="Menu"><span></span><span></span><span></span></button>
+            <button type="button" className={`mobile-toggle ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(p => !p)} aria-label="Toggle menu" aria-expanded={mobileOpen}><span></span><span></span><span></span></button>
           </div>
         </div>
       </nav>
 
-      {/* MOBILE DRAWER */}
-      <div className={`mobile-drawer ${mobileOpen ? 'active' : ''}`}>
-        <div className="mobile-drawer-inner">
+      {/* MOBILE DRAWER — same authoritative navigate as desktop, backdrop closes, Escape closes */}
+      <div className={`mobile-drawer ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)} aria-hidden={!mobileOpen}>
+        <div className="mobile-drawer-inner" onClick={(e) => e.stopPropagation()}>
           {navLinks.map((link) => (
             <Link
               key={link.hash}
@@ -116,7 +146,7 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-          <Link to={isHome ? '#pricing' : '/#pricing'} className="btn btn-primary mobile-cta" onClick={(e) => handleLinkClick(e, '#pricing')}>
+          <Link to="/#pricing" className="btn btn-primary mobile-cta" onClick={(e) => handleLinkClick(e, '#pricing')}>
             Start Project <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
           </Link>
         </div>

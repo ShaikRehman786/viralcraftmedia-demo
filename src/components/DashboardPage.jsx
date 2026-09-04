@@ -35,8 +35,8 @@ const ROLE_ACCESS = {
   staff: ['SUPER_ADMIN', 'MANAGER'],
   logs: ['SUPER_ADMIN'],
   backup: ['SUPER_ADMIN', 'BACKUP_ADMIN'],
-  enquiries: ['SUPER_ADMIN'],
-  whatsapp: ['SUPER_ADMIN'],
+  enquiries: ['SUPER_ADMIN', 'MANAGER'],
+  whatsapp: ['SUPER_ADMIN', 'MANAGER'],
   payments: ['CLIENT', 'SUPER_ADMIN'],
   'notification-center': ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
   referrals: ['SUPER_ADMIN'],
@@ -384,25 +384,14 @@ export default function DashboardPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  // Authorization check (redirect if trying to access unauthorized tab)
+  // Authorization check (redirect if trying to access unauthorized tab) — unified with top ROLE_ACCESS
   useEffect(() => {
     if (!user) return;
 
-    const ROLE_ACCESS = {
-      overview: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
-      projects: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
-      calendar: ['SUPER_ADMIN', 'MANAGER'],
-      staff: ['SUPER_ADMIN'],
-      logs: ['SUPER_ADMIN'],
-      enquiries: ['SUPER_ADMIN', 'MANAGER'],
-      whatsapp: ['SUPER_ADMIN', 'MANAGER'],
-      payments: ['CLIENT', 'SUPER_ADMIN'],
-      'notification-center': ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
-      referrals: ['SUPER_ADMIN'],
-    };
+    const ROLE_ACCESS_INNER = ROLE_ACCESS;
 
     const canAccessTab = (tabId, role) => {
-      const allowed = ROLE_ACCESS[tabId];
+      const allowed = ROLE_ACCESS_INNER[tabId];
       if (!allowed) return false;
       return allowed.includes(role);
     };

@@ -20,25 +20,14 @@ export const login = async (req, res, next) => {
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
     // Intercept backup admin account for database isolation and Backup Database validation
-    const backupAdminEmail = (config.backupAdminEmail || 'backupadmin@viralcraftmedia.com').toLowerCase();
+    const backupAdminEmail = config.backupAdminEmail.toLowerCase();
     
-    // DEBUG LOG
-    if (email) {
-      console.log(`[DEBUG] Incoming email: ${email}`);
-    }
-
     if (email && email.toLowerCase() === backupAdminEmail) {
-      // DEBUG LOG
-      console.log('[DEBUG] Backup login branch reached');
 
       const { backupConnection, getBackupModel } = await import('../services/backupService.js');
       if (!backupConnection || backupConnection.readyState !== 1) {
-        console.log('[DEBUG] Backup DB connection state is NOT ready');
         return res.status(500).json({ error: 'Backup Database connection is not ready. Please try again.' });
       }
-
-      // DEBUG LOG
-      console.log('[DEBUG] Backup DB connected');
 
       const BackupUser = getBackupModel('User');
       if (!BackupUser) {
@@ -48,12 +37,8 @@ export const login = async (req, res, next) => {
       // Query ONLY the Backup Database for the backup user
       const user = await BackupUser.findOne({ email: backupAdminEmail }).select('+password');
       if (!user) {
-        console.log('[DEBUG] Backup Admin NOT found in Backup DB');
         return res.status(401).json({ error: 'Invalid credentials' });
       }
-
-      // DEBUG LOG
-      console.log('[DEBUG] Backup Admin found');
 
       // Check status
       if (user.status && user.status.toUpperCase() === 'INACTIVE') {
@@ -62,9 +47,6 @@ export const login = async (req, res, next) => {
 
       // Validate password against the hashed password stored in the Backup Database using bcrypt
       const isMatch = await bcrypt.compare(password, user.password);
-      
-      // DEBUG LOG
-      console.log(`[DEBUG] Password comparison result: ${isMatch}`);
 
       if (!isMatch) {
         await logEvent({
@@ -77,20 +59,17 @@ export const login = async (req, res, next) => {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      // Generate access and refresh tokens for mock session (maintaining the same mock session for request path isolation)
+      // Generate access and refresh tokens for the backup admin
       const accessToken = jwt.sign(
-        { id: 'backup_admin_mock_id_placeholder', role: 'BACKUP_ADMIN' },
+        { id: user._id, role: 'BACKUP_ADMIN' },
         config.jwtSecret,
         { expiresIn: config.jwtAccessExpiry }
       );
       const refreshToken = jwt.sign(
-        { id: 'backup_admin_mock_id_placeholder', role: 'BACKUP_ADMIN' },
+        { id: user._id, role: 'BACKUP_ADMIN' },
         config.jwtRefreshSecret,
         { expiresIn: config.jwtRefreshExpiry }
       );
-
-      // DEBUG LOG
-      console.log('[DEBUG] JWT generated');
 
       const isProduction = config.nodeEnv === 'production';
       const cookieOptions = {
@@ -115,9 +94,6 @@ export const login = async (req, res, next) => {
         ipAddress: clientIp,
         userAgent
       }).catch(() => {});
-
-      // DEBUG LOG
-      console.log('[DEBUG] Login success');
 
       return res.status(200).json({
         success: true,
@@ -293,7 +269,7 @@ export const logout = async (req, res, next) => {
     }
 
     const token = req.cookies.refreshToken;
-    if (token && req.user && req.user._id !== 'backup_admin_mock_id_placeholder') {
+    if (token && req.user) {
       req.user.refreshTokens = req.user.refreshTokens.filter(t => t.token !== token);
       await req.user.save();
     }

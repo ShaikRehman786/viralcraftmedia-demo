@@ -3,6 +3,7 @@ import axios from 'axios';
 import { getReferralAttribution, clearReferralAttribution } from '../services/referralAttribution.js';
 import { Scissors, Activity, TrendingUp, Monitor, Play, Heart, MessageCircle, Bookmark, Zap, Target, Layers, UserCheck, Clock, Shield, UploadCloud, DownloadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
 import AnimatedCounter from './shared/AnimatedCounter.jsx';
 import { clientTestimonials } from '../data/clientTestimonials.js';
@@ -229,7 +230,7 @@ export default function ClipEditingPage() {
 
   return (
     <div className="landing-page-wrap">
-      
+      <Navbar />
       <main style={{ paddingTop: '80px' }}>
         {/* HERO SECTION */}
         <section className="hero" id="top">

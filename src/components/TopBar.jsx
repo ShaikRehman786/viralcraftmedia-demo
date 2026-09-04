@@ -31,10 +31,11 @@ const ROLE_ACCESS = {
   calendar: ['SUPER_ADMIN'],
   staff: ['SUPER_ADMIN', 'MANAGER'],
   logs: ['SUPER_ADMIN'],
-  enquiries: ['SUPER_ADMIN'],
-  whatsapp: ['SUPER_ADMIN'],
+  enquiries: ['SUPER_ADMIN', 'MANAGER'],
+  whatsapp: ['SUPER_ADMIN', 'MANAGER'],
   payments: ['CLIENT', 'SUPER_ADMIN'],
-  'notification-center': ['SUPER_ADMIN'],
+  'notification-center': ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
+  referrals: ['SUPER_ADMIN'],
 };
 
 const TAB_LABELS = {

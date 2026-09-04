@@ -289,30 +289,18 @@ export const getCampaigns = async (req, res, next) => {
 export const createCampaign = async (req, res, next) => {
   const { campaignName, partner, validityDays, customExpiryDate, landingPage, minCommissionPercentage, maxCommissionPercentage, notes, service, targetRoute, campaignType, serviceId, serviceSlug, serviceName } = req.body;
 
-  // Log incoming request body safely
-  console.log('[Referral Campaign creation request payload]:', {
-    campaignName,
-    partner,
-    validityDays,
-    customExpiryDate,
-    landingPage,
-    minCommissionPercentage,
-    maxCommissionPercentage,
-    service,
-    targetRoute,
-    campaignType,
-    serviceId,
-    serviceSlug,
-    serviceName
-  });
-
-  if (!campaignName || !partner || validityDays === undefined || minCommissionPercentage === undefined || maxCommissionPercentage === undefined) {
+    if (!campaignName || !partner || validityDays === undefined || minCommissionPercentage === undefined || maxCommissionPercentage === undefined) {
     return res.status(400).json({ error: 'Please provide all required campaign parameters: campaignName, partner, validityDays, minCommissionPercentage, maxCommissionPercentage' });
   }
 
   // 1. Verify partner format and existence
   if (!mongoose.Types.ObjectId.isValid(partner)) {
     return res.status(400).json({ error: 'Invalid partner reference ID format' });
+  }
+
+  // 1.5 Prevent self-referral
+  if (req.user && req.user._id && req.user._id.toString() === partner) {
+    return res.status(400).json({ error: 'Cannot create a campaign for yourself as the partner.' });
   }
 
   try {
@@ -720,14 +708,11 @@ export const createBookingCommission = async (req, res, next) => {
       return res.status(200).json({ success: true, message: 'Commission reset successfully' });
     }
 
-    const val = bookingValue !== undefined ? Number(bookingValue) : booking.bookingValue;
-    const pct = commissionPercentage !== undefined ? Number(commissionPercentage) : booking.commissionPercentage;
+    const val = booking.bookingValue;
+    const pct = booking.commissionPercentage;
     const commissionAmount = val * (pct / 100);
 
     // 2. Otherwise update booking commission details
-    booking.bookingValue = val;
-    booking.commissionPercentage = pct;
-    booking.commissionAmount = commissionAmount;
     booking.status = 'Completed';
     await booking.save();
 

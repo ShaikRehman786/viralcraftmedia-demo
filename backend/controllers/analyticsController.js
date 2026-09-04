@@ -3,6 +3,7 @@ import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import User from '../models/User.js';
 import Enquiry from '../models/Enquiry.js';
+import Payment from '../models/Payment.js';
 
 /**
  * Gathers business statistics and metrics using real MongoDB aggregates
@@ -58,15 +59,40 @@ export const getDashboardStats = async (req, res, next) => {
     const projectsDueToday = await Project.countDocuments({ estimatedCompletion: { $gte: today, $lte: endOfToday } });
     const projectsDelayed = await Project.countDocuments({ estimatedCompletion: { $lt: today }, status: { $ne: 'completed' } });
 
-    // 5. Success Payments & Revenue Overview — confirmed vs pending separation (dateFilter aware, uses createdAt = verified date)
+    // 5. Success Payments & Revenue Overview — confirmed vs pending/failed/refunded/abandoned separation
+    // Authoritative: Order.paymentStatus + Payment.status, both keyed by createdAt (verified/captured timestamp)
     const successMatch = dateFilter ? { paymentStatus: 'success', createdAt: dateFilter } : { paymentStatus: 'success' };
     const pendingMatch = dateFilter ? { paymentStatus: { $in: ['pending', 'enquiry'] }, createdAt: dateFilter } : { paymentStatus: { $in: ['pending', 'enquiry'] } };
-    const successOrders = await Order.find(successMatch).select('amount createdAt').lean();
+    const failedMatch = dateFilter ? { paymentStatus: 'failed', createdAt: dateFilter } : { paymentStatus: 'failed' };
+    const refundedMatch = dateFilter ? { paymentStatus: 'refunded', createdAt: dateFilter } : { paymentStatus: 'refunded' };
+    // Abandoned = Payment created but never captured (no razorpayPaymentId) — within same date window
+    const abandonedPaymentMatch = dateFilter ? { status: 'created', razorpayPaymentId: { $exists: false }, createdAt: dateFilter } : { status: 'created', razorpayPaymentId: { $exists: false } };
+    // Fallback for abandoned where razorpayPaymentId is null/undefined sparsely
+    const abandonedPaymentMatchAlt = dateFilter ? { status: 'created', razorpayPaymentId: null, createdAt: dateFilter } : { status: 'created', razorpayPaymentId: null };
+    const successOrders = await Order.find(successMatch).select('amount createdAt razorpayOrderId').lean();
     const totalRevenue = successOrders.reduce((sum, ord) => sum + (ord.amount || 0), 0);
     const pendingOrdersRaw = await Order.find(pendingMatch).select('amount createdAt').lean();
     const pendingRevenue = pendingOrdersRaw.reduce((sum, ord) => sum + (ord.amount || 0), 0);
-    const outstandingOrdersRaw = await Order.find(dateFilter ? { paymentStatus: { $in: ['pending','enquiry','failed'] }, createdAt: dateFilter } : { paymentStatus: { $in: ['pending','enquiry','failed'] } }).select('amount').lean();
-    const outstandingAmount = outstandingOrdersRaw.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const failedOrdersRaw = await Order.find(failedMatch).select('amount createdAt').lean();
+    const failedRevenue = failedOrdersRaw.reduce((sum, o) => sum + (o.amount || 0), 0);
+    // Payment-level failed (webhook-marked) that may not have Order row
+    const failedPaymentsRaw = await Payment.find(dateFilter ? { status: 'failed', createdAt: dateFilter } : { status: 'failed' }).select('amount').lean();
+    const failedPaymentsRevenue = failedPaymentsRaw.reduce((sum, p) => sum + (p.amount || 0), 0);
+    // Combine failed: prefer Order failed amount, plus any Payment failed not already counted (avoid double-count by orderId)
+    const failedOrderIds = new Set(successOrders.map(o => o.razorpayOrderId).concat(failedOrdersRaw.map(o => o.razorpayOrderId).filter(Boolean)));
+    const dedupFailedPaymentsRevenue = failedPaymentsRaw.filter(p => !failedOrderIds.has(p.razorpayOrderId)).reduce((sum, p) => sum + (p.amount || 0), 0);
+    const failedRevenueTotal = failedRevenue + dedupFailedPaymentsRevenue;
+    const refundedOrdersRaw = await Order.find(refundedMatch).select('amount').lean();
+    const refundedPaymentsRaw = await Payment.find(dateFilter ? { status: 'refunded', createdAt: dateFilter } : { status: 'refunded' }).select('amount').lean();
+    const refundedRevenue = refundedOrdersRaw.reduce((sum, o) => sum + (o.amount || 0), 0) + refundedPaymentsRaw.reduce((sum, p) => sum + (p.amount || 0), 0) - refundedOrdersRaw.filter(o => refundedPaymentsRaw.some(p => p.razorpayOrderId && p.razorpayOrderId === o.razorpayOrderId)).reduce((s, o) => s + (o.amount || 0), 0);
+    const abandonedPaymentsRaw = await Payment.find({ $or: [abandonedPaymentMatch, abandonedPaymentMatchAlt] }).select('amount createdAt').lean();
+    const abandonedRevenue = abandonedPaymentsRaw.reduce((sum, p) => sum + (p.amount || 0), 0);
+    // Outstanding = genuine pending only (not failed/abandoned) — pending is not revenue
+    const outstandingAmount = pendingOrdersRaw.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const outstandingCount = pendingOrdersRaw.length;
+    const failedCount = failedOrdersRaw.length + failedPaymentsRaw.filter(p => !failedOrderIds.has(p.razorpayOrderId)).length;
+    const refundedCount = refundedOrdersRaw.length;
+    const abandonedCount = abandonedPaymentsRaw.length;
     const avgDealValue = successOrders.length > 0 ? Math.round(totalRevenue / successOrders.length) : 0;
 
     // 6. Turnaround Speed (TAT)
@@ -226,35 +252,83 @@ export const getDashboardStats = async (req, res, next) => {
       });
     }
 
-    // 10. Monthly growth charts aggregates
-    const currentYear = new Date().getFullYear();
-    const startOfYear = new Date(currentYear, 0, 1);
-    const monthlyStats = await Order.aggregate([
-      { 
-        $match: { 
-          paymentStatus: 'success', 
-          createdAt: { $gte: startOfYear } 
-        } 
-      },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          revenue: { $sum: "$amount" },
-          orders: { $sum: 1 }
-        }
-      },
-      { $sort: { "_id": 1 } }
-    ]);
-
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const growthChart = months.map((month, index) => {
-      const match = monthlyStats.find(item => item._id === index + 1);
-      return {
-        month,
-        revenue: match ? match.revenue : 0,
-        orders: match ? match.orders : 0
-      };
-    });
+    // 10. Budget timeline — per-day buckets using correct event timestamp (IST), dateFilter aware
+    // Confirmed = Order paymentStatus success @ createdAt (verified time)
+    // Pending = Order pending/enquiry @ createdAt
+    // Failed = Order failed + Payment failed (deduped) @ createdAt
+    let budgetTimeline = [];
+    let growthChart;
+    try {
+      const tz = 'Asia/Kolkata';
+      // Determine timeline range: dateFilter else last 30 days
+      const rangeEnd = dateFilter ? new Date(dateFilter.$lte) : new Date();
+      const rangeStart = dateFilter ? new Date(dateFilter.$gte) : new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
+      rangeStart.setHours(0,0,0,0);
+      rangeEnd.setHours(23,59,59,999);
+      const dayKeys = [];
+      const dayMap = new Map();
+      for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+        const key = d.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD in IST
+        dayKeys.push(key);
+        dayMap.set(key, { date: key, confirmed: 0, pending: 0, failed: 0, refunded: 0, countConfirmed: 0, countPending: 0, countFailed: 0 });
+      }
+      // Aggregate by IST day string
+      const [confirmedByDay, pendingByDay, failedByDay, refundedByDay] = await Promise.all([
+        Order.aggregate([
+          { $match: { paymentStatus: 'success', createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } }
+        ]),
+        Order.aggregate([
+          { $match: { paymentStatus: { $in: ['pending','enquiry'] }, createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } }
+        ]),
+        Order.aggregate([
+          { $match: { paymentStatus: 'failed', createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } }
+        ]),
+        Order.aggregate([
+          { $match: { paymentStatus: 'refunded', createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } }
+        ])
+      ]);
+      confirmedByDay.forEach(r => { const e = dayMap.get(r._id); if (e) { e.confirmed = r.revenue; e.countConfirmed = r.count; }});
+      pendingByDay.forEach(r => { const e = dayMap.get(r._id); if (e) { e.pending = r.revenue; e.countPending = r.count; }});
+      failedByDay.forEach(r => { const e = dayMap.get(r._id); if (e) { e.failed = r.revenue; e.countFailed = r.count; }});
+      refundedByDay.forEach(r => { const e = dayMap.get(r._id); if (e) { e.refunded = r.revenue; }});
+      budgetTimeline = dayKeys.map(k => dayMap.get(k));
+      // Legacy growthChart — keep shape but make dateFilter aware: monthly revenue for the timeline range's year span
+      const monthlyStats = await Order.aggregate([
+        { $match: { paymentStatus: 'success', createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+        { $group: { _id: { $month: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz } } }, revenue: { $sum: '$amount' }, orders: { $sum: 1 } } }
+      ]);
+      // Fallback monthly mapping for widget compatibility: map by calendar month name
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      // If range spans single year, show that year's months; otherwise show timeline months directly
+      const monthAggByNum = await Order.aggregate([
+        { $match: { paymentStatus: 'success', createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+        { $group: { _id: { $month: '$createdAt' }, revenue: { $sum: '$amount' }, orders: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]);
+      growthChart = months.map((month, index) => {
+        const match = monthAggByNum.find(item => item._id === index + 1);
+        return { month, revenue: match ? match.revenue : 0, orders: match ? match.orders : 0 };
+      });
+    } catch (e) {
+      // Fail-closed to legacy behaviour — never break dashboard for timeline error
+      const currentYear = new Date().getFullYear();
+      const startOfYear = new Date(currentYear, 0, 1);
+      const monthlyStats = await Order.aggregate([
+        { $match: { paymentStatus: 'success', createdAt: { $gte: startOfYear } } },
+        { $group: { _id: { $month: "$createdAt" }, revenue: { $sum: "$amount" }, orders: { $sum: 1 } } },
+        { $sort: { "_id": 1 } }
+      ]);
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      growthChart = months.map((month, index) => {
+        const match = monthlyStats.find(item => item._id === index + 1);
+        return { month, revenue: match ? match.revenue : 0, orders: match ? match.orders : 0 };
+      });
+      budgetTimeline = [];
+    }
 
     const recentOrdersFilter = dateFilter ? { paymentStatus: 'success', createdAt: dateFilter } : { paymentStatus: 'success' };
     const recentOrders = await Order.find(recentOrdersFilter)
@@ -328,7 +402,14 @@ export const getDashboardStats = async (req, res, next) => {
         totalRevenue,
         pendingRevenue,
         confirmedRevenue: totalRevenue,
+        failedRevenue: failedRevenueTotal,
+        failedCount,
+        refundedRevenue,
+        refundedCount,
+        abandonedRevenue,
+        abandonedCount,
         outstandingAmount,
+        outstandingCount,
         avgDealValue,
         ordersToday,
         revenueToday,
@@ -347,6 +428,7 @@ export const getDashboardStats = async (req, res, next) => {
         employeeProductivity,
         managerProductivity,
         growthChart,
+        budgetTimeline,
         recentOrders,
         referralStats
       }

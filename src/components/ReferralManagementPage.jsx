@@ -602,25 +602,33 @@ export default function ReferralManagementPage({ user, addToast }) {
   return (
     <div className="animate-fade-in">
       
-      {/* Title */}
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Referral Partner Hub</h2>
-          <p className="section-subtitle">
-            Manage external partner agencies, unique links, cookie attributions, commissions, and payout records.
-          </p>
+      {/* Premium Header — hierarchy, stats, single primary action */}
+      <div className="card" style={{ padding: '20px', marginBottom: '16px', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+            <h2 className="section-title" style={{ margin: 0, fontSize: '1.25rem', letterSpacing: '-0.02em' }}>Referral Partner Hub</h2>
+            <p className="section-subtitle" style={{ margin: '6px 0 0', maxWidth: 560, lineHeight: 1.5 }}>
+              Partner agencies · Campaign links with cookie attribution · Bookings only when genuine referral exists · Commissions & payouts
+            </p>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
+              <span className="badge badge-gray" style={{ fontSize: '0.72rem' }}>{partners.length} Partners</span>
+              <span className="badge badge-gray" style={{ fontSize: '0.72rem' }}>{campaigns.length} Campaigns</span>
+              <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{bookings.length} Referral bookings</span>
+              <span className="badge badge-gray" style={{ fontSize: '0.72rem' }}>{commissions.filter(c=>c.status==='Pending').length} Pending commissions</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button onClick={refreshActiveData} disabled={loading} className="btn btn-ghost btn-sm" style={{ border: '1px solid var(--border)' }}>
+              <RefreshCw size={14} className={loading ? "spinner" : ""} /> Sync
+            </button>
+            {activeSubTab === 'partners' && <button onClick={openCreatePartner} className="btn btn-primary btn-sm"><UserPlus size={14} /> Add Partner</button>}
+            {activeSubTab === 'campaigns' && <button onClick={openCreateCampaign} className="btn btn-primary btn-sm"><Layers size={14} /> New Campaign</button>}
+          </div>
         </div>
-        <button 
-          onClick={refreshActiveData}
-          disabled={loading}
-          className="btn btn-secondary flex items-center gap-2"
-        >
-          <RefreshCw size={14} className={loading ? "spinner" : ""} /> Refresh Data
-        </button>
       </div>
 
-      {/* Tabs Menu */}
-      <div className="scrollable-tabs-bar mb-5" ref={tabsContainerRef}>
+      {/* Tabs — scrollable on mobile, no overflow, keyboard accessible */}
+      <div className="scrollable-tabs-bar mb-5" ref={tabsContainerRef} role="tablist" aria-label="Referral sections" style={{ overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
         {[
           { id: 'partners', name: 'Partners', icon: Users },
           { id: 'campaigns', name: 'Campaigns', icon: Layers },
@@ -635,11 +643,11 @@ export default function ReferralManagementPage({ user, addToast }) {
           return (
             <button
               key={tab.id}
-              onClick={() => {
-                setActiveSubTab(tab.id);
-                setSearchQuery('');
-              }}
+              role="tab"
+              aria-selected={active}
+              onClick={() => { setActiveSubTab(tab.id); setSearchQuery(''); }}
               className={`tab ${active ? 'active' : ''}`}
+              style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               <Icon size={14} />
               {tab.name}
@@ -648,21 +656,7 @@ export default function ReferralManagementPage({ user, addToast }) {
         })}
       </div>
 
-      {/* Action buttons row (Search Bar Removed) */}
-      {['partners', 'campaigns'].includes(activeSubTab) && (
-        <div className="flex justify-end gap-2 mb-4">
-          {activeSubTab === 'partners' && (
-            <button onClick={openCreatePartner} className="btn btn-primary">
-              <UserPlus size={16} /> Add Partner
-            </button>
-          )}
-          {activeSubTab === 'campaigns' && (
-            <button onClick={openCreateCampaign} className="btn btn-primary">
-              <Layers size={16} /> New Campaign
-            </button>
-          )}
-        </div>
-      )}
+
 
       {/* Main Tab Rendering Block */}
       {loading ? (

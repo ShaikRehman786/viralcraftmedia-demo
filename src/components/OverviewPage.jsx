@@ -666,6 +666,7 @@ export default function OverviewPage({
   }, [activeFilter, customRange, getISTDateRange]);
   const displayAnalytics = filteredAnalytics || analytics;
 
+  // Projects filtered for non-financial widgets (category breakdown etc.) — financial KPIs use backend authoritative stats only
   const filteredProjects = useMemo(() => {
     const { start, end } = getISTDateRange(activeFilter === 'Month' ? 'This Month' : activeFilter, customRange);
     return projects.filter(p => {
@@ -674,37 +675,24 @@ export default function OverviewPage({
     });
   }, [projects, activeFilter, customRange, getISTDateRange]);
 
-  const previousPeriodProjects = useMemo(() => {
-    const { start, end } = getISTDateRange(activeFilter, customRange);
-    const duration = end.getTime() - start.getTime();
-    const prevStart = new Date(start.getTime() - duration - 1);
-    const prevEnd = new Date(start.getTime() - 1);
-    return projects.filter(p => {
-      const pDate = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
-      return pDate >= prevStart && pDate <= prevEnd;
-    });
-  }, [projects, activeFilter, customRange, getISTDateRange]);
-
-  const totalRevenue = useMemo(() => {
-    return filteredProjects.reduce((acc, p) => acc + (p.order?.amount || 0), 0);
-  }, [filteredProjects]);
-
-  const prevRevenue = useMemo(() => {
-    return previousPeriodProjects.reduce((acc, p) => acc + (p.order?.amount || 0), 0);
-  }, [previousPeriodProjects]);
-
-  const formattedRevenue = totalRevenue > 0 ? (totalRevenue >= 100000 ? `₹${(totalRevenue / 100000).toFixed(1)}L` : `₹${totalRevenue.toLocaleString('en-IN')}`) : '₹0';
-  const formattedNetProfit = totalRevenue > 0 ? (totalRevenue >= 100000 ? `₹${(totalRevenue / 100000).toFixed(1)}L` : `₹${totalRevenue.toLocaleString('en-IN')}`) : '₹0';
-
-  const outstandingSum = useMemo(() => {
-    return filteredProjects
-      .filter(p => p.status !== 'completed' && p.order?.amount)
-      .reduce((acc, p) => acc + p.order.amount, 0);
-  }, [filteredProjects]);
-  const formattedOutstanding = outstandingSum > 0 ? (outstandingSum >= 100000 ? `₹${(outstandingSum / 100000).toFixed(1)}L` : `₹${outstandingSum.toLocaleString('en-IN')}`) : '₹0';
-
-  const averageDealValue = filteredProjects.length > 0 ? totalRevenue / filteredProjects.length : 0;
-  const formattedAverageDeal = averageDealValue > 0 ? (averageDealValue >= 100000 ? `₹${(averageDealValue / 100000).toFixed(1)}L` : `₹${Math.round(averageDealValue).toLocaleString('en-IN')}`) : '₹0';
+  // Authoritative financial values — from backend MongoDB, never derived from frontend project aggregation
+  const confirmedRevenue = displayAnalytics?.confirmedRevenue ?? displayAnalytics?.totalRevenue ?? 0;
+  const pendingRevenue = displayAnalytics?.pendingRevenue ?? 0;
+  const failedRevenue = displayAnalytics?.failedRevenue ?? 0;
+  const refundedRevenue = displayAnalytics?.refundedRevenue ?? 0;
+  const abandonedRevenue = displayAnalytics?.abandonedRevenue ?? 0;
+  const outstandingSum = displayAnalytics?.outstandingAmount ?? 0;
+  const averageDealValue = displayAnalytics?.avgDealValue ?? 0;
+  const inr = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+  const fmtL = (n) => n >= 100000 ? `₹${(n/100000).toFixed(1)}L` : `₹${Math.round(n).toLocaleString('en-IN')}`;
+  const formattedRevenue = confirmedRevenue ? fmtL(confirmedRevenue) : '₹0';
+  const formattedNetProfit = formattedRevenue; // Net = confirmed (no cost model)
+  const formattedOutstanding = outstandingSum ? fmtL(outstandingSum) : '₹0';
+  const formattedAverageDeal = averageDealValue ? fmtL(averageDealValue) : '₹0';
+  const formattedPending = pendingRevenue ? fmtL(pendingRevenue) : '₹0';
+  const formattedFailed = failedRevenue ? fmtL(failedRevenue) : '₹0';
+  const formattedAbandoned = abandonedRevenue ? fmtL(abandonedRevenue) : '₹0';
+  const formattedRefunded = refundedRevenue ? fmtL(refundedRevenue) : '₹0';
   
   const overdueTasksCount = useMemo(() => {
     const now = new Date();
@@ -734,87 +722,62 @@ export default function OverviewPage({
     return Object.entries(categoryRevenueMap).reduce((max, [cat, val]) => val > max.val ? { cat, val } : max, { cat: 'Video Production', val: 0 }).cat;
   }, [categoryRevenueMap]);
 
-  // Compute dynamic chart data
+  // Timeline — authoritative backend buckets (per IST day, correct event timestamp), never frontend aggregation
   const dynamicChartData = useMemo(() => {
-    const { start, end } = getISTDateRange(activeFilter, customRange);
-    const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (activeFilter === 'Today' || activeFilter === 'Yesterday') {
-      const hours = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'];
-      const acc = hours.map(h => ({ month: h, revenue: 0, orders: 0 }));
-      filteredProjects.forEach(p => {
-        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
-        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const hr = istDate.getHours();
-        const idx = Math.min(5, Math.floor(hr / 4));
-        acc[idx].revenue += p.order?.amount || 0;
-        acc[idx].orders += 1;
-      });
-      return acc;
-    } else if (diffDays <= 7) {
-      const acc = [];
-      const tempDate = new Date(start);
-      while (tempDate <= end) {
-        acc.push({
-          month: tempDate.toLocaleDateString('en-US', { weekday: 'short' }),
-          dateStr: tempDate.toDateString(),
-          revenue: 0,
-          orders: 0
-        });
-        tempDate.setDate(tempDate.getDate() + 1);
+    const tl = displayAnalytics?.budgetTimeline;
+    if (Array.isArray(tl) && tl.length > 0) {
+      // Backend timeline is per-day with {date, confirmed, pending, failed, refunded}
+      // For chart, map to requested granularity while preserving correct totals
+      const diffDays = tl.length;
+      if (activeFilter === 'Today' || activeFilter === 'Yesterday') {
+        // Single day — show the day's confirmed as single point; backend timeline already correct
+        const d = tl[0];
+        return [{ month: d.date.slice(5), revenue: d.confirmed, confirmed: d.confirmed, pending: d.pending, failed: d.failed, orders: d.countConfirmed }];
       }
-      filteredProjects.forEach(p => {
-        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
-        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const match = acc.find(a => a.dateStr === istDate.toDateString());
-        if (match) {
-          match.revenue += p.order?.amount || 0;
-          match.orders += 1;
-        }
-      });
-      return acc;
-    } else if (diffDays <= 31) {
-      const acc = [];
-      const step = Math.max(1, Math.ceil(diffDays / 5));
-      for (let i = 0; i < 5; i++) {
-        const pStart = new Date(start);
-        pStart.setDate(start.getDate() + i * step);
-        const pEnd = new Date(pStart);
-        pEnd.setDate(pStart.getDate() + step - 1);
-        acc.push({
-          month: `${pStart.getDate()} ${pStart.toLocaleString('en-US', { month: 'short' })}`,
-          startRange: pStart,
-          endRange: pEnd,
-          revenue: 0,
-          orders: 0
-        });
+      if (diffDays <= 7) {
+        return tl.map(d => ({
+          month: new Date(d.date).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' }),
+          revenue: d.confirmed,
+          confirmed: d.confirmed,
+          pending: d.pending,
+          failed: d.failed,
+          orders: d.countConfirmed,
+          date: d.date
+        }));
       }
-      filteredProjects.forEach(p => {
-        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
-        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const match = acc.find(a => istDate >= a.startRange && istDate <= a.endRange);
-        if (match) {
-          match.revenue += p.order?.amount || 0;
-          match.orders += 1;
-        }
+      if (diffDays <= 31) {
+        // For 30-day views, show daily confirmed (already correct) — no frontend re-aggregation
+        return tl.map(d => ({
+          month: `${new Date(d.date).getDate()} ${new Date(d.date).toLocaleString('en-US', { month: 'short', timeZone: 'Asia/Kolkata' })}`,
+          revenue: d.confirmed,
+          confirmed: d.confirmed,
+          pending: d.pending,
+          failed: d.failed,
+          orders: d.countConfirmed,
+          date: d.date
+        }));
+      }
+      // >31 days (Quarter/Year): bucket by month from timeline days, summing confirmed per month (still correct timestamp)
+      const byMonth = {};
+      tl.forEach(d => {
+        const m = new Date(d.date).toLocaleString('en-US', { month: 'short', timeZone: 'Asia/Kolkata' });
+        if (!byMonth[m]) byMonth[m] = { month: m, revenue: 0, confirmed: 0, pending: 0, failed: 0, orders: 0 };
+        byMonth[m].revenue += d.confirmed;
+        byMonth[m].confirmed += d.confirmed;
+        byMonth[m].pending += d.pending;
+        byMonth[m].failed += d.failed;
+        byMonth[m].orders += d.countConfirmed;
       });
-      return acc;
-    } else {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const acc = months.map(m => ({ month: m, revenue: 0, orders: 0 }));
-      filteredProjects.forEach(p => {
-        const date = p.order?.orderDate ? new Date(p.order.orderDate) : new Date(p.createdAt);
-        const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const monthStr = istDate.toLocaleString('default', { month: 'short' });
-        const match = acc.find(a => a.month === monthStr);
-        if (match) {
-          match.revenue += p.order?.amount || 0;
-          match.orders += 1;
-        }
-      });
-      return acc;
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return months.filter(m => byMonth[m]).map(m => byMonth[m]);
     }
-  }, [filteredProjects, activeFilter, customRange, getISTDateRange]);
+    // Fallback: legacy growthChart or empty (never fabricate)
+    const gc = displayAnalytics?.growthChart;
+    if (Array.isArray(gc) && gc.some(x => x.revenue > 0)) {
+      return gc.map(g => ({ month: g.month, revenue: g.revenue, orders: g.orders, confirmed: g.revenue }));
+    }
+    return [];
+  }, [displayAnalytics, activeFilter]);
 
   const highestMonthObj = useMemo(() => {
     return dynamicChartData.reduce((max, d) => d.revenue > max.revenue ? d : max, { month: 'N/A', revenue: 0 });
@@ -974,35 +937,54 @@ export default function OverviewPage({
               </div>
             ) : (
               <>
-              {/* Financial Overview — confirmed vs pending (real DB state, realtime, date-filtered) */}
+              {/* Financial Overview — authoritative backend buckets, premium hierarchy */}
               <div className="card animate-slide-up" style={{ marginTop: '16px', opacity: filterLoading ? 0.7 : 1 }}>
                 <div className="card-header" style={{ paddingBottom: '12px' }}>
                   <div>
                     <h3 className="section-title">Financial Overview</h3>
-                    <p className="section-subtitle">Confirmed budget only after verified payment — pending is not revenue {filterLoading ? '· Updating…' : ''}</p>
+                    <p className="section-subtitle">Confirmed after verified payment · Pending is not revenue · Failed/Abandoned never counts {filterLoading ? '· Updating…' : ''}</p>
                   </div>
-                  <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>Live</span>
+                  <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>Live · {activeFilter}</span>
                 </div>
-                <div className="card-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div style={{ background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px' }}>
-                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Confirmed Budget</div>
-                    <div style={{ fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginTop: '6px' }}>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics?.confirmedRevenue ?? displayAnalytics?.totalRevenue ?? 0)}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: '4px', fontWeight: 500 }}>Received & verified {displayAnalytics?.outstandingAmount ? `· Outstanding ${new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics.outstandingAmount)}` : ''}</div>
+                <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                  <div style={{ background: 'var(--gray-900)', color: 'var(--white)', borderRadius: '12px', padding: '16px', border: '1px solid var(--gray-800)' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Confirmed Budget</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.03em', marginTop: '6px' }}>{inr(confirmedRevenue)}</div>
+                    <div style={{ fontSize: '0.73rem', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>Verified & captured · {displayAnalytics?.successfulOrders ?? ''} {displayAnalytics?.successfulOrders ? 'orders' : ''}</div>
                   </div>
-                  <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px' }}>
-                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Pending Payments</div>
-                    <div style={{ fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginTop: '6px' }}>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics?.pendingRevenue ?? 0)}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '4px', fontWeight: 500 }}>Not confirmed — enquiry/booking/started only {displayAnalytics?.avgDealValue ? `· Avg ${new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(displayAnalytics.avgDealValue)}` : ''}</div>
+                  <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Pending</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '6px' }}>{inr(pendingRevenue)}</div>
+                    <div style={{ fontSize: '0.73rem', color: 'var(--warning)', marginTop: '4px', fontWeight: 500 }}>Enquiry/booking only · {displayAnalytics?.outstandingCount ?? 0} pending</div>
+                  </div>
+                  <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Outstanding</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '6px' }}>{inr(outstandingSum)}</div>
+                    <div style={{ fontSize: '0.73rem', color: 'var(--gray-500)', marginTop: '4px' }}>Avg deal {inr(averageDealValue)}</div>
+                  </div>
+                  <div style={{ background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Failed</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '6px', color: 'var(--error)' }}>{inr(failedRevenue)}</div>
+                    <div style={{ fontSize: '0.73rem', color: 'var(--gray-500)', marginTop: '4px' }}>{displayAnalytics?.failedCount ?? 0} failed · not revenue</div>
+                  </div>
+                  <div style={{ background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Abandoned</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '6px', color: 'var(--gray-600)' }}>{inr(abandonedRevenue)}</div>
+                    <div style={{ fontSize: '0.73rem', color: 'var(--gray-500)', marginTop: '4px' }}>{displayAnalytics?.abandonedCount ?? 0} started, never paid</div>
+                  </div>
+                  <div style={{ background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-500)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Refunded</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '6px' }}>{inr(refundedRevenue)}</div>
+                    <div style={{ fontSize: '0.73rem', color: 'var(--gray-500)', marginTop: '4px' }}>{displayAnalytics?.refundedCount ?? 0} refunded</div>
                   </div>
                 </div>
-                {/* Budget Timeline — real state */}
-                <div style={{ padding: '0 16px 16px', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.75rem', color: 'var(--gray-500)', flexWrap: 'wrap' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--gray-300)', display: 'inline-block' }}></span>Booking Created → Pending</span>
+                <div style={{ padding: '12px 16px 16px', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.72rem', color: 'var(--gray-500)', flexWrap: 'wrap', borderTop: '1px solid var(--gray-100)', marginTop: '12px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--gray-300)', display: 'inline-block' }}></span>Enquiry → Pending</span>
                   <span>→</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }}></span>Payment Started → Pending</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }}></span>Started → Pending</span>
                   <span>→</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontWeight: 600 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }}></span>Payment Verified → Confirmed</span>
-                  <span style={{ color: 'var(--gray-400)' }}>· Failed/Abandoned never confirms</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontWeight: 700 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }}></span>Verified → Confirmed</span>
+                  <span style={{ color: 'var(--gray-400)' }}>· Timeline uses verified timestamp, not booking date</span>
                 </div>
               </div>
               <div className="revenue-executive-center animate-slide-up" style={{ marginTop: '16px' }}>
@@ -1043,38 +1025,27 @@ export default function OverviewPage({
                   </div>
                 </div>
 
-                {/* ROW 1: Executive KPI Summary (8-card ribbon - REAL DATABASE METRICS ONLY) */}
+                {/* ROW 1: Executive KPI Summary — authoritative, no duplicates */}
                 <div className="rev-kpi-ribbon">
-                  <div className="rev-kpi-subcard">
+                  <div className="rev-kpi-subcard" style={{ borderLeft: '3px solid var(--success)' }}>
                     <div className="rev-kpi-subcard-header">
-                      <span className="rev-kpi-subcard-label">Revenue</span>
+                      <span className="rev-kpi-subcard-label">Confirmed</span>
                       <TrendingUp size={14} className="text-success" />
                     </div>
                     <span className="rev-kpi-subcard-value">{formattedRevenue}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">Live</span>
+                      <span className="rev-kpi-subcard-trend up">Verified</span>
                     </div>
                   </div>
 
                   <div className="rev-kpi-subcard">
                     <div className="rev-kpi-subcard-header">
-                      <span className="rev-kpi-subcard-label">Net Profit</span>
-                      <Sparkles size={14} className="text-purple" />
+                      <span className="rev-kpi-subcard-label">Pending</span>
+                      <Clock size={14} className="text-warning" />
                     </div>
-                    <span className="rev-kpi-subcard-value">{formattedNetProfit}</span>
+                    <span className="rev-kpi-subcard-value">{formattedPending}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">Real Time</span>
-                    </div>
-                  </div>
-
-                  <div className="rev-kpi-subcard">
-                    <div className="rev-kpi-subcard-header">
-                      <span className="rev-kpi-subcard-label">Paid / Collected</span>
-                      <TrendingUp size={14} className="text-success" />
-                    </div>
-                    <span className="rev-kpi-subcard-value">{formattedRevenue}</span>
-                    <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend up">Collected</span>
+                      <span className="rev-kpi-subcard-trend down">Not revenue</span>
                     </div>
                   </div>
 
@@ -1085,7 +1056,18 @@ export default function OverviewPage({
                     </div>
                     <span className="rev-kpi-subcard-value">{formattedOutstanding}</span>
                     <div className="rev-kpi-subcard-footer">
-                      <span className="rev-kpi-subcard-trend down">Unbilled</span>
+                      <span className="rev-kpi-subcard-trend down">Collectable</span>
+                    </div>
+                  </div>
+
+                  <div className="rev-kpi-subcard" style={{ opacity: 0.95 }}>
+                    <div className="rev-kpi-subcard-header">
+                      <span className="rev-kpi-subcard-label">Failed</span>
+                      <AlertTriangle size={14} style={{ color: 'var(--error)' }} />
+                    </div>
+                    <span className="rev-kpi-subcard-value" style={{ color: 'var(--error)' }}>{formattedFailed}</span>
+                    <div className="rev-kpi-subcard-footer">
+                      <span className="rev-kpi-subcard-trend down">Never confirmed</span>
                     </div>
                   </div>
 
@@ -1171,7 +1153,7 @@ export default function OverviewPage({
                             </linearGradient>
                           </defs>
                           <XAxis dataKey="month" stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
-                          <YAxis stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
+                          <YAxis stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} tickFormatter={(v)=> `₹${(v/1000).toFixed(0)}k`} />
                           <Tooltip
                             contentStyle={{
                               borderRadius: 12,
@@ -1179,8 +1161,16 @@ export default function OverviewPage({
                               boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
                               background: 'var(--white)'
                             }}
+                            formatter={(value, name, props) => {
+                              const p = props?.payload;
+                              if (p && (p.confirmed !== undefined || p.pending !== undefined)) {
+                                return [`Confirmed ₹${(p.confirmed||0).toLocaleString('en-IN')} · Pending ₹${(p.pending||0).toLocaleString('en-IN')} · Failed ₹${(p.failed||0).toLocaleString('en-IN')}`, 'Budget'];
+                              }
+                              return [`₹${Number(value).toLocaleString('en-IN')}`, 'Confirmed'];
+                            }}
+                            labelFormatter={(label) => `${label} · ${activeFilter}`}
                           />
-                          <Area type="monotone" dataKey="revenue" stroke="var(--accent)" fillOpacity={1} fill="url(#overviewRevenueGrad)" strokeWidth={2.5} />
+                          <Area type="monotone" dataKey="revenue" stroke="var(--accent)" fillOpacity={1} fill="url(#overviewRevenueGrad)" strokeWidth={2.5} dot={dynamicChartData.length <= 7 ? { r: 3, strokeWidth: 2 } : false} activeDot={{ r: 5 }} />
                         </AreaChart>
                       </ResponsiveContainer>
                       {dynamicChartData.every(d => d.revenue === 0) && (
@@ -1247,7 +1237,7 @@ export default function OverviewPage({
                     <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Service Breakdown</h4>
                     <div className="flex-col gap-2">
                       {Object.entries(categoryRevenueMap).slice(0, 4).map(([cat, val]) => {
-                        const share = totalRevenue > 0 ? Math.round((val / totalRevenue) * 100) : 0;
+                        const share = confirmedRevenue > 0 ? Math.round((val / confirmedRevenue) * 100) : 0;
                         return (
                           <div key={cat} className="category-analytic-row">
                             <div className="category-analytic-meta">
@@ -1267,7 +1257,7 @@ export default function OverviewPage({
                     <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-800)', marginBottom: '12px' }}>Top Client Contributions</h4>
                     <div className="flex-col gap-2">
                       {projects.filter(p => p.client?.name && p.order?.amount).slice(0, 4).map(p => {
-                        const share = totalRevenue > 0 ? Math.round((p.order.amount / totalRevenue) * 100) : 0;
+                        const share = confirmedRevenue > 0 ? Math.round((p.order.amount / confirmedRevenue) * 100) : 0;
                         return (
                           <div key={p._id} className="employee-status-row">
                             <div className="employee-status-left">

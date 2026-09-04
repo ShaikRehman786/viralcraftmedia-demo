@@ -11,6 +11,18 @@ dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 // Also load root .env (lower priority) for shared variables
 dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
+// Boot-required secrets/config. Fail-closed: server refuses to start if absent.
+// NOTE (config-architecture fix): PARTNER_JWT_REFRESH_SECRET and all EMAILJS_*
+// variables are intentionally NOT in this list:
+// - PARTNER_JWT_REFRESH_SECRET has zero consumers (partner flow issues only a
+//   24h access token signed with PARTNER_JWT_SECRET; nothing reads
+//   config.partnerJwtRefreshSecret). Requiring it at boot blocks deploys for
+//   no runtime benefit.
+// - EMAILJS_* are feature-gated, not boot-gated: backend/routes/auth.js
+//   `sendInvitationEmailSecure()` validates all four per request and throws a
+//   clear error if absent. The frontend uses VITE_EMAILJS_* at build time.
+//   Blocking the entire API boot because invitation emails are unconfigured
+//   is wrong granularity.
 const requiredEnv = [
   'RAZORPAY_KEY_ID',
   'RAZORPAY_KEY_SECRET',
@@ -21,8 +33,13 @@ const requiredEnv = [
   'MONGO_URI',
   'BACKUP_JWT_SECRET',
   'PARTNER_JWT_SECRET',
+  'BACKUP_ADMIN_EMAIL'
+];
+
+// Feature-gated (optional at boot, required at use). Warn only — never exit,
+// never log values, never fall back to hardcoded secrets.
+const optionalFeatureEnv = [
   'PARTNER_JWT_REFRESH_SECRET',
-  'BACKUP_ADMIN_EMAIL',
   'EMAILJS_SERVICE_ID',
   'EMAILJS_TEMPLATE_ID',
   'EMAILJS_PUBLIC_KEY',
@@ -45,6 +62,17 @@ if (missingEnv.length > 0) {
   console.error('Server boot halted due to missing required configurations.');
   console.error('=================================================\n');
   process.exit(1);
+}
+
+// Non-fatal visibility for feature-gated config (server still boots).
+const missingFeatureEnv = optionalFeatureEnv.filter(key => !process.env[key]);
+if (missingFeatureEnv.length > 0) {
+  console.warn('\n-------------------------------------------------');
+  console.warn('WARNING: OPTIONAL FEATURE CONFIG MISSING (non-fatal, server will boot):');
+  missingFeatureEnv.forEach(key => {
+    console.warn(`- ${key} is not set. Related feature calls will fail with a clear error until configured.`);
+  });
+  console.warn('-------------------------------------------------\n');
 }
 
 // Environment-aware Razorpay Safety Validation

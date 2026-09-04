@@ -24,14 +24,29 @@ export const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, config.jwtSecret);
 
     let user;
-    if (decoded.id === 'backup_admin_mock_id_placeholder' || decoded.role === 'BACKUP_ADMIN') {
-      user = {
-        _id: 'backup_admin_mock_id_placeholder',
-        name: 'System Backup Admin',
-        email: (config.backupAdminEmail || 'shaikrehman78609@gmail.com').toLowerCase(),
-        role: 'BACKUP_ADMIN',
-        status: 'active'
-      };
+    if (decoded.role === 'BACKUP_ADMIN') {
+      // Backup admin must authenticate via real Backup DB lookup — no mock bypass.
+      const { backupConnection, getBackupModel } = await import('../services/backupService.js');
+      if (!backupConnection || backupConnection.readyState !== 1) {
+        return res.status(401).json({ error: 'Backup database unavailable. Please try again.' });
+      }
+      const BackupUser = getBackupModel('User');
+      if (!BackupUser) {
+        return res.status(401).json({ error: 'User is inactive or no longer exists.' });
+      }
+      user = await BackupUser.findById(decoded.id);
+      if (user) {
+        // Normalize to the shape downstream code expects without inventing fields.
+        user = {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: 'BACKUP_ADMIN',
+          status: user.status,
+          lockUntil: user.lockUntil,
+          mustChangePassword: user.mustChangePassword
+        };
+      }
     } else {
       // Get user from database, excluding password
       user = await User.findById(decoded.id);
@@ -65,7 +80,12 @@ export const protect = async (req, res, next) => {
     req.user = user;
 
     // Intercept backup admin account for database isolation and read-only lockdown
-    const backupAdminEmail = (config.backupAdminEmail || 'backupadmin@viralcraftmedia.com').toLowerCase();
+    // No hardcoded fallback: BACKUP_ADMIN_EMAIL is required at boot (config/env.js).
+    if (!config.backupAdminEmail) {
+      next();
+      return;
+    }
+    const backupAdminEmail = config.backupAdminEmail.toLowerCase();
     if (user.email.toLowerCase() === backupAdminEmail) {
       const isBackupRoute = (req.originalUrl && req.originalUrl.includes('/api/backup')) || (req.baseUrl && req.baseUrl.includes('/backup')) || req.path.toLowerCase().startsWith('/backup');
       

@@ -4,6 +4,7 @@ import axios from 'axios';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CRMGlobalLoader from './components/shared/CRMGlobalLoader.jsx';
 import { LoadingProvider } from './context/LoadingContext.jsx';
+import { ToastProvider } from './components/Toast.jsx';
 
 const LandingPage = lazy(() => import('./components/LandingPage.jsx'));
 const LoginPage = lazy(() => import('./components/LoginPage.jsx'));
@@ -182,6 +183,7 @@ export default function App() {
   useEffect(() => { setupSessionInterceptor(); }, []);
   return (
     <ErrorBoundary>
+    <ToastProvider>
     <AuthProvider>
     <PartnerAuthProvider>
     <LoadingProvider>
@@ -281,6 +283,7 @@ export default function App() {
     </LoadingProvider>
     </PartnerAuthProvider>
     </AuthProvider>
+    </ToastProvider>
     </ErrorBoundary>
   );
 }

@@ -154,7 +154,32 @@ function PublicFallback() {
   return <div style={{ minHeight: '100vh', background: '#FFFFFF' }} aria-hidden="true" />;
 }
 
+let sessionExpiredHandled = false;
+
+function setupSessionInterceptor() {
+  if (setupSessionInterceptor.done) return;
+  setupSessionInterceptor.done = true;
+  axios.interceptors.response.use(
+    res => res,
+    err => {
+      const status = err.response?.status;
+      const msg = (err.response?.data?.error || err.message || '').toLowerCase();
+      const isSessionExpiry = status === 401 && (msg.includes('session') || msg.includes('expired') || msg.includes('please log in') || msg.includes('token expired') || msg.includes('re-authenticate'));
+      const isAuthEndpoint = (err.config?.url || '').includes('/api/auth/');
+      // Ignore auth endpoint 401s (login failures) and silent background checks
+      if (isSessionExpiry && !isAuthEndpoint && err.config?.silent !== true && !sessionExpiredHandled) {
+        sessionExpiredHandled = true;
+        try { sessionStorage.setItem('sessionExpired', '1'); } catch {}
+        // Clear any cached protected state is handled by AuthProvider on next load
+        setTimeout(() => { window.location.href = '/login'; }, 80);
+      }
+      return Promise.reject(err);
+    }
+  );
+}
+
 export default function App() {
+  useEffect(() => { setupSessionInterceptor(); }, []);
   return (
     <ErrorBoundary>
     <AuthProvider>

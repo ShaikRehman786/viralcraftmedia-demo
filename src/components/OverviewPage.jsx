@@ -388,51 +388,19 @@ export default function OverviewPage({
   if (!user) return null;
 
   const renderEmployeeKpi = () => {
-    const kpis = [
-      { label: 'Assigned Projects', value: assignedCount, icon: Briefcase, color: 'blue', trend: 'Total assignments', trendVal: 'Active', trendDir: 'up', sparkPoints: 'M0,25 Q15,5 30,20 T60,10 T90,22' },
-      { label: 'Accepted', value: acceptedCount, icon: UserCheck, color: 'green', trend: 'Confirmed by you', trendVal: 'Ready', trendDir: 'up', sparkPoints: 'M0,10 Q20,25 40,5 T80,18 T100,5' },
-      { label: 'Completed', value: completedCount, icon: CheckSquare, color: 'purple', trend: 'Delivered', trendVal: 'Done', trendDir: 'up', sparkPoints: 'M0,20 Q20,10 40,20 T80,10 T100,15' },
-      { label: 'Pending Tasks', value: pendingTasksCount, icon: Clock, color: 'orange', trend: 'Awaiting action', trendVal: 'Todo', trendDir: 'down', sparkPoints: 'M0,5 Q15,25 30,10 T60,25 T90,8' },
-      { label: 'Upcoming Deadlines', value: upcomingDeadlines.length, icon: CalendarDays, color: 'blue', trend: 'Next 7 days', trendVal: 'Due', trendDir: 'down', sparkPoints: 'M0,25 Q15,5 30,20 T60,10 T90,22' },
-      { label: 'High Priority', value: highPriorityTasks.length, icon: AlertTriangle, color: 'orange', trend: 'Needs attention', trendVal: 'Urgent', trendDir: 'down', sparkPoints: 'M0,5 Q15,25 30,10 T60,25 T90,8' },
-    ];
-
+    if (isLoading) {
+      return (
+        <div className="emp-summary-skeleton">
+          {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 64, borderRadius: 12 }} />)}
+        </div>
+      );
+    }
     return (
-      <div className="kpi-grid">
-        {isLoading
-          ? [1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="kpi-card">
-                <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 'var(--r-lg)' }}></div>
-                <div style={{ flex: 1 }}>
-                  <div className="skeleton skeleton-text" style={{ width: '60%' }}></div>
-                  <div className="skeleton skeleton-title" style={{ width: '40%', height: 28, marginTop: 8 }}></div>
-                </div>
-              </div>
-            ))
-          : kpis.map(kpi => (
-              <div key={kpi.label} className={`kpi-card kpi-card-${kpi.color}`}>
-                <div className="kpi-card-header">
-                  <div className="kpi-card-title-container">
-                    <span className="kpi-label">{kpi.label}</span>
-                    <span className="kpi-value">{kpi.value}</span>
-                  </div>
-                  <div className={`kpi-card-icon-wrapper ${kpi.color}`}>
-                    <kpi.icon size={20} />
-                  </div>
-                </div>
-                <div className="kpi-card-footer">
-                  <span className={`kpi-card-trend-badge ${kpi.trendDir}`}>
-                    {kpi.trendVal}
-                  </span>
-                  <div className="kpi-sparkline-container text-muted">
-                    <svg viewBox="0 0 100 30" width="60" height="18" style={{ overflow: 'visible' }}>
-                      <path d={kpi.sparkPoints} fill="none" stroke={`var(--${kpi.color === 'orange' ? 'accent' : kpi.color === 'blue' ? 'info' : kpi.color})`} strokeWidth="2" className="kpi-sparkline" />
-                    </svg>
-                  </div>
-                  <span className="kpi-card-footer-desc">{kpi.trend}</span>
-                </div>
-              </div>
-            ))}
+      <div className="emp-operational-summary">
+        <div className="emp-stat"><span className="emp-stat-label">Assigned</span><span className="emp-stat-value">{assignedCount}</span><span className="emp-stat-sub">projects</span></div>
+        <div className="emp-stat"><span className="emp-stat-label">Accepted</span><span className="emp-stat-value">{acceptedCount}</span><span className="emp-stat-sub">confirmed</span></div>
+        <div className="emp-stat"><span className="emp-stat-label">Pending tasks</span><span className="emp-stat-value">{pendingTasksCount}</span><span className="emp-stat-sub">to do</span></div>
+        <div className="emp-stat emp-stat--accent"><span className="emp-stat-label">Due soon</span><span className="emp-stat-value">{upcomingDeadlines.length}</span><span className="emp-stat-sub">7 days</span></div>
       </div>
     );
   };

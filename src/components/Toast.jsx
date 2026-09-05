@@ -1,16 +1,31 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import { Check, AlertCircle, TriangleAlert, Info, X } from 'lucide-react';
 
 let toastIdCounter = 0;
 
 export function useToast() {
   const [toasts, setToasts] = useState([]);
+  const lastToastRef = useRef({ message: '', time: 0 });
 
-  const addToast = useCallback((message, type = 'success', duration = 4000) => {
+  const addToast = useCallback((message, type = 'info', duration) => {
+    const safeMsg = typeof message === 'string' ? message : String(message || '');
+    const clean = safeMsg.replace(/AxiosError.*/i, '').replace(/Request failed.*/i, '').trim() || safeMsg;
+    // Deduplicate: same message within 1.8s
+    const now = Date.now();
+    if (lastToastRef.current.message === clean && now - lastToastRef.current.time < 1800) return;
+    lastToastRef.current = { message: clean, time: now };
+
     const id = ++toastIdCounter;
-    setToasts(prev => [...prev, { id, message, type }]);
+    // sensible duration per type if not provided
+    const ms = duration ?? (type === 'error' ? 5000 : type === 'warning' ? 4500 : 3500);
+    setToasts(prev => {
+      // prevent stacking more than 3
+      const next = [...prev, { id, message: clean, type }];
+      return next.length > 3 ? next.slice(next.length - 3) : next;
+    });
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, duration);
+    }, ms);
   }, []);
 
   const removeToast = useCallback((id) => {
@@ -20,59 +35,40 @@ export function useToast() {
   return { toasts, addToast, removeToast };
 }
 
-const typeStyles = {
-  success: { bg: 'rgba(16, 185, 129, 0.95)', icon: '✓' },
-  error: { bg: 'rgba(239, 68, 68, 0.95)', icon: '✕' },
-  warning: { bg: 'rgba(245, 158, 11, 0.95)', icon: '!' },
-  info: { bg: 'rgba(59, 130, 246, 0.95)', icon: 'i' }
+const iconMap = {
+  success: Check,
+  error: AlertCircle,
+  warning: TriangleAlert,
+  info: Info,
+};
+
+const accentMap = {
+  success: '#10B981',
+  error: '#EF4444',
+  warning: '#F59E0B',
+  info: '#3B82F6',
 };
 
 export default function ToastContainer({ toasts, onRemove }) {
   if (!toasts || toasts.length === 0) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: '20px',
-      right: '20px',
-      zIndex: 99999,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-      maxWidth: '380px',
-      width: 'calc(100% - 40px)'
-    }}>
+    <div className="vcm-toast-stack" role="region" aria-live="polite" aria-label="Notifications">
       {toasts.map(t => {
-        const style = typeStyles[t.type] || typeStyles.success;
+        const Icon = iconMap[t.type] || Info;
+        const accent = accentMap[t.type] || '#6B7280';
         return (
           <div
             key={t.id}
-            style={{
-              background: style.bg,
-              color: '#FFF',
-              padding: '14px 18px',
-              borderRadius: '12px',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              animation: 'slideInRight 0.3s ease',
-              cursor: 'pointer',
-              backdropFilter: 'blur(8px)'
-            }}
-            onClick={() => onRemove(t.id)}
+            className={`vcm-toast vcm-toast--${t.type}`}
+            role={t.type === 'error' ? 'alert' : 'status'}
+            style={{ '--toast-accent': accent }}
           >
-            <span style={{
-              width: '22px', height: '22px', borderRadius: '50%',
-              background: 'rgba(255,255,255,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '0.7rem', fontWeight: 'bold', flexShrink: 0
-            }}>
-              {style.icon}
-            </span>
-            <span style={{ flex: 1 }}>{t.message}</span>
+            <span className="vcm-toast-icon" aria-hidden="true"><Icon size={15} strokeWidth={2.2} /></span>
+            <span className="vcm-toast-msg">{t.message}</span>
+            <button type="button" className="vcm-toast-close" onClick={() => onRemove(t.id)} aria-label="Dismiss notification">
+              <X size={13} strokeWidth={2.2} />
+            </button>
           </div>
         );
       })}

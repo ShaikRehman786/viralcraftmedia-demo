@@ -38,7 +38,12 @@ import {
 import CRMGlobalLoader from './shared/CRMGlobalLoader.jsx';
 
 export default function BackupPortalPage({ embedded = false }) {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'collections' | 'activity' | 'datagrid' | 'restorepoints'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'collections' | 'activity' | 'datagrid' | 'restorepoints' | 'security'
+  const [lockedAccounts, setLockedAccounts] = useState([]);
+  const [securityEvents, setSecurityEvents] = useState([]);
+  const [securityIncidents, setSecurityIncidents] = useState([]);
+  const [unlockReason, setUnlockReason] = useState('');
+  const [unlockTarget, setUnlockTarget] = useState(null);
   const [collections, setCollections] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState('ALL');
   const [documents, setDocuments] = useState([]);
@@ -89,7 +94,10 @@ export default function BackupPortalPage({ embedded = false }) {
           fetchStats(),
           fetchCollectionSummaries(),
           fetchActivityStream(),
-          fetchRestorePoints()
+          fetchRestorePoints(),
+          fetchLockedAccounts(),
+          fetchSecurityEvents(),
+          fetchSecurityIncidents()
         ]);
       } catch (err) {
         console.error('Failed to bootstrap backup portal data:', err);
@@ -168,6 +176,31 @@ export default function BackupPortalPage({ embedded = false }) {
     } catch (err) {
       console.error('Failed to fetch restore points:', err);
     }
+  };
+
+  const fetchLockedAccounts = async () => {
+    try {
+      const res = await axios.get('/api/auth/staff');
+      if (res.data.success) {
+        const locked = (res.data.data || []).filter(u => u.lockUntil && new Date(u.lockUntil) > new Date());
+        setLockedAccounts(locked);
+      }
+    } catch (err) { console.error('Failed to fetch locked accounts:', err); }
+  };
+  const fetchSecurityEvents = async () => {
+    try {
+      const res = await axios.get('/api/logs?limit=100');
+      if (res.data.success) {
+        const evts = (res.data.data || []).filter(l => ['ACCOUNT_LOCKED','ACCOUNT_UNLOCKED','LOGIN_FAILURE'].includes(l.action));
+        setSecurityEvents(evts.slice(0, 20));
+      }
+    } catch {}
+  };
+  const fetchSecurityIncidents = async () => {
+    try {
+      const res = await axios.get('/api/security/incidents');
+      if (res.data.success) setSecurityIncidents(res.data.data || []);
+    } catch (err) { console.error('Failed to fetch security incidents:', err); }
   };
 
   const fetchCollectionData = async () => {
@@ -522,6 +555,13 @@ export default function BackupPortalPage({ embedded = false }) {
           style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: '8px 8px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}
         >
           <RotateCcw size={16} /> Restore Points ({restorePoints.length})
+        </button>
+        <button
+          onClick={() => { setActiveTab('security'); fetchLockedAccounts(); fetchSecurityEvents(); }}
+          className={`btn ${activeTab === 'security' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: '8px 8px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          <ShieldCheck size={16} /> Security {lockedAccounts.length > 0 ? `(${lockedAccounts.length})` : ''}
         </button>
       </div>
 
@@ -911,6 +951,93 @@ export default function BackupPortalPage({ embedded = false }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB 6: SECURITY CENTER */}
+      {activeTab === 'security' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="card" style={{ padding: '16px' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '0 0 4px 0' }}>Security Overview</h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', margin: 0 }}>{lockedAccounts.length} locked account(s) · {securityEvents.length} recent security events</p>
+          </div>
+          <div className="card" style={{ padding: '16px' }}>
+            <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 12px 0' }}>Active Security Incidents</h4>
+            {securityIncidents.filter(i => i.status === 'ACTIVE').length === 0 ? (
+              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--gray-500)', fontSize: '0.85rem', border: '1px dashed var(--gray-300)', borderRadius: '8px' }}>No active incidents.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="table" style={{ minWidth: '720px' }}>
+                  <thead><tr><th>Status</th><th>Account</th><th>IP</th><th>Attempts</th><th>Last Seen</th><th>Action</th></tr></thead>
+                  <tbody>
+                    {securityIncidents.filter(i => i.status === 'ACTIVE').map(inc => (
+                      <tr key={inc._id}>
+                        <td><span className="badge badge-error">ACTIVE</span></td>
+                        <td style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>{inc._id.slice(-8)}</td>
+                        <td style={{ fontSize: '0.8rem' }}>{inc.attemptedEmail || inc.affectedUserId?.email || '—'}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{inc.normalizedIp}</td>
+                        <td>{inc.failedAttempts}</td>
+                        <td style={{ fontSize: '0.75rem' }}>{new Date(inc.lastFailedAt || inc.createdAt).toLocaleString()}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button onClick={async () => { if (!confirm('Unblock Account?')) return; try { await axios.post(`/api/auth/unlock/${inc.affectedUserId?._id || inc.affectedUserId}`, {}); await axios.post(`/api/security/unblock/${inc._id}`, { type: 'account' }); fetchSecurityIncidents(); fetchLockedAccounts(); } catch(e){ alert(e.response?.data?.error||'Failed'); } }} className="btn btn-ghost btn-xs" style={{ border: '1px solid var(--gray-200)' }}>Unblock Account</button>
+                            <button onClick={async () => { if (!confirm('Unblock IP?')) return; try { await axios.post(`/api/security/unblock/${inc._id}`, { type: 'ip' }); fetchSecurityIncidents(); } catch(e){ alert(e.response?.data?.error||'Failed'); } }} className="btn btn-ghost btn-xs" style={{ border: '1px solid var(--gray-200)' }}>Unblock IP</button>
+                            <button onClick={async () => { if (!confirm('Unblock Account + IP and resolve incident?')) return; try { if (inc.affectedUserId) await axios.post(`/api/auth/unlock/${inc.affectedUserId?._id || inc.affectedUserId}`, {}); await axios.post(`/api/security/unblock/${inc._id}`, { type: 'both' }); fetchSecurityIncidents(); fetchLockedAccounts(); } catch(e){ alert(e.response?.data?.error||'Failed'); } }} className="btn btn-primary btn-xs">Unblock Both</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="card" style={{ padding: '16px' }}>
+            <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 12px 0' }}>Locked Accounts — Manual Review Required</h4>
+            {lockedAccounts.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--gray-500)', fontSize: '0.85rem', border: '1px dashed var(--gray-300)', borderRadius: '8px' }}>No locked accounts. System healthy.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {lockedAccounts.map(acc => (
+                  <div key={acc._id} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '10px', padding: '12px', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'var(--white)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: 'var(--gray-900)', fontSize: '0.875rem' }}>{acc.name} <span style={{ fontWeight: 400, color: 'var(--gray-500)', fontSize: '0.75rem' }}>{acc.email} · {acc.role}</span></div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '2px' }}>Locked until {new Date(acc.lockUntil).toLocaleString()} · Attempts: {acc.failedLoginAttempts}</div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const reason = window.prompt('Reason for unblocking (optional):', unlockReason || 'Verified user identity — admin review');
+                        if (reason === null) return;
+                        try {
+                          await axios.post(`/api/auth/unlock/${acc._id}`, { reason });
+                          setLockedAccounts(prev => prev.filter(x => x._id !== acc._id));
+                          fetchSecurityEvents();
+                        } catch (e) { alert(e.response?.data?.error || 'Unlock failed'); }
+                      }}
+                      className="btn btn-primary btn-sm"
+                    >
+                      Unblock Account
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="card" style={{ padding: '16px' }}>
+            <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 12px 0' }}>Recent Security Events</h4>
+            {securityEvents.length === 0 ? (
+              <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>No security events.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {securityEvents.map(ev => (
+                  <div key={ev._id} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '0.8rem', padding: '8px 10px', background: 'var(--gray-50)', borderRadius: '6px', border: '1px solid var(--gray-200)' }}>
+                    <span><strong>{ev.action}</strong> · {ev.userName || ev.details?.email || ''}</span>
+                    <span style={{ color: 'var(--gray-500)', whiteSpace: 'nowrap' }}>{new Date(ev.createdAt).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

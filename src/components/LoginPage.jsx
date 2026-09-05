@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Lock, Mail, ArrowLeft, Loader2, LogIn, Key, Eye, EyeOff, XCircle, CheckCircle } from 'lucide-react';
 
@@ -44,6 +44,16 @@ export default function LoginPage() {
   const [btnPressed, setBtnPressed] = useState(false);
   const [forgotHovered, setForgotHovered] = useState(false);
   const [backHovered, setBackHovered] = useState(false);
+
+  // Session expiry UX — single professional message after redirect
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('sessionExpired')) {
+        sessionStorage.removeItem('sessionExpired');
+        setError('Your session has expired. Please log in again.');
+      }
+    } catch {}
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();

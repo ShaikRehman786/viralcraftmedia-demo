@@ -313,25 +313,13 @@ export default function LogsPage({ user, logs, staff }) {
       </div>
 
       {filteredSessions.length === 0 ? (
-        <div className="card">
-          <div style={{
-            textAlign: 'center',
-            padding: '3rem 1.5rem',
-            background: 'var(--bg-secondary)',
-            borderRadius: 12,
-            border: '1px solid var(--border)'
-          }}>
-            <ShieldAlert size={48} style={{ color: 'var(--text-muted)', opacity: 0.4, marginBottom: '1rem' }} />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.5rem' }}>
-              No login history recorded
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto' }}>
-              Adjust your search parameters or filter configurations to locate specific audits.
-            </p>
-          </div>
+        <div className="enq-empty">
+          <ShieldAlert size={20} />
+          <div><strong>No login history</strong><span>Adjust search or filters to locate specific audits.</span></div>
         </div>
       ) : (
-        <div className="card">
+        <>
+        <div className="logs-table-wrap">
           <div className="table-responsive">
             <table className="table">
               <thead>
@@ -414,39 +402,37 @@ export default function LogsPage({ user, logs, staff }) {
               </tbody>
             </table>
           </div>
-
-          {/* Pagination Controls */}
+        </div>
+        <div className="logs-cards">
+          {paginatedSessions.map(s => (
+            <div key={s.id} className="logs-card">
+              <div className="logs-card-head">
+                <span className="logs-card-action">{s.status === 'Success' ? 'LOGIN' : 'FAILED'}</span>
+                <span className={`badge ${s.status === 'Success' ? 'badge-success' : 'badge-error'}`}>{s.status}</span>
+              </div>
+              <div className="logs-card-name">{s.userName}</div>
+              <div className="logs-card-meta">{s.role.replace(/_/g,' ')} · {s.department}</div>
+              <div className="logs-card-time">Login {s.loginTime.toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})} · {s.duration}</div>
+              <div className="logs-card-foot">{s.logoutTime instanceof Date ? s.logoutTime.toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : s.logoutTime} · {s.ipAddress}</div>
+            </div>
+          ))}
+        </div>
+        <style>{` .logs-table-wrap{border:1px solid var(--gray-200);border-radius:12px;background:var(--white);overflow:auto;} .logs-cards{display:none;flex-direction:column;gap:10px;} .logs-card{border:1px solid var(--gray-200);border-radius:12px;background:var(--white);padding:12px;display:flex;flex-direction:column;gap:4px;} .logs-card-head{display:flex;justify-content:space-between;align-items:center;} .logs-card-action{font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gray-500);} .logs-card-name{font-weight:600;color:var(--gray-900);font-size:0.875rem;} .logs-card-meta{font-size:0.75rem;color:var(--gray-600);} .logs-card-time{font-size:0.75rem;color:var(--gray-700);} .logs-card-foot{font-size:0.6875rem;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:6px;margin-top:4px;} @media(max-width:768px){.logs-table-wrap{display:none;} .logs-cards{display:flex;} .logs-filters-grid{grid-template-columns:1fr !important;}} `}</style>
           {totalPages > 1 && (
-            <div className="card-footer flex items-center justify-between border-top px-4 py-3">
+            <div className="card-footer flex items-center justify-between border-top px-4 py-3" style={{ marginTop: '12px', border: '1px solid var(--gray-200)', borderRadius: '12px', background: 'var(--white)' }}>
               <div className="text-xs text-muted">
                 Showing <span className="font-semibold">{(currentPage - 1) * rowsPerPage + 1}</span> to{' '}
-                <span className="font-semibold">
-                  {Math.min(currentPage * rowsPerPage, filteredSessions.length)}
-                </span>{' '}
+                <span className="font-semibold">{Math.min(currentPage * rowsPerPage, filteredSessions.length)}</span>{' '}
                 of <span className="font-semibold">{filteredSessions.length}</span> logins
               </div>
               <div className="flex gap-2 items-center">
-                <button
-                  className="btn btn-outline btn-sm p-1 btn-icon"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="text-xs font-semibold px-2">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  className="btn btn-outline btn-sm p-1 btn-icon"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight size={16} />
-                </button>
+                <button className="btn btn-outline btn-sm p-1 btn-icon" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}><ChevronLeft size={16} /></button>
+                <span className="text-xs font-semibold px-2">Page {currentPage} of {totalPages}</span>
+                <button className="btn btn-outline btn-sm p-1 btn-icon" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}><ChevronRight size={16} /></button>
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

@@ -14,6 +14,7 @@ import pushRoutes from './push.js';
 import backupRoutes from './backup.js';
 import partnerRoutes from './partners.js';
 import adminReferralRoutes from './adminReferrals.js';
+import securityRoutes from './security.js';
 
 import { 
   employeeForgotPassword, 
@@ -52,5 +53,6 @@ router.use('/backup', backupRoutes);
 // Partner Portal routes
 router.use('/partners', partnerRoutes);
 router.use('/admin/referrals', protect, authorize('SUPER_ADMIN'), adminReferralRoutes);
+router.use('/security', securityRoutes);
 
 export default router;

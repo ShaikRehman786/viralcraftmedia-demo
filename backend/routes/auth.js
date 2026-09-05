@@ -728,7 +728,32 @@ router.put('/staff/:id/role', protect, authorize('SUPER_ADMIN'), async (req, res
   }
 });
 
-// 8. Delete user (Super Admin Only)
+// 8. Unlock account after lockout (Backup Administrator + Super Admin)
+router.post('/unlock/:userId', protect, authorize('BACKUP_ADMIN', 'SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const target = await User.findById(req.params.userId);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    target.lockUntil = null;
+    target.failedLoginAttempts = 0;
+    await target.save();
+    // Also resolve active security incidents for this user (IP block)
+    try {
+      const SecurityIncident = (await import('../models/SecurityIncident.js')).default;
+      await SecurityIncident.updateMany({ affectedUserId: target._id, status: 'ACTIVE' }, { status: 'RESOLVED', resolvedAt: new Date(), resolvedBy: req.user._id });
+    } catch {}
+    await logEvent({
+      userId: req.user._id,
+      userName: req.user.name,
+      action: 'ACCOUNT_UNLOCKED',
+      details: { targetUserId: target._id, targetEmail: target.email },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    return res.json({ success: true, message: 'Account unlocked successfully.' });
+  } catch (err) { next(err); }
+});
+
+// 9. Delete user (Super Admin Only)
 router.delete('/staff/:id', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);

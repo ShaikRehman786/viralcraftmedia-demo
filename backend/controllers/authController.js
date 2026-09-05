@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import SecurityIncident from '../models/SecurityIncident.js';
 import { getSignedTokenResponse, rotateRefreshToken } from '../services/authService.js';
 import { logEvent } from '../services/loggingService.js';
 import { sendPasswordResetEmail, sendEmail } from '../services/emailService.js';
@@ -8,6 +9,15 @@ import crypto from 'crypto';
 import { config, getFrontendBaseUrl } from '../config/env.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+
+function normalizeIp(raw) {
+  if (!raw) return 'unknown';
+  let ip = String(raw).trim();
+  if (ip.startsWith('::ffff:')) ip = ip.slice(7);
+  // Handle comma-separated X-Forwarded-For already resolved by trust proxy, but keep first
+  if (ip.includes(',')) ip = ip.split(',')[0].trim();
+  return ip.toLowerCase();
+}
 
 /**
  * Login user with lockout logic (5 failed attempts = 30 min lock)
@@ -107,6 +117,16 @@ export const login = async (req, res, next) => {
       });
     }
 
+    // IP block enforcement — before authentication (persistent MongoDB state)
+    const normIp = normalizeIp(clientIp);
+    try {
+      const ipBlocked = await SecurityIncident.findOne({ normalizedIp: normIp, status: 'ACTIVE', ipBlockedAt: { $ne: null } });
+      if (ipBlocked) {
+        await logEvent({ action: 'LOGIN_FAILURE', userName: email, details: { message: 'Blocked IP attempt', normalizedIp: normIp, incidentId: ipBlocked._id }, ipAddress: clientIp, userAgent });
+        return res.status(403).json({ error: 'Access is temporarily restricted. Please contact the administrator.' });
+      }
+    } catch {}
+
     // Look up user
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user) {
@@ -117,6 +137,35 @@ export const login = async (req, res, next) => {
         ipAddress: clientIp,
         userAgent
       });
+      // Track fake-identifier attempts per IP for IP-block threshold (no fake user created)
+      try {
+        const fakeExisting = await SecurityIncident.findOne({ attemptedEmail: email.toLowerCase(), normalizedIp: normIp, status: 'ACTIVE' });
+        if (!fakeExisting) {
+          await SecurityIncident.create({
+            attemptedEmail: email.toLowerCase(),
+            normalizedIp: normIp,
+            failedAttempts: 1,
+            firstFailedAt: new Date(),
+            lastFailedAt: new Date(),
+            status: 'ACTIVE',
+            userAgent
+          });
+        } else {
+          fakeExisting.failedAttempts += 1;
+          fakeExisting.lastFailedAt = new Date();
+          if (fakeExisting.failedAttempts >= 5 && !fakeExisting.ipBlockedAt) {
+            fakeExisting.ipBlockedAt = new Date();
+            fakeExisting.lockedAt = new Date();
+            await fakeExisting.save();
+            try {
+              const { notifyStaff } = await import('../services/notificationService.js');
+              await notifyStaff({ title: 'Security alert — suspicious activity', message: `Multiple failed sign-in attempts for unknown identifier ${email} from IP ${normIp}. IP blocked.`, type: 'error', priority: 'critical', referenceId: fakeExisting._id.toString(), referenceModel: 'SecurityIncident', metadata: { attemptedEmail: email, normalizedIp: normIp } });
+            } catch {}
+          } else {
+            await fakeExisting.save();
+          }
+        }
+      } catch {}
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -207,8 +256,9 @@ export const login = async (req, res, next) => {
       let isLockedNow = false;
 
       if (user.failedLoginAttempts >= 5) {
-        user.lockUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes lockout
-        user.failedLoginAttempts = 0; // reset counter after locking
+        // Persistent lock until Backup Admin explicitly unblocks (per security spec) — far future, not 30m auto-unlock
+        user.lockUntil = new Date(Date.now() + 365 * 10 * 24 * 60 * 60 * 1000); // ~10 years
+        user.failedLoginAttempts = 0;
         isLockedNow = true;
       }
       await user.save();
@@ -216,9 +266,9 @@ export const login = async (req, res, next) => {
       await logEvent({
         userId: user._id,
         userName: user.name,
-        action: 'LOGIN_FAILURE',
+        action: isLockedNow ? 'ACCOUNT_LOCKED' : 'LOGIN_FAILURE',
         details: { 
-          message: 'Incorrect password', 
+          message: isLockedNow ? 'Account locked after 5 failed attempts — pending administrator review' : 'Incorrect password', 
           failedAttempts: user.failedLoginAttempts,
           accountLocked: isLockedNow 
         },
@@ -227,8 +277,45 @@ export const login = async (req, res, next) => {
       });
 
       if (isLockedNow) {
+        // Create single Security Incident + IP block (deduplicated)
+        try {
+          const existing = await SecurityIncident.findOne({ attemptedEmail: user.email.toLowerCase(), normalizedIp: normIp, status: 'ACTIVE' });
+          if (!existing) {
+            await SecurityIncident.create({
+              affectedUserId: user._id,
+              attemptedEmail: user.email.toLowerCase(),
+              normalizedIp: normIp,
+              failedAttempts: 5,
+              firstFailedAt: new Date(Date.now() - 5 * 60 * 1000),
+              lastFailedAt: new Date(),
+              lockedAt: new Date(),
+              ipBlockedAt: new Date(),
+              status: 'ACTIVE',
+              userAgent
+            });
+          } else {
+            existing.failedAttempts = 5;
+            existing.lastFailedAt = new Date();
+            existing.lockedAt = existing.lockedAt || new Date();
+            existing.ipBlockedAt = existing.ipBlockedAt || new Date();
+            await existing.save();
+          }
+        } catch {}
+        // Controlled single alert to Backup Admin / SUPER_ADMIN via existing notification pipeline
+        try {
+          const { notifyStaff } = await import('../services/notificationService.js');
+          await notifyStaff({
+            title: 'Security alert — account locked',
+            message: `Repeated failed login attempts detected. Account ${user.email} locked pending administrator review. IP ${normIp} blocked.`,
+            type: 'error',
+            priority: 'critical',
+            referenceId: user._id.toString(),
+            referenceModel: 'User',
+            metadata: { email: user.email, ip: clientIp, normalizedIp: normIp }
+          });
+        } catch {}
         return res.status(403).json({ 
-          error: 'Account temporarily locked due to multiple failed login attempts. Try again in 30 minutes.' 
+          error: 'Your account is temporarily locked. Please contact the administrator for assistance.' 
         });
       }
 

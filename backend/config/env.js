@@ -166,7 +166,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   jwtAccessExpiry: process.env.JWT_ACCESS_EXPIRY || '15m',
-  jwtRefreshExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
+  jwtRefreshExpiry: process.env.JWT_REFRESH_EXPIRY || '1d',
   partnerJwtSecret: process.env.PARTNER_JWT_SECRET,
   partnerJwtRefreshSecret: process.env.PARTNER_JWT_REFRESH_SECRET,
   

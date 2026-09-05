@@ -23,9 +23,12 @@ export const getSignedTokenResponse = async (user, statusCode, res) => {
   const accessToken = generateAccessToken(user._id);
   const refreshToken = generateRefreshToken(user._id);
 
-  // Store refresh token in user document with expiry (7 days)
+  // Store refresh token with 1-day session lifetime (absolute max ~1 day per requirements)
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  const refreshDays = parseInt((config.jwtRefreshExpiry || '1d').replace(/\D/g, '')) || 1;
+  // Supports '1d' or '24h' — default 1 day
+  if ((config.jwtRefreshExpiry || '').includes('h')) expiresAt.setHours(expiresAt.getHours() + refreshDays);
+  else expiresAt.setDate(expiresAt.getDate() + refreshDays);
 
   user.refreshTokens.push({ token: refreshToken, expiresAt });
   

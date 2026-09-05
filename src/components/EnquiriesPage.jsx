@@ -33,6 +33,39 @@ function StatusBadge({ status }) {
   return <span className={`badge ${cls}`} style={{ fontSize: '0.6875rem', whiteSpace: 'nowrap' }}>{(status || '—').replace(/_/g, ' ')}</span>;
 }
 
+function formatPhoneDisplay(raw) {
+  if (!raw) return '—';
+  const s = String(raw).trim();
+  // Keep leading + for E.164 detection
+  const hasPlus = s.startsWith('+');
+  const digits = s.replace(/\D/g, '');
+  if (!digits) return '—';
+  // If already E.164 with plus, derive country
+  if (hasPlus) {
+    if (digits.length === 12 && digits.startsWith('91')) return `+91 ${digits.slice(2,7)} ${digits.slice(7)}`;
+    if (digits.length === 11 && digits.startsWith('1')) return `+1 ${digits.slice(1,4)} ${digits.slice(4,7)} ${digits.slice(7)}`;
+    if (digits.length >= 11) { const ccLen = digits.length - 10; return `+${digits.slice(0, ccLen)} ${digits.slice(ccLen)}`; }
+    return `+${digits}`;
+  }
+  // No plus: infer from length/prefix without assuming blindly
+  const d = digits.replace(/^0+/, '');
+  if (d.length === 12 && d.startsWith('91')) return `+91 ${d.slice(2,7)} ${d.slice(7)}`;
+  if (d.length === 11 && d.startsWith('1')) return `+1 ${d.slice(1,4)} ${d.slice(4,7)} ${d.slice(7)}`;
+  if (d.length === 10) return `+91 ${d.slice(0,5)} ${d.slice(5)}`;
+  if (d.length === 12) return `+${d.slice(0,2)} ${d.slice(2,7)} ${d.slice(7)}`;
+  if (d.length > 10) { const ccLen = d.length - 10; return `+${d.slice(0, ccLen)} ${d.slice(ccLen, ccLen+5)} ${d.slice(ccLen+5)}`; }
+  return `+${d}`;
+}
+function getTelHref(raw) {
+  if (!raw) return undefined;
+  const digits = String(raw).replace(/\D/g, '');
+  if (!digits) return undefined;
+  const display = formatPhoneDisplay(raw);
+  // tel: expects +country + digits no spaces
+  const telDigits = display.replace(/\s/g, '');
+  return `tel:${telDigits}`;
+}
+
 export default function EnquiriesPage({
   enquiries, user,
   enqSearch, setEnqSearch,
@@ -50,6 +83,7 @@ export default function EnquiriesPage({
 }) {
   const selectedEnquiry = useMemo(() => enquiries.find(e => e._id === activeEnquiryForNote), [enquiries, activeEnquiryForNote]);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   const counts = useMemo(() => {
     const total = enquiries.length;
@@ -77,32 +111,46 @@ export default function EnquiriesPage({
       <div className="enq-filters">
         <div className="enq-search">
           <Search size={14} />
-          <input type="text" placeholder="Search name, phone, ID…" value={enqSearch} onChange={e => setEnqSearch(e.target.value)} />
+          <input type="text" placeholder="Search leads…" value={enqSearch} onChange={e => setEnqSearch(e.target.value)} />
         </div>
-        <select value={enqStatusFilter} onChange={e => setEnqStatusFilter(e.target.value)} className="enq-select">
-          <option value="all">All statuses</option>
-          <option value="pending_review">Pending review</option>
-          <option value="assigned">Assigned</option>
-          <option value="converted_client">Converted — client</option>
-          <option value="converted_project">Converted — project</option>
-          <option value="archived">Archived</option>
-        </select>
-        <select value={enqCategoryFilter} onChange={e => setEnqCategoryFilter(e.target.value)} className="enq-select">
-          <option value="all">All services</option>
-          <option value="Clip Editing">Clip Editing</option>
-          <option value="Podcast Editing">Podcast Editing</option>
-          <option value="Social Media Marketing">Social Media Marketing</option>
-          <option value="Website Design & Development">Website Design & Development</option>
-        </select>
-        <select value={enqReferralFilter} onChange={e => setEnqReferralFilter(e.target.value)} className="enq-select enq-select--narrow">
-          <option value="all">All sources</option>
-          <option value="referral">Referral</option>
-          <option value="organic">Organic</option>
-          <option value="direct">Direct</option>
-          <option value="website">Website</option>
-          <option value="partner">Partner</option>
-        </select>
+        <div className="enq-filters-desktop">
+          <select value={enqStatusFilter} onChange={e => setEnqStatusFilter(e.target.value)} className="enq-select">
+            <option value="all">All statuses</option>
+            <option value="pending_review">Pending review</option>
+            <option value="assigned">Assigned</option>
+            <option value="converted_client">Converted — client</option>
+            <option value="converted_project">Converted — project</option>
+            <option value="archived">Archived</option>
+          </select>
+          <select value={enqCategoryFilter} onChange={e => setEnqCategoryFilter(e.target.value)} className="enq-select">
+            <option value="all">All services</option>
+            <option value="Clip Editing">Clip Editing</option>
+            <option value="Podcast Editing">Podcast Editing</option>
+            <option value="Social Media Marketing">Social Media Marketing</option>
+            <option value="Website Design & Development">Website Design & Development</option>
+          </select>
+          <select value={enqReferralFilter} onChange={e => setEnqReferralFilter(e.target.value)} className="enq-select enq-select--narrow">
+            <option value="all">All sources</option>
+            <option value="referral">Referral</option>
+            <option value="organic">Organic</option>
+            <option value="direct">Direct</option>
+            <option value="website">Website</option>
+            <option value="partner">Partner</option>
+          </select>
+        </div>
+        <button className="enq-filters-trigger" onClick={() => setFilterSheetOpen(true)}><Filter size={14} /> Filters {(enqStatusFilter !== 'all' || enqCategoryFilter !== 'all' || enqReferralFilter !== 'all') ? '·' : ''}</button>
       </div>
+      {filterSheetOpen && (
+        <div className="enq-sheet-overlay" onClick={() => setFilterSheetOpen(false)}>
+          <div className="enq-sheet" onClick={e => e.stopPropagation()}>
+            <div className="enq-sheet-head"><strong>Filters</strong><button onClick={() => setFilterSheetOpen(false)} className="btn btn-ghost btn-xs"><X size={14} /></button></div>
+            <label>Status<select value={enqStatusFilter} onChange={e => setEnqStatusFilter(e.target.value)} className="enq-select"><option value="all">All statuses</option><option value="pending_review">Pending</option><option value="assigned">Assigned</option><option value="converted_client">Converted client</option><option value="converted_project">Converted project</option><option value="archived">Archived</option></select></label>
+            <label>Service<select value={enqCategoryFilter} onChange={e => setEnqCategoryFilter(e.target.value)} className="enq-select"><option value="all">All services</option><option value="Clip Editing">Clip Editing</option><option value="Podcast Editing">Podcast Editing</option><option value="Social Media Marketing">Social Media</option><option value="Website Design & Development">Website Dev</option></select></label>
+            <label>Source<select value={enqReferralFilter} onChange={e => setEnqReferralFilter(e.target.value)} className="enq-select"><option value="all">All sources</option><option value="referral">Referral</option><option value="organic">Organic</option><option value="direct">Direct</option><option value="website">Website</option><option value="partner">Partner</option></select></label>
+            <div className="enq-sheet-actions"><button onClick={() => { setEnqStatusFilter('all'); setEnqCategoryFilter('all'); setEnqReferralFilter('all'); }} className="btn btn-ghost btn-sm">Clear</button><button onClick={() => setFilterSheetOpen(false)} className="btn btn-primary btn-sm">Apply</button></div>
+          </div>
+        </div>
+      )}
 
       {enquiries.length === 0 ? (
         <div className="enq-empty">
@@ -142,7 +190,7 @@ export default function EnquiriesPage({
                         </div>
                       </td>
                       <td>
-                        <span className="enq-contact"><Phone size={12} /> +{enq.phone || '—'}</span>
+                        <a href={getTelHref(enq.phone)} className="enq-contact enq-contact--link" title={formatPhoneDisplay(enq.phone)}><Phone size={12} /> {formatPhoneDisplay(enq.phone)}</a>
                         {enq.email && <span className="enq-contact enq-contact--muted"><Mail size={12} /> {enq.email}</span>}
                       </td>
                       <td>
@@ -158,10 +206,10 @@ export default function EnquiriesPage({
                             <option value="">Assign</option>
                             {staff?.filter(s => s.role === 'MANAGER').map(m => <option key={m._id} value={m._id}>{m.name}</option>)}
                           </select>
-                          <button onClick={() => handleConvertProject(enq._id)} disabled={enq.status === 'converted_project'} className="btn btn-primary btn-xs">Project</button>
-                          <button onClick={() => handleConvertClient(enq._id)} disabled={['converted_client','converted_project'].includes(enq.status)} className="btn btn-secondary btn-xs">Client</button>
+                          <button onClick={() => handleConvertProject(enq._id)} disabled={enq.status === 'converted_project'} className="enq-action"><Briefcase size={12} /> Project</button>
+                          <button onClick={() => handleConvertClient(enq._id)} disabled={['converted_client','converted_project'].includes(enq.status)} className="enq-action"><UserPlus size={12} /> Client</button>
                           <span className="enq-menu-anchor">
-                            <button onClick={() => setOpenMenuId(openMenuId === enq._id ? null : enq._id)} className="btn btn-ghost btn-xs" aria-label="More actions"><MoreHorizontal size={14} /></button>
+                            <button onClick={() => setOpenMenuId(openMenuId === enq._id ? null : enq._id)} className="enq-action enq-action--icon" aria-label="More actions"><MoreHorizontal size={14} /></button>
                             {openMenuId === enq._id && (
                               <span className="enq-menu" onMouseLeave={() => setOpenMenuId(null)}>
                                 <button onClick={() => { setActiveEnquiryForNote(enq._id); setOpenMenuId(null); }}><MessageSquare size={12} /> Notes</button>
@@ -186,14 +234,14 @@ export default function EnquiriesPage({
                     <StatusBadge status={enq.status} />
                   </div>
                   <div className="enq-card-service"><FolderOpen size={12} /> {enq.serviceCategory || '—'}</div>
-                  <div className="enq-card-contact"><Phone size={12} /> +{enq.phone || '—'} <span className="enq-dot">·</span> {enq.createdAt ? new Date(enq.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}</div>
+                  <div className="enq-card-contact"><a href={getTelHref(enq.phone)} className="enq-contact enq-contact--link"><Phone size={12} /> {formatPhoneDisplay(enq.phone)}</a> <span className="enq-dot">·</span> {enq.createdAt ? new Date(enq.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}</div>
                   {enq.budget > 0 && <div className="enq-card-value"><IndianRupee size={12} /> {new Intl.NumberFormat('en-IN').format(enq.budget)}</div>}
                   {enq.referral?.isReferral && <div className="enq-card-referral">Referral · {enq.referral.referralCode}</div>}
                   <div className="enq-card-actions">
-                    <button onClick={() => handleConvertProject(enq._id)} disabled={enq.status === 'converted_project'} className="btn btn-primary btn-xs">Project</button>
-                    <button onClick={() => handleConvertClient(enq._id)} disabled={['converted_client','converted_project'].includes(enq.status)} className="btn btn-secondary btn-xs">Client</button>
-                    <button onClick={() => setActiveEnquiryForNote(activeEnquiryForNote === enq._id ? null : enq._id)} className="btn btn-ghost btn-xs"><MessageSquare size={12} /></button>
-                    <button onClick={() => handleArchiveEnquiry(enq._id)} className="btn btn-ghost btn-xs"><Archive size={12} /></button>
+                    <button onClick={() => handleConvertProject(enq._id)} disabled={enq.status === 'converted_project'} className="enq-action"><Briefcase size={12} /> Project</button>
+                    <button onClick={() => handleConvertClient(enq._id)} disabled={['converted_client','converted_project'].includes(enq.status)} className="enq-action"><UserPlus size={12} /> Client</button>
+                    <button onClick={() => setActiveEnquiryForNote(activeEnquiryForNote === enq._id ? null : enq._id)} className="enq-action enq-action--icon" aria-label="Notes"><MessageSquare size={14} /></button>
+                    <button onClick={() => handleArchiveEnquiry(enq._id)} className="enq-action enq-action--icon" aria-label="Archive"><Archive size={14} /></button>
                   </div>
                   <div className="enq-card-assign">
                     <select value={enq.assignedManager?._id || ''} onChange={e => handleAssignManager(enq._id, e.target.value)} className="enq-inline-select enq-inline-select--full">
@@ -206,14 +254,8 @@ export default function EnquiriesPage({
             </div>
           </div>
 
-          <div className="enq-detail">
-            {!selectedEnquiry ? (
-              <div className="enq-detail-empty">
-                <MessageSquare size={18} />
-                <strong>Select a lead</strong>
-                <span>Choose a lead’s note action to view its timeline and add follow-ups.</span>
-              </div>
-            ) : (
+          {selectedEnquiry ? (
+            <div className="enq-detail enq-detail--active">
               <div className="enq-detail-card">
                 <div className="enq-detail-head">
                   <div>
@@ -229,7 +271,7 @@ export default function EnquiriesPage({
                   </div>
                 )}
                 <div className="enq-detail-meta">
-                  <span><Phone size={12} /> +{selectedEnquiry.phone}</span>
+                  <span><a href={getTelHref(selectedEnquiry.phone)} className="enq-contact enq-contact--link"><Phone size={12} /> {formatPhoneDisplay(selectedEnquiry.phone)}</a></span>
                   {selectedEnquiry.email && <span><Mail size={12} /> {selectedEnquiry.email}</span>}
                   {selectedEnquiry.source && <span><Globe size={12} /> {selectedEnquiry.source}</span>}
                   <span><Clock size={12} /> {new Date(selectedEnquiry.createdAt).toLocaleString('en-IN')}</span>
@@ -251,13 +293,13 @@ export default function EnquiriesPage({
                   <button onClick={() => handleAddEnquiryNote(selectedEnquiry._id)} className="btn btn-primary btn-sm"><Send size={12} /> Add</button>
                 </div>
               </div>
-            )}
+            </div>
+            ) : null}
           </div>
-        </div>
       )}
 
       <style>{`
-        .enq-page { display:flex; flex-direction:column; gap:14px; }
+        .enq-page { display:flex; flex-direction:column; gap:14px; width:100%; max-width:none; }
         .enq-header { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-start; }
         .enq-metrics { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .enq-metric { font-size:0.75rem; color:var(--gray-600); background:var(--white); border:1px solid var(--gray-200); padding:6px 10px; border-radius:999px; }
@@ -265,31 +307,47 @@ export default function EnquiriesPage({
         .enq-metric--pending strong { color:var(--warning); }
         .enq-metric--ok strong { color:var(--success); }
         .enq-filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .enq-search { position:relative; flex:1 1 220px; min-width:180px; }
+        .enq-search { position:relative; flex:1 1 260px; min-width:180px; }
         .enq-search svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--gray-400); pointer-events:none; }
         .enq-search input { width:100%; height:36px; padding:0 12px 0 32px; border:1px solid var(--gray-200); border-radius:8px; font-size:0.8125rem; background:var(--white); }
+        .enq-filters-desktop { display:flex; gap:8px; align-items:center; }
+        .enq-filters-trigger { display:none; height:36px; padding:0 14px; border:1px solid var(--gray-200); border-radius:8px; background:var(--white); font-size:0.8125rem; font-weight:500; align-items:center; gap:6px; cursor:pointer; }
         .enq-select { height:36px; border:1px solid var(--gray-200); border-radius:8px; padding:0 28px 0 10px; font-size:0.8125rem; background:var(--white); min-width:140px; }
         .enq-select--narrow { min-width:120px; }
+        .enq-sheet-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:60; display:flex; align-items:flex-end; }
+        .enq-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:16px; width:100%; max-width:520px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+        .enq-sheet-head { display:flex; justify-content:space-between; align-items:center; }
+        .enq-sheet label { display:flex; flex-direction:column; gap:6px; font-size:0.8125rem; font-weight:500; }
+        .enq-sheet-actions { display:flex; justify-content:space-between; gap:12px; padding-top:8px; border-top:1px solid var(--gray-100); }
         .enq-empty { display:flex; gap:12px; align-items:center; padding:20px; border:1px solid var(--gray-200); border-radius:12px; background:var(--white); color:var(--gray-600); }
         .enq-empty strong { display:block; color:var(--gray-900); }
-        .enq-layout { display:grid; grid-template-columns: 1fr 360px; gap:16px; align-items:start; }
-        .enq-list { min-width:0; }
-        .enq-table-wrap { overflow:auto; border:1px solid var(--gray-200); border-radius:12px; background:var(--white); }
-        .enq-table { width:100%; border-collapse:collapse; font-size:0.8125rem; }
+        .enq-layout { display:flex; flex-direction:column; gap:18px; width:100%; max-width:none; }
+        .enq-list { min-width:0; width:100%; }
+        .enq-table-wrap { border:1px solid var(--gray-200); border-radius:12px; background:var(--white); overflow:auto; }
+        .enq-table { width:100%; border-collapse:collapse; font-size:0.8125rem; table-layout:auto; }
         .enq-table th { text-align:left; font-size:0.6875rem; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--gray-500); padding:10px 12px; border-bottom:1px solid var(--gray-200); background:var(--gray-50); white-space:nowrap; }
+        .enq-table th:last-child, .enq-table td:last-child { width:1%; white-space:nowrap; text-align:right; }
         .enq-table td { padding:10px 12px; border-bottom:1px solid var(--gray-100); vertical-align:top; }
+        .enq-table td:last-child { white-space:nowrap; }
         .enq-table tr.is-selected td { background:rgba(255,106,0,0.04); }
-        .enq-lead { display:flex; gap:10px; align-items:center; }
+        .enq-lead { display:flex; gap:10px; align-items:center; min-width:0; }
         .enq-avatar { width:28px; height:28px; border-radius:999px; background:var(--gray-900); color:var(--white); display:inline-flex; align-items:center; justify-content:center; font-size:0.6875rem; font-weight:700; flex-shrink:0; }
-        .enq-name { display:block; font-weight:600; color:var(--gray-900); }
+        .enq-name { display:block; font-weight:600; color:var(--gray-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .enq-id { display:block; font-size:0.6875rem; color:var(--gray-500); font-family:var(--font-mono); }
         .enq-contact { display:flex; gap:6px; align-items:center; font-size:0.75rem; color:var(--gray-700); }
-        .enq-contact--muted { color:var(--gray-500); }
+        .enq-contact--link { color:var(--gray-700); text-decoration:none; }
+        .enq-contact--link:hover { color:var(--accent); }
+        .enq-contact--muted { color:var(--gray-500); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .enq-service { display:inline-flex; gap:6px; align-items:center; font-size:0.75rem; font-weight:600; color:var(--gray-700); }
         .enq-referral { display:block; font-size:0.6875rem; color:var(--warning); margin-top:2px; }
-        .enq-row-actions { display:flex; gap:6px; align-items:center; justify-content:flex-end; }
-        .enq-inline-select { height:28px; border:1px solid var(--gray-200); border-radius:6px; font-size:0.75rem; padding:0 6px; background:var(--white); }
-        .enq-inline-select--full { width:100%; }
+        .enq-row-actions { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:nowrap; }
+        .enq-action { display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; border:1px solid var(--gray-200); border-radius:8px; background:var(--white); font-size:0.75rem; font-weight:500; color:var(--gray-700); white-space:nowrap; cursor:pointer; transition:background 120ms, border-color 120ms, color 120ms; }
+        .enq-action:hover { background:var(--gray-50); border-color:var(--gray-300); color:var(--gray-900); }
+        .enq-action:disabled { opacity:0.45; cursor:not-allowed; }
+        .enq-action:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+        .enq-action--icon { width:28px; padding:0; justify-content:center; }
+        .enq-inline-select { height:28px; border:1px solid var(--gray-200); border-radius:6px; font-size:0.75rem; padding:0 6px; background:var(--white); max-width:110px; }
+        .enq-inline-select--full { width:100%; max-width:none; }
         .enq-menu-anchor { position:relative; }
         .enq-menu { position:absolute; right:0; top:32px; background:var(--white); border:1px solid var(--gray-200); border-radius:8px; padding:4px; display:flex; flex-direction:column; gap:2px; box-shadow:var(--shadow-lg); z-index:10; min-width:140px; }
         .enq-menu button { display:flex; gap:8px; align-items:center; padding:7px 10px; border:0; background:transparent; font-size:0.8125rem; text-align:left; border-radius:6px; cursor:pointer; }
@@ -298,14 +356,16 @@ export default function EnquiriesPage({
         .enq-card { border:1px solid var(--gray-200); border-radius:12px; background:var(--white); padding:12px; display:flex; flex-direction:column; gap:6px; }
         .enq-card.is-selected { border-color:var(--accent); }
         .enq-card-head { display:flex; justify-content:space-between; gap:8px; align-items:center; }
-        .enq-card-name { font-weight:600; color:var(--gray-900); font-size:0.875rem; }
+        .enq-card-name { font-weight:600; color:var(--gray-900); font-size:0.875rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .enq-card-service, .enq-card-contact { display:flex; gap:6px; align-items:center; font-size:0.75rem; color:var(--gray-600); }
         .enq-card-value { font-size:0.8125rem; font-weight:600; display:flex; gap:4px; align-items:center; }
         .enq-card-referral { font-size:0.6875rem; color:var(--warning); }
         .enq-card-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
         .enq-card-assign { margin-top:4px; }
         .enq-dot { color:var(--gray-300); }
-        .enq-detail { position:sticky; top:64px; }
+        .enq-detail { position:static; width:100%; min-width:0; }
+        .enq-detail--active { border:1px solid var(--gray-200); border-radius:12px; background:var(--white); overflow:hidden; }
+        .enq-detail--active .enq-detail-card { border:0; border-radius:0; }
         .enq-detail-empty { border:1px dashed var(--gray-200); border-radius:12px; padding:24px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; color:var(--gray-500); background:var(--white); }
         .enq-detail-card { border:1px solid var(--gray-200); border-radius:12px; background:var(--white); overflow:hidden; }
         .enq-detail-head { display:flex; justify-content:space-between; gap:12px; padding:12px 14px; border-bottom:1px solid var(--gray-100); }
@@ -325,14 +385,19 @@ export default function EnquiriesPage({
         .enq-note em { color:var(--gray-500); font-style:normal; font-size:0.6875rem; }
         .enq-detail-compose { display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--gray-100); }
         .enq-detail-compose textarea { flex:1; border:1px solid var(--gray-200); border-radius:8px; padding:8px 10px; font-size:0.8125rem; resize:vertical; }
-        @media (max-width: 1024px) { .enq-layout { grid-template-columns: 1fr; } .enq-detail { position:static; } }
+        @media (max-width: 1280px) { .enq-layout { gap:16px; } }
         @media (max-width: 768px) {
           .enq-table-wrap { display:none; }
           .enq-cards { display:flex; }
           .enq-header { flex-direction:column; }
-          .enq-filters { flex-direction:column; align-items:stretch; }
-          .enq-search, .enq-select { width:100%; min-width:0; }
+          .enq-filters-desktop { display:none; }
+          .enq-filters-trigger { display:inline-flex; }
+          .enq-search { flex-basis:100%; }
+          .enq-detail:has(.enq-detail-empty) { display:none; }
+          .enq-detail { position:fixed; inset:auto 0 0 0; z-index:40; max-height:82vh; overflow:auto; border-radius:16px 16px 0 0; box-shadow:0 -12px 40px rgba(0,0,0,0.12); border:1px solid var(--gray-200); border-bottom:0; background:var(--white); display:none; }
+          .enq-detail:has(.enq-detail-card) { display:block; }
         }
+        @media (min-width: 769px) { .enq-filters-trigger { display:none; } .enq-sheet-overlay { display:none !important; } }
       `}</style>
     </div>
   );

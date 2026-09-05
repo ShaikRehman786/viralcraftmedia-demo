@@ -140,8 +140,7 @@ export default function WebDevelopmentPage() {
               <p>We build high-performance websites that help businesses establish credibility, generate qualified leads, and grow online.</p>
               <div className="sp-hero-actions">
                 <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                  Request Website Proposal
+                  Request Website Proposal <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </a>
                 <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>View Services</a>
               </div>
@@ -332,7 +331,7 @@ export default function WebDevelopmentPage() {
                 <div key={s.num} className="sp-wf-card" style={{ '--stagger': i }}>
                   <div className="sp-wf-step-badge">Step {s.num}</div>
                   <div className="sp-wf-icon-wrap">
-                    <IconWrapper icon={s.icon} size={48} color={s.color} />
+                    <IconWrapper icon={s.icon} size={36} color={s.color} />
                   </div>
                   <h3>{s.title}</h3>
                   <p>{s.desc}</p>

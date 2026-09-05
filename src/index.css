@@ -181,28 +181,12 @@ img { max-width: 100%; display: block; }
   transition: transform var(--tr-base);
 }
 
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 56px;
-  padding: 0 16px;
-  margin: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  font-weight: 700;
-  font-size: 0.9375rem;
-  letter-spacing: -0.02em;
-  color: var(--white);
-}
-
-.sidebar-logo img { height: 22px; }
-
 .sidebar-nav {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 0 8px;
+  padding: 14px 8px 0;
 }
 
 .sidebar-group { display: flex; flex-direction: column; gap: 2px; }
@@ -356,10 +340,32 @@ img { max-width: 100%; display: block; }
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
 }
+.header-brand { display: inline-flex; align-items: center; flex-shrink: 0; text-decoration: none; }
+.topbar-logo { height: 38px; width: auto; object-fit: contain; display: block; }
+.header-account { position: relative; }
+.header-account-trigger { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border-radius: 999px; border: 1px solid var(--gray-200); background: var(--white); cursor: pointer; font-family: var(--font); transition: border-color var(--tr-fast), background var(--tr-fast); }
+.header-account-trigger:hover { background: var(--gray-50); border-color: var(--gray-300); }
+.header-account-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.header-account-avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--gray-900); color: var(--white); display: inline-flex; align-items: center; justify-content: center; font-size: 0.6875rem; font-weight: 700; flex-shrink: 0; }
+.header-account-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; min-width: 0; text-align: left; }
+.header-account-name { font-size: 0.8125rem; font-weight: 600; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.header-account-role { font-size: 0.6875rem; color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.header-account-chevron { color: var(--gray-400); transition: transform 150ms ease; flex-shrink: 0; }
+.header-account-chevron.is-open { transform: rotate(180deg); }
+.header-account-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px; z-index: 40; }
+.header-account-menu-head { padding: 8px 10px 6px; }
+.header-account-menu-name { font-size: 0.8125rem; font-weight: 600; color: var(--gray-900); }
+.header-account-menu-email { font-size: 0.75rem; color: var(--gray-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-account-menu-divider { height: 1px; background: var(--gray-100); margin: 6px 0; }
+.header-account-menu-item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent; font-size: 0.8125rem; font-weight: 500; color: var(--gray-700); cursor: pointer; font-family: var(--font); text-align: left; }
+.header-account-menu-item:hover { background: var(--gray-50); color: var(--gray-900); }
+.header-account-menu-item--danger { color: var(--gray-700); }
+.header-account-menu-item--danger:hover { background: #FEF2F2; color: #DC2626; }
+.header-account-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .header-breadcrumb {
   display: flex;
@@ -2162,9 +2168,9 @@ img { max-width: 100%; display: block; }
   padding: 4px 9px; margin-left: -8px; border-radius: 999px; transition: var(--trans);
   flex-shrink: 0;
 }
-.brand-logo { height: 28px; width: auto; object-fit: contain; display: block; border-radius: 4px; }
-@media (max-width: 1024px) { .brand-logo { height: 26px; } }
-@media (max-width: 480px) { .brand-logo { height: 24px; } }
+.brand-logo { height: 36px; width: auto; object-fit: contain; display: block; border-radius: 4px; }
+@media (max-width: 1024px) { .brand-logo { height: 34px; } }
+@media (max-width: 480px) { .brand-logo { height: 32px; } }
 
 .nav-center { display: flex; gap: 24px; align-items: center; flex-shrink: 0; }
 .nav-center a {
@@ -2905,20 +2911,17 @@ img { max-width: 100%; display: block; }
 .why-card {
   position: relative;
   z-index: 3;
-  padding: 28px; border-radius: var(--radius-lg);
-  background: rgba(255,255,255,0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: 20px 22px; border-radius: var(--r-lg);
+  background: var(--white);
   border: 1px solid var(--border);
-  transition: var(--trans);
-  box-shadow: var(--shadow-sm);
-  animation: fade-slide-up 0.6s var(--ease) calc(var(--stagger) * 0.12s) both;
+  transition: border-color var(--tr-fast), box-shadow var(--tr-fast);
+  box-shadow: none;
 }
 .why-card:hover {
-  transform: translate3d(6px, -3px, 0);
-  border-color: rgba(255,106,0,0.25);
-  box-shadow: var(--shadow-md);
-  background: rgba(255,255,255,0.98);
+  transform: none;
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-xs);
+  background: var(--white);
 }
 .why-card-hdr {
   display: flex;
@@ -2929,18 +2932,22 @@ img { max-width: 100%; display: block; }
 .why-icon-box {
   position: relative;
   z-index: 5;
-  background: white;
-  padding: 12px;
-  border-radius: 14px;
+  background: var(--gray-100);
+  padding: 0;
+  border-radius: var(--r-md);
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
 }
-
 .why-icon {
   width: 36px; height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(255,106,0,0.08), rgba(255,138,0,0.04));
+  border-radius: var(--r-md);
+  background: var(--gray-100);
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(255,106,0,0.08);
+  border: 1px solid var(--border);
   flex-shrink: 0;
+  color: var(--gray-600);
 }
 .why-tag { font-size: 0.72rem; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; font-family: var(--font-mono); line-height: 1; }
 .why-ctitle { font-size: 1.15rem; margin-bottom: 8px; }
@@ -6476,9 +6483,9 @@ img { max-width: 100%; display: block; }
 .notif-center-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: var(--r-lg);
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
   transition: all 0.15s ease;
   cursor: pointer;
   position: relative;
@@ -6505,9 +6512,9 @@ img { max-width: 100%; display: block; }
 }
 
 .notif-center-item-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-md);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -9952,24 +9959,23 @@ img { max-width: 100%; display: block; }
 }
 
 .sp-wf-card {
-  padding: 44px 36px;
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+  padding: 28px 24px;
+  border-radius: var(--r-lg);
+  background: var(--white);
   border: 1px solid var(--border);
-  text-align: center;
-  transition: var(--trans);
-  box-shadow: var(--shadow-sm);
+  text-align: left;
+  transition: border-color var(--tr-fast), box-shadow var(--tr-fast);
+  box-shadow: none;
   position: relative;
-  animation: fade-slide-up 0.6s var(--ease) calc(var(--stagger) * 0.15s) both;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .sp-wf-card:hover {
-  transform: translate3d(0, -6px, 0);
-  box-shadow: var(--shadow-md);
-  border-color: rgba(255, 106, 0, 0.2);
+  transform: none;
+  box-shadow: var(--shadow-xs);
+  border-color: var(--border-strong);
 }
 
 .sp-wf-step-badge {
@@ -9995,14 +10001,14 @@ img { max-width: 100%; display: block; }
 }
 
 .sp-wf-icon-wrap .icon-wrapper {
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, rgba(255,106,0,0.06), rgba(245,158,11,0.04));
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  background: var(--gray-100);
+  border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255,106,0,0.06);
+  border: 1px solid var(--border);
 }
 
 .sp-wf-card h3 {
@@ -11777,7 +11783,122 @@ html { scrollbar-gutter: stable; }
 /* Icon discipline — 16px default */
 .lucide, [data-lucide] { stroke-width: 2; }
 
+/* Header responsive — logo stays visible, no squeeze */
+@media (max-width: 768px) {
+  .header-breadcrumb { display: none !important; }
+  .header-search { width: 140px !important; }
+  .header-account-meta { display: none !important; }
+  .header-account-trigger { padding: 3px !important; border-color: transparent !important; background: transparent !important; }
+  .header-account-trigger:hover { background: var(--gray-100) !important; border-color: var(--gray-200) !important; }
+  .topbar-logo { height: 32px !important; }
+}
+@media (max-width: 480px) {
+  .topbar-logo { height: 30px !important; }
+  .header-right { gap: 6px !important; }
+  .header-search { display: none !important; }
+  .app-header { gap: 6px !important; }
+}
+@media (max-width: 375px) {
+  .topbar-logo { height: 28px !important; }
+  .app-header { padding: 0 10px !important; }
+}
+
 /* Z-index — predictable */
 .toast, [class*="toast"] { z-index: 70; }
 .command-palette { z-index: 60; }
+
+/* =====================================================================
+   MOBILE-FIRST REBUILD — P0 structural fixes (2026)
+   Overrides broken desktop-squeezed layouts with intentional mobile
+   compositions. Loaded last so it wins over earlier @media blocks.
+   ===================================================================== */
+
+/* 1. HERO — mobile: content-first, showcase as inline strip (no overlay, no rotation) */
+@media (max-width: 768px) {
+  .hero { min-height: auto !important; padding: 16px 0 32px !important; overflow: visible !important; background: var(--white) !important; }
+  .hero-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
+  .hero-left { order: 1; text-align: left !important; align-items: flex-start !important; width: 100% !important; }
+  .hero-badge { justify-content: flex-start !important; margin: 0 0 12px 0 !important; font-size: 0.7rem !important; }
+  .hero-title { text-align: left !important; font-size: 1.9rem !important; line-height: 1.08 !important; letter-spacing: -0.03em !important; margin-bottom: 10px !important; max-width: 100% !important; }
+  .hero-desc { text-align: left !important; margin: 0 0 16px 0 !important; max-width: 100% !important; font-size: 0.875rem !important; line-height: 1.6 !important; }
+  .hero-actions { flex-direction: column !important; width: 100% !important; margin-bottom: 16px !important; }
+  .hero-actions .btn { width: 100% !important; min-height: 44px !important; justify-content: center !important; }
+  .hero-actions .btn-ghost { background: var(--gray-100) !important; }
+  .hero-stats { flex-direction: row !important; gap: 0 !important; padding: 12px 0 !important; border-top: 1px solid var(--border) !important; border-bottom: 1px solid var(--border) !important; background: transparent !important; width: 100% !important; }
+  .hero-stat { flex: 1 !important; text-align: center !important; }
+  .hero-stat-div { width: 1px !important; height: 32px !important; background: var(--border) !important; }
+  /* showcase becomes horizontal scroll strip below content, not absolute overlay */
+  .hero-right { position: relative !important; order: 2; top: auto !important; left: auto !important; right: auto !important; bottom: auto !important; width: 100% !important; overflow: hidden !important; pointer-events: auto !important; min-height: 180px !important; background: var(--gray-50) !important; border-radius: var(--r-lg) !important; border: 1px solid var(--border) !important; padding: 12px !important; }
+  .hero-right .showcase-mesh { display: none !important; }
+  .hero-right .showcase-gallery { transform: none !important; gap: 10px !important; flex-direction: row !important; overflow-x: auto !important; scrollbar-width: none !important; padding-bottom: 4px !important; }
+  .hero-right .showcase-gallery::-webkit-scrollbar { display: none !important; }
+  .hero-right .showcase-col { flex: 0 0 auto !important; }
+  .hero-right .showcase-track { flex-direction: row !important; gap: 10px !important; transform: none !important; animation: none !important; }
+  .hero-right .showcase-set { flex-direction: row !important; gap: 10px !important; padding-bottom: 0 !important; }
+  .hero-right .showcase-card { opacity: 1 !important; width: 112px !important; height: 196px !important; flex-shrink: 0 !important; border-radius: var(--r-lg) !important; overflow: hidden !important; }
+  .hero-right .showcase-card video { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+  /* ClipEditing hero-mockup variant */
+  .hero-mockup { transform: none !important; max-width: 100% !important; }
+  .hero-mockup-phone { max-width: 200px !important; margin: 0 auto !important; animation: none !important; }
+}
+
+/* 2. PRICING — touch targets 44px, not 24px */
+@media (max-width: 768px) {
+  .p-sel { gap: 8px !important; grid-template-columns: repeat(3, 1fr) !important; }
+  .p-btn { min-height: 44px !important; font-size: 0.8125rem !important; padding: 0 !important; border-radius: var(--r-md) !important; }
+  .p-inp input, .p-inp textarea, .p-inp select, .sp-form-input { min-height: 44px !important; font-size: 0.9375rem !important; padding: 10px 12px !important; }
+  .p-inp textarea { min-height: 80px !important; }
+  .p-total, .p-summary { border-radius: var(--r-lg) !important; }
+}
+
+/* 3. SERVICES GRID — editorial, not 4 identical cards with same spacing */
+@media (max-width: 768px) {
+  .redesigned-services-grid { gap: 12px !important; }
+  .premium-service-card { padding: 16px !important; }
+  .svc-features-grid, .svc-grid { gap: 10px !important; }
+  .svc-feature-card { padding: 14px !important; }
+}
+
+/* 4. SERVICE PAGES — reduce hero from 740-850px to intentional 480px, stack */
+@media (max-width: 768px) {
+  .sp-hero { min-height: auto !important; padding: 24px 0 28px !important; }
+  .sp-hero-inner { flex-direction: column !important; gap: 20px !important; padding: 0 16px !important; }
+  .sp-hero-left { gap: 10px !important; }
+  .sp-hero-left h1 { font-size: 1.75rem !important; line-height: 1.12 !important; }
+  .sp-hero-left p { font-size: 0.875rem !important; line-height: 1.6 !important; }
+  .sp-hero-actions { flex-direction: column !important; }
+  .sp-hero-actions .btn { width: 100% !important; min-height: 44px !important; justify-content: center !important; }
+  .sp-hero-right { width: 100% !important; }
+  .premium-floating-panel { max-width: 100% !important; }
+  .sp-enquiry-inner { grid-template-columns: 1fr !important; gap: 20px !important; padding: 0 16px !important; }
+  .sp-enquiry-form-card { padding: 16px !important; }
+  .sp-wf-grid { gap: 10px !important; }
+  .sp-wf-card { padding: 16px !important; }
+  .sp-why-ledger { grid-template-columns: 1fr !important; gap: 10px !important; }
+}
+
+/* 5. FOOTER — intentional stacking, not 2-col squeezed */
+@media (max-width: 768px) {
+  .footer { padding: 32px 0 24px !important; }
+  .ft-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+  .ft-brand { grid-column: 1 !important; }
+  .ft-col h4 { font-size: 0.75rem !important; }
+  .ft-col a, .ft-addr, .ft-email { font-size: 0.8125rem !important; }
+}
+
+/* 6. CRM MOBILE — sidebar becomes drawer, topbar prioritized, KPI not 6 stacked giants */
+@media (max-width: 768px) {
+  .app-sidebar { width: 280px !important; transform: translateX(-100%) !important; transition: transform 220ms cubic-bezier(0.32,0.72,0,1) !important; box-shadow: var(--shadow-xl) !important; }
+  .app-sidebar.sidebar-open { transform: translateX(0) !important; }
+  .sidebar-overlay { display: block !important; }
+  .app-main { margin-left: 0 !important; }
+  .app-header { gap: 8px !important; padding: 0 12px !important; }
+  .header-left { gap: 8px !important; }
+  .header-breadcrumb { font-size: 0.8125rem !important; }
+  .app-content { padding: 12px 12px 24px !important; }
+  /* Overview KPI: primary metric prominent, rest 2-col compact */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+  .kpi-grid .kpi-card:first-child { grid-column: 1 / -1 !important; }
+  .kpi-card-projects, .kpi-card-tasks, .kpi-card-employees, .kpi-card-reviews { grid-column: span 1 !important; }
+}
 

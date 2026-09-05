@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import axios from 'axios';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -8,9 +7,8 @@ import {
   ShieldCheck,
   UserPlus,
   MessageCircle,
-  Receipt,
-  Bell,
-  LogOut
+  IndianRupee,
+  Bell
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, user }) {
@@ -32,15 +30,6 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
     }
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
-  const handleLogout = async () => {
-    try {
-      await axios.post('/api/auth/logout');
-      window.location.href = '/';
-    } catch (err) {
-      window.location.href = '/';
-    }
-  };
-
   const getInitials = (name) =>
     name.split(' ').map(n => n[0]).join('').toUpperCase();
 
@@ -54,10 +43,6 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
     <>
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <aside className={`app-sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
-        <div className="sidebar-logo">
-          <img src="/logoooooooooo.png" alt="ViralCraft Media" />
-        </div>
-
         <nav className="sidebar-nav">
           <div className="sidebar-group">
             <div className="sidebar-group-title">Main</div>
@@ -156,7 +141,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
                 className={`sidebar-link${activeTab === 'payments' ? ' active' : ''}`}
                 onClick={() => handleNav('payments')}
               >
-                <Receipt /> Payments & Invoices
+                <IndianRupee /> Payments & Invoices
               </button>
             </div>
           )}
@@ -172,9 +157,6 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
               <div className="sidebar-user-role">{user.role.replace(/_/g, ' ')}</div>
             </div>
           </div>
-          <button type="button" className="sidebar-link" onClick={handleLogout} title="Logout">
-            <LogOut /> Logout
-          </button>
         </div>
       </aside>
     </>

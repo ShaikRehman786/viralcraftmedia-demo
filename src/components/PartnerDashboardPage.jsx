@@ -294,16 +294,9 @@ export default function PartnerDashboardPage() {
           <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         )}
 
-        {/* Unified Light-Theme CRM Sidebar */}
+        {/* CRM Sidebar — logo removed per spec, navigation starts at MAIN */}
         <aside className={`app-sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
           <div>
-            <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <img src="/logoooooooooo.png" alt="ViralCraft Media" style={{ height: '28px' }} />
-              <h2 style={{ fontSize: '1.05rem', fontWeight: 850, margin: 0, color: '#FFF', letterSpacing: '-0.5px' }}>
-                ViralCraft<span style={{ color: 'var(--accent)' }}>Partner</span>
-              </h2>
-            </div>
-
             <nav className="sidebar-nav">
               <div className="sidebar-group">
                 <div className="sidebar-group-title">Hub Workspace</div>
@@ -353,21 +346,13 @@ export default function PartnerDashboardPage() {
                 <div className="sidebar-user-role">{partner?.ownerName}</div>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="btn btn-ghost btn-icon"
-              style={{ color: 'var(--error)' }}
-              title="Log Out"
-            >
-              <LogOut size={16} />
-            </button>
           </div>
         </aside>
 
         {/* Unified Light-Theme Main Section */}
         <div className="app-main">
           
-          {/* Sticky Header TopBar */}
+          {/* Sticky Header — logo in header, account menu for logout */}
           <header className="app-header">
             <div className="header-left">
               <button type="button"
@@ -378,6 +363,9 @@ export default function PartnerDashboardPage() {
               >
                 <Menu size={18} />
               </button>
+              <a href="/" className="header-brand" aria-label="ViralCraftMedia home">
+                <img src="/logoooooooooo.png" alt="ViralCraft Media" className="topbar-logo" />
+              </a>
               <div className="header-breadcrumb">
                 <span>Partner Portal</span>
                 <span className="breadcrumb-separator">/</span>
@@ -393,7 +381,7 @@ export default function PartnerDashboardPage() {
               <div className="badge badge-success hide-on-mobile">Active Partner</div>
               <button
                 onClick={handleLogout}
-                className="btn btn-ghost btn-sm"
+                className="btn btn-ghost btn-sm header-account-menu-item--partner-logout"
                 style={{ color: 'var(--error, #dc2626)', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 10px', fontSize: '0.8rem' }}
                 title="Logout"
               >

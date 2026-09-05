@@ -205,72 +205,71 @@ export default function PaymentsPage({ user, projects, triggerDownload }) {
       </div>
 
       {invoicedProjects.length === 0 ? (
-        <div className="card">
-          <div style={{
-            textAlign: 'center',
-            padding: '3rem 1.5rem',
-            background: 'var(--bg-secondary)',
-            borderRadius: 12,
-            border: '1px solid var(--border)'
-          }}>
-            <Receipt size={48} style={{ color: 'var(--text-muted)', opacity: 0.4, marginBottom: '1rem' }} />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.5rem' }}>
-              No invoices yet
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto' }}>
-              Invoices appear after verified payment. Failed and pending are listed below with their correct status.
-            </p>
-          </div>
+        <div className="enq-empty">
+          <Receipt size={20} />
+          <div><strong>No invoices yet</strong><span>Invoices appear after verified payment. Failed and pending are listed with their correct status.</span></div>
         </div>
       ) : (
-        <div className="data-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-          {invoicedProjects.map(p => {
-            const order = p.order || {};
-            const hasInvoice = !!order.invoiceUrl;
-            const status = (order.paymentStatus || (hasInvoice ? 'success' : 'pending')).toLowerCase();
-
-            return (
-              <div key={p._id} className="data-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', minWidth: 0, padding: '14px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', fontWeight: 700, color: 'var(--gray-500)' }}>
-                      {order.orderId || '—'}
-                    </span>
-                    <span className={`badge ${badgeFor(status)}`} style={{ fontSize: '0.68rem' }}>
-                      {labelFor(status)}
-                    </span>
-                    {status === 'success' && !hasInvoice && <span className="badge badge-warning" style={{ fontSize: '0.68rem' }}>Invoice pending</span>}
+        <>
+          <div className="pay-table-wrap">
+            <table className="pay-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Service</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th>Date</th>
+                  <th style={{ textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoicedProjects.map(p => {
+                  const order = p.order || {};
+                  const hasInvoice = !!order.invoiceUrl;
+                  const status = (order.paymentStatus || (hasInvoice ? 'success' : 'pending')).toLowerCase();
+                  const d = order.createdAt ? new Date(order.createdAt) : (order.orderDate ? new Date(order.orderDate) : null);
+                  return (
+                    <tr key={p._id}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 600, color: 'var(--gray-700)' }}>{order.orderId || '—'}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--gray-900)' }}>{order.clientName || p.name}</td>
+                      <td style={{ fontSize: '0.75rem', color: 'var(--gray-600)' }}>{order.serviceType || p.category || '—'}</td>
+                      <td><span className={`badge ${badgeFor(status)}`}>{labelFor(status)}</span></td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: status === 'failed' ? 'var(--error)' : 'var(--gray-900)' }}>₹{(order.amount || 0).toLocaleString('en-IN')}</td>
+                      <td style={{ fontSize: '0.75rem', color: 'var(--gray-500)', whiteSpace: 'nowrap' }}>{d ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {status === 'success' && hasInvoice ? <button onClick={() => triggerDownload(order.invoiceUrl, order.orderId)} className="btn btn-secondary btn-xs"><Download size={12} /> PDF</button> : <span style={{ fontSize: '0.6875rem', color: 'var(--gray-500)' }}>{status === 'failed' ? '—' : '—'}</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="pay-cards">
+            {invoicedProjects.map(p => {
+              const order = p.order || {};
+              const hasInvoice = !!order.invoiceUrl;
+              const status = (order.paymentStatus || (hasInvoice ? 'success' : 'pending')).toLowerCase();
+              return (
+                <div key={p._id} className="pay-card">
+                  <div className="pay-card-head">
+                    <span className="pay-card-id">{order.orderId || '—'}</span>
+                    <span className={`badge ${badgeFor(status)}`}>{labelFor(status)}</span>
                   </div>
-                  <div className="data-card-title" style={{ fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.clientName || p.name}</div>
-                  <div className="data-card-desc" style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
-                    {(order.createdAt ? new Date(order.createdAt) : (order.orderDate ? new Date(order.orderDate) : null))?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) || '—'}
-                    {' · '}{order.serviceType || p.category || 'Service'}
+                  <div className="pay-card-name">{order.clientName || p.name}</div>
+                  <div className="pay-card-meta">{order.serviceType || p.category || '—'} · {(order.createdAt ? new Date(order.createdAt) : (order.orderDate ? new Date(order.orderDate) : null))?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) || '—'}</div>
+                  <div className="pay-card-foot">
+                    <strong style={{ color: status === 'failed' ? 'var(--error)' : 'var(--gray-900)' }}>₹{(order.amount || 0).toLocaleString('en-IN')}</strong>
+                    {status === 'success' && hasInvoice && <button onClick={() => triggerDownload(order.invoiceUrl, order.orderId)} className="btn btn-secondary btn-xs"><Download size={12} /> PDF</button>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: status === 'failed' ? 'var(--error)' : 'var(--gray-900)' }}>
-                    ₹{(order.amount || 0).toLocaleString('en-IN')}
-                  </div>
-                  {status === 'success' && hasInvoice ? (
-                    <button onClick={() => triggerDownload(order.invoiceUrl, order.orderId)} className="btn btn-primary btn-sm" style={{ minHeight: '32px' }}>
-                      <Download size={12} /> PDF
-                    </button>
-                  ) : status === 'success' && !hasInvoice ? (
-                    <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <Clock size={11} /> Generating…
-                    </span>
-                  ) : status === 'failed' ? (
-                    <span style={{ fontSize: '0.72rem', color: 'var(--error)', fontWeight: 600 }}>Not collected</span>
-                  ) : status === 'refunded' ? (
-                    <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Refunded</span>
-                  ) : (
-                    <span style={{ fontSize: '0.72rem', color: 'var(--warning)', fontWeight: 600 }}>Awaiting payment</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <style>{` .pay-table-wrap { border:1px solid var(--gray-200); border-radius:12px; background:var(--white); overflow:auto; } .pay-table { width:100%; border-collapse:collapse; font-size:0.8125rem; } .pay-table th { text-align:left; font-size:0.6875rem; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--gray-500); padding:10px 12px; border-bottom:1px solid var(--gray-200); background:var(--gray-50); white-space:nowrap; } .pay-table td { padding:10px 12px; border-bottom:1px solid var(--gray-100); } .pay-cards { display:none; flex-direction:column; gap:10px; } .pay-card { border:1px solid var(--gray-200); border-radius:12px; background:var(--white); padding:12px; display:flex; flex-direction:column; gap:6px; } .pay-card-head { display:flex; justify-content:space-between; align-items:center; } .pay-card-id { font-family:monospace; font-size:0.75rem; font-weight:600; color:var(--gray-700); } .pay-card-name { font-weight:600; color:var(--gray-900); font-size:0.875rem; } .pay-card-meta { font-size:0.75rem; color:var(--gray-500); } .pay-card-foot { display:flex; justify-content:space-between; align-items:center; margin-top:4px; } @media (max-width:768px){ .pay-table-wrap{display:none;} .pay-cards{display:flex;} } `}</style>
+        </>
       )}
     </div>
   );

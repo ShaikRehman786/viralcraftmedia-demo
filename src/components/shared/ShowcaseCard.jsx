@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Film } from 'lucide-react';
 
 export default function ShowcaseCard({ serviceName = "Clip Editing" }) {
   return (
@@ -18,7 +18,7 @@ export default function ShowcaseCard({ serviceName = "Clip Editing" }) {
       border: '1px solid rgba(255, 106, 0, 0.15)'
     }}>
       <div style={{ background: 'rgba(255, 106, 0, 0.1)', color: 'var(--accent)', padding: '8px', borderRadius: '50%', marginBottom: '12px' }}>
-        <Sparkles size={20} />
+        <Film size={20} />
       </div>
       <div style={{ fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)' }}>{serviceName}</div>
       <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: '4px' }}>Portfolio showcase coming soon</div>

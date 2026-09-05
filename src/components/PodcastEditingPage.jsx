@@ -275,14 +275,7 @@ export default function PodcastEditingPage() {
         `}</style>
 
         {/* 1. EDITORIAL HERO — Cinematic Video Redesign */}
-        <section className="sp-hero" style={{ 
-          position: 'relative', 
-          minHeight: '85vh', 
-          display: 'flex', 
-          alignItems: 'center', 
-          overflow: 'hidden',
-          background: '#0B0B0C'
-        }}>
+        <section className="sp-hero">
           {/* Background Video — lazy poster, metadata preload to avoid blocking mobile LCP */}
           <video
             autoPlay
@@ -370,8 +363,7 @@ export default function PodcastEditingPage() {
                   alignItems: 'center',
                   gap: '8px'
                 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                  Start Podcast Project
+                  Start Podcast Project <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </a>
                 <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
                   View Deliverables
@@ -575,7 +567,7 @@ export default function PodcastEditingPage() {
                 <div key={s.num} className="sp-wf-card" style={{ '--stagger': i }}>
                   <div className="sp-wf-step-badge">Step {s.num}</div>
                   <div className="sp-wf-icon-wrap">
-                    <IconWrapper icon={s.icon} size={48} color={s.color} />
+                    <IconWrapper icon={s.icon} size={36} color={s.color} />
                   </div>
                   <h3>{s.title}</h3>
                   <p>{s.desc}</p>

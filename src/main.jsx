@@ -15,7 +15,9 @@ if (import.meta.env.PROD) {
   console.debug = () => {};
 }
 
-registerServiceWorker().catch(() => {});
+// Defer SW registration until idle so it never blocks first interaction on mobile
+const idleRegister = window.requestIdleCallback || ((cb) => setTimeout(cb, 2500));
+idleRegister(() => registerServiceWorker().catch(() => {}), { timeout: 4000 });
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

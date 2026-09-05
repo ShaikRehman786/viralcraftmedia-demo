@@ -8,7 +8,7 @@ import {
   TrendingUp,
   ArrowUpRight,
   ChevronRight,
-  Sparkles,
+  Palette,
   FolderOpen,
   UserPlus,
   Building,
@@ -72,7 +72,7 @@ function getCategoryIcon(category) {
   const c = category.toLowerCase();
   if (c.includes('edit')) return <Film size={14} />;
   if (c.includes('market')) return <TrendingUp size={14} />;
-  if (c.includes('brand')) return <Sparkles size={14} />;
+  if (c.includes('brand')) return <Palette size={14} />;
   if (c.includes('web')) return <Globe size={14} />;
   if (c.includes('consult')) return <MessageCircle size={14} />;
   return <FolderOpen size={14} />;
@@ -1191,7 +1191,7 @@ export default function OverviewPage({
                           <span className="rev-mini-card-label">Revenue Today</span>
                           <span className="rev-mini-card-val">{analytics?.revenueToday > 0 ? `₹${analytics.revenueToday.toLocaleString('en-IN')}` : '₹0'}</span>
                         </div>
-                        <Sparkles size={14} className="text-accent" />
+                        <Palette size={14} className="text-accent" />
                       </div>
                       <div className="rev-mini-card">
                         <div className="rev-mini-card-left">
@@ -1225,7 +1225,7 @@ export default function OverviewPage({
                             {projects.length > 0 ? 'Active' : 'Idle'}
                           </span>
                         </div>
-                        <Sparkles size={14} className="text-success" />
+                        <Palette size={14} className="text-success" />
                       </div>
                     </div>
                   </div>
@@ -1397,7 +1397,7 @@ export default function OverviewPage({
                 <div className="rev-kpi-subcard">
                   <div className="rev-kpi-subcard-header">
                     <span className="rev-kpi-subcard-label">Top Campaign</span>
-                    <Sparkles size={14} className="text-accent" />
+                    <Palette size={14} className="text-accent" />
                   </div>
                   <span className="rev-kpi-subcard-value" style={{ fontSize: '15px' }}>{analytics.referralStats.topPerformingCampaign?.name || '—'}</span>
                   <div className="rev-kpi-subcard-footer">

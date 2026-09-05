@@ -252,8 +252,7 @@ export default function ClipEditingPage() {
                 </p>
                 <div className="hero-actions">
                   <a href="#pricing" className="btn btn-primary">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                    Start Order
+                    Start Order <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                   </a>
                 </div>
                 <div className="hero-stats">
@@ -553,7 +552,7 @@ export default function ClipEditingPage() {
               <div className="svc-card" style={{ border: '2px solid var(--accent)', background: 'rgba(255, 106, 0, 0.02)', minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
                 <div>
                   <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={Scissors} size={44} color="var(--accent)" className="svc-icon" />
+                    <IconWrapper icon={Scissors} size={36} color="var(--gray-600)" className="svc-icon" />
                     <div className="svc-hdr-group">
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Clip Editing (Active)</h3>
                     </div>
@@ -567,7 +566,7 @@ export default function ClipEditingPage() {
               <div className="svc-card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
                 <div>
                   <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={Activity} size={44} color="#3B82F6" className="svc-icon" />
+                    <IconWrapper icon={Activity} size={36} color="var(--gray-600)" className="svc-icon" />
                     <div className="svc-hdr-group">
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Podcast Editing</h3>
                     </div>
@@ -581,7 +580,7 @@ export default function ClipEditingPage() {
               <div className="svc-card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
                 <div>
                   <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={TrendingUp} size={44} color="#10B981" className="svc-icon" />
+                    <IconWrapper icon={TrendingUp} size={36} color="var(--gray-600)" className="svc-icon" />
                     <div className="svc-hdr-group">
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Social Marketing</h3>
                     </div>
@@ -595,7 +594,7 @@ export default function ClipEditingPage() {
               <div className="svc-card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
                 <div>
                   <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={Monitor} size={44} color="#8B5CF6" className="svc-icon" />
+                    <IconWrapper icon={Monitor} size={36} color="var(--gray-600)" className="svc-icon" />
                     <div className="svc-hdr-group">
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Website Development</h3>
                     </div>

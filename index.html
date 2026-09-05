@@ -40,9 +40,7 @@
   <!-- Fonts: display=swap + reduced weights to avoid render-blocking 100KB+ -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
 
-  <!-- Razorpay Checkout: async so it never blocks initial mobile render; lazy-loads before payment -->
-  <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
-  <link rel="preconnect" href="https://api.razorpay.com" crossorigin>
+  <!-- Razorpay: lazy-loaded only when user reaches payment (not during initial paint) -->
 
   <!-- Local JSON-LD Schema -->
   <script type="application/ld+json">

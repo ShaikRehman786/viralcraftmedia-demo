@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Lock, Mail, ArrowLeft, Loader2, Sparkles, Key, Eye, EyeOff, XCircle, CheckCircle } from 'lucide-react';
+import { Lock, Mail, ArrowLeft, Loader2, LogIn, Key, Eye, EyeOff, XCircle, CheckCircle } from 'lucide-react';
 
 axios.defaults.withCredentials = true;
 
@@ -371,8 +371,8 @@ export default function LoginPage() {
               onMouseDown={() => setBtnPressed(true)}
               onMouseUp={() => setBtnPressed(false)}
             >
-              {loading ? <Loader2 size={16} className="spinner" /> : <Sparkles size={16} />}
-              {loading ? 'Updating Password...' : 'Save & Login'}
+              {loading ? <Loader2 size={16} className="spinner" /> : <LogIn size={16} />}
+              {loading ? 'Updating Password...' : 'Save & Continue'}
             </button>
           </form>
         ) : !forgotMode ? (
@@ -524,7 +524,7 @@ export default function LoginPage() {
               onMouseDown={() => setBtnPressed(true)}
               onMouseUp={() => setBtnPressed(false)}
             >
-              {loading ? <Loader2 size={16} className="spinner" /> : <Sparkles size={16} />}
+              {loading ? <Loader2 size={16} className="spinner" /> : <LogIn size={16} />}
               {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>

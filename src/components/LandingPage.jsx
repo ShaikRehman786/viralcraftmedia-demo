@@ -55,23 +55,33 @@ function useDebounce(fn, _delay) {
 function ReelVideo({ src }) {
   const videoRef = useRef(null);
   const [inView, setInView] = useState(false);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   useEffect(() => {
+    if (isMobile) return;
     const el = videoRef.current;
     if (!el) return;
-    // Respect reduced-motion: don't autoplay heavy videos
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        setInView(true);
-        observer.disconnect();
-      }
-    }, { rootMargin: '200px' });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 800));
+    const idleId = idle(() => {
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      }, { rootMargin: '200px' });
+      observer.observe(el);
+    }, { timeout: 2000 });
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idleId);
+      else clearTimeout(idleId);
+    };
+  }, [isMobile]);
 
-  // Mobile: avoid decoding 10 videos at once; only load when in viewport
+  if (isMobile) {
+    return <img src="/website header.png" alt="" className="reel-video-element" loading="lazy" decoding="async" style={{ contentVisibility: 'auto', objectFit: 'cover', width: '100%', height: '100%' }} />;
+  }
+
   return (
     <video
       ref={videoRef}
@@ -359,8 +369,7 @@ export default function LandingPage() {
   useSmoothScroll(rightTrackRef, 0.5, -200);
 
   useEffect(() => {
-    preloadImage('/logoooooooooo.png');
-    preloadImage('/website header.png');
+    // Images already preloaded via <link rel=preload> in index.html — no extra JS blocking startup
   }, []);
 
   useDebounce(() => {
@@ -675,8 +684,7 @@ export default function LandingPage() {
                 </p>
                 <div className="hero-actions">
                   <a href="#pricing" className="btn btn-primary" onClick={(e) => { e.preventDefault(); scrollTo('#pricing'); }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                    Start Order
+                    Start Order <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                   </a>
                   <a href="#workflow" className="btn btn-ghost" onClick={(e) => { e.preventDefault(); scrollTo('#workflow'); }}>View How It Works</a>
                 </div>
@@ -1089,7 +1097,7 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
                   <div key={c.tag} className="why-card" style={{ '--stagger': i }}>
                     <div className="why-card-hdr">
                       <div className="why-icon-box">
-                        <IconWrapper icon={c.icon} size={36} color="var(--accent)" className="why-icon" />
+                        <IconWrapper icon={c.icon} size={32} color="var(--gray-600)" className="why-icon" />
                       </div>
                       <span className="why-tag">{c.tag}</span>
                     </div>
@@ -1119,7 +1127,7 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
                 <div key={s.num} className="wf-card" style={{ '--stagger': i }}>
                   <div className="wf-step-badge">Step {s.num}</div>
                   <div className="wf-icon-wrap">
-                    <IconWrapper icon={s.icon} size={48} color={s.color} className="wf-icon" />
+                    <IconWrapper icon={s.icon} size={36} color={s.color} className="wf-icon" />
                   </div>
                   <h3 className="wf-title">{s.title}</h3>
                   <p className="wf-desc">{s.desc}</p>

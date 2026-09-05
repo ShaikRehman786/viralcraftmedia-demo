@@ -30,17 +30,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // PERFORMANCE: Skip auth probe on public customer pages to avoid blocking mobile LCP
-    // Public routes: '/', '/services/*', '/login', '/register', '/r/*', '/partner/login', '/reset-password/*'
+    // Public pages must render immediately — never block on auth
     const p = window.location.pathname;
     const isPublic = p === '/' || p.startsWith('/services/') || p === '/login' || p === '/register' || p.startsWith('/r/') || p.startsWith('/partner/login') || p.startsWith('/reset-password') || p.startsWith('/invite/') || p.startsWith('/accept-invitation');
     if (isPublic) {
       setLoading(false);
-      // Lazy background check after first paint (doesn't block LCP) — 300ms so SPA nav to /dashboard before auth resolves is rare (<1s human)
-      const t = setTimeout(() => {
+      // Defer background auth check until browser is idle and after first paint
+      const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
+      const idleId = idle(() => {
         axios.get('/api/auth/me', { silent: true }).then(res => setUser(res.data.user)).catch(() => {});
-      }, 300);
-      return () => clearTimeout(t);
+      }, { timeout: 3000 });
+      return () => {
+        if (window.cancelIdleCallback) window.cancelIdleCallback(idleId);
+        else clearTimeout(idleId);
+      };
     }
     axios.get('/api/auth/me')
       .then(res => {
@@ -147,6 +150,10 @@ function PartnerProtectedRoute({ children }) {
   return children;
 }
 
+function PublicFallback() {
+  return <div style={{ minHeight: '100vh', background: '#FFFFFF' }} aria-hidden="true" />;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -154,7 +161,7 @@ export default function App() {
     <PartnerAuthProvider>
     <LoadingProvider>
     <Router>
-      <Suspense fallback={<CRMGlobalLoader fullScreen message="Loading page..." />}>
+      <Suspense fallback={<PublicFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/partner/login" element={<PartnerLoginPage />} />

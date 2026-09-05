@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   Search, Menu, LayoutDashboard, ClipboardList,
   CalendarDays, Users, ShieldCheck, UserPlus,
-  MessageCircle, Receipt, Bell, Plus, Download, ArrowRight, LogOut
+  MessageCircle, IndianRupee, Bell, Plus, Download, ArrowRight, LogOut, ChevronDown
 } from 'lucide-react';
 import NotificationBell from './NotificationBell.jsx';
 
@@ -15,7 +15,7 @@ const PAGES = [
   { id: 'logs', label: 'Security Logs', icon: ShieldCheck },
   { id: 'enquiries', label: 'Inbound Leads', icon: UserPlus },
   { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
-  { id: 'payments', label: 'Payments & Invoices', icon: Receipt },
+  { id: 'payments', label: 'Payments & Invoices', icon: IndianRupee },
   { id: 'notification-center', label: 'Notification Center', icon: Bell },
 ];
 
@@ -57,6 +57,9 @@ function canAccess(pageId, role) {
 }
 
 export default function TopBar({ user, unreadCount, notifications, sidebarOpen, setSidebarOpen, activeTab, onNavigate, onMarkRead, onMarkAllRead }) {
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
+
   const handleLogout = async () => {
     try {
       await axios.post('/api/auth/logout');
@@ -65,6 +68,17 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
       window.location.href = '/';
     }
   };
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onDocClick = (e) => {
+      if (accountRef.current && !accountRef.current.contains(e.target)) setAccountOpen(false);
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') setAccountOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onEsc);
+    return () => { document.removeEventListener('mousedown', onDocClick); document.removeEventListener('keydown', onEsc); };
+  }, [accountOpen]);
 
   const getTabLabel = (tabId) => {
     if (tabId === 'overview') {
@@ -175,7 +189,7 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
   return (
     <>
       <header className="app-header">
-        <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="header-left">
           <button type="button"
             className="header-btn menu-toggle-btn"
             onClick={() => setSidebarOpen(prev => !prev)}
@@ -183,23 +197,24 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
           >
             <Menu size={18} />
           </button>
-          <img
-            src="/logoooooooooo.png"
-            alt="ViralCraft Media"
-            className="topbar-logo"
-            style={{ height: '26px', width: 'auto', objectFit: 'contain' }}
-          />
+          <a href="/" className="header-brand" aria-label="ViralCraftMedia home">
+            <img
+              src="/logoooooooooo.png"
+              alt="ViralCraft Media"
+              className="topbar-logo"
+            />
+          </a>
           <div className="header-breadcrumb">
             <span>{getTabLabel(activeTab)}</span>
           </div>
         </div>
 
         <div className="header-right">
-          <div className="header-search" onClick={open}>
-            <Search size={16} />
+          <div className="header-search" onClick={open} role="button" aria-label="Search">
+            <Search size={15} />
             <input
               type="text"
-              placeholder="Search anything..."
+              placeholder="Search…"
               readOnly
               onFocus={open}
             />
@@ -213,19 +228,28 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
             onNavigateToCenter={() => onNavigate?.('notification-center')}
           />
 
-          <div className="avatar avatar-sm" title={user?.name || 'User'}>
-            {getInitials(user?.name || 'U')}
+          <div className="header-account" ref={accountRef}>
+            <button type="button" className="header-account-trigger" onClick={() => setAccountOpen(v => !v)} aria-haspopup="menu" aria-expanded={accountOpen} aria-label="Account menu">
+              <span className="header-account-avatar">{getInitials(user?.name || 'U')}</span>
+              <span className="header-account-meta">
+                <span className="header-account-name">{user?.name || 'User'}</span>
+                <span className="header-account-role">{(user?.role || '').replace(/_/g, ' ')}</span>
+              </span>
+              <ChevronDown size={14} className={`header-account-chevron ${accountOpen ? 'is-open' : ''}`} />
+            </button>
+            {accountOpen && (
+              <div className="header-account-menu" role="menu">
+                <div className="header-account-menu-head">
+                  <div className="header-account-menu-name">{user?.name}</div>
+                  <div className="header-account-menu-email">{user?.email}</div>
+                </div>
+                <div className="header-account-menu-divider" />
+                <button type="button" role="menuitem" className="header-account-menu-item header-account-menu-item--danger" onClick={handleLogout}>
+                  <LogOut size={14} /> Log out
+                </button>
+              </div>
+            )}
           </div>
-
-          <button
-            onClick={handleLogout}
-            className="btn btn-ghost btn-sm header-logout-btn"
-            style={{ color: 'var(--error, #dc2626)', display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', fontSize: '0.8rem', flexShrink: 0, fontWeight: 600, border: '1px solid rgba(220, 38, 38, 0.2)', borderRadius: '8px' }}
-            title="Logout"
-          >
-            <LogOut size={15} />
-            <span>Logout</span>
-          </button>
         </div>
       </header>
 

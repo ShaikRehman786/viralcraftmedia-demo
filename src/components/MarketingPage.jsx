@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getReferralAttribution, clearReferralAttribution } from '../services/referralAttribution.js';
 import { 
-  BarChart3, Target, Users, Zap, Shield, TrendingUp, Calendar, Layers
+  BarChart3, Target, Users, TrendingUp
 } from 'lucide-react';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
@@ -262,8 +262,7 @@ export default function MarketingPage() {
               <p>We build organic brand channels, configure script blueprints, and map social engagement hooks to convert audiences into direct web leads.</p>
               <div className="sp-hero-actions">
                 <a href="#configure" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                  Request Growth Blueprint
+                  Request Growth Blueprint <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </a>
                 <a href="#services" className="btn btn-ghost" style={{ textDecoration: 'none' }}>View Deliverables</a>
               </div>
@@ -426,7 +425,7 @@ export default function MarketingPage() {
                 { tag: 'Results', title: 'Conversion Focused', desc: 'Social hooks formatted strictly to drive lead queries and inbound inquiries that convert.' },
                 { tag: 'Security', title: 'Secure Analytics', desc: 'Safe UTM tracking setup and secure data sync protocols protecting your brand data.' },
                 { tag: 'Scale', title: 'Scalable Strategy', desc: 'Flexible strategy templates configured to match evolving social algorithms and platform changes.' }
-              ].map((item, i) => (
+              ].map((item) => (
                 <div key={item.tag} className="sp-why-ledger-item">
                   <div className="sp-why-ledger-tag">{item.tag}</div>
                   <h3>{item.title}</h3>
@@ -454,7 +453,7 @@ export default function MarketingPage() {
                 <div key={s.num} className="sp-wf-card" style={{ '--stagger': i }}>
                   <div className="sp-wf-step-badge">Step {s.num}</div>
                   <div className="sp-wf-icon-wrap">
-                    <IconWrapper icon={s.icon} size={48} color={s.color} />
+                    <IconWrapper icon={s.icon} size={36} color={s.color} />
                   </div>
                   <h3>{s.title}</h3>
                   <p>{s.desc}</p>

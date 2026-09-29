@@ -134,4 +134,32 @@ router.get('/messages', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req
   }
 });
 
+// 9. Process inbound / test WhatsApp command (Admin only)
+router.post('/inbound', protect, authorize('SUPER_ADMIN', 'MANAGER'), [
+  body('text').trim().isLength({ min: 1 }).withMessage('Message text is required')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+    }
+    const { text, senderPhone = '919440720814' } = req.body;
+    const mockMsg = {
+      from: `${senderPhone}@c.us`,
+      to: 'system@c.us',
+      body: text,
+      reply: async (msgText) => {
+        console.log('[WHATSAPP-INBOUND-REPLY]', msgText);
+      }
+    };
+    await whatsappService.handleAdminCommand(req.user, text, mockMsg, senderPhone);
+    return res.status(200).json({
+      success: true,
+      message: 'Inbound WhatsApp command processed successfully.'
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

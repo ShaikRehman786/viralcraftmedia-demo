@@ -289,9 +289,12 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
           recipients.set(project.manager._id.toString(), { user: project.manager, isManager: true });
         }
       } else {
-        const matchingEmployees = (project.employees || []).filter(emp => 
-          emp && emp.department && emp.department.toLowerCase() === dept.toLowerCase()
-        );
+        const matchingEmployees = (project.employees || []).filter(emp => {
+          if (!emp || !emp.department) return false;
+          const ed = emp.department.toLowerCase().trim();
+          const dd = dept.toLowerCase().trim();
+          return ed === dd || dd.includes(ed) || ed.includes(dd) || (ed.includes('edit') && dd.includes('edit')) || (ed.includes('design') && dd.includes('design'));
+        });
         for (const emp of matchingEmployees) {
           if (!emp || !emp._id) continue;
           employeesFound.push(emp);
@@ -299,6 +302,15 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
             recipients.set(emp._id.toString(), { user: emp, isManager: false });
           }
         }
+      }
+    }
+
+    // Safety fallback: if project has assigned employees but department mismatch prevented matching
+    if (recipients.size === 0 && project.employees && project.employees.length > 0) {
+      for (const emp of project.employees) {
+        if (!emp || !emp._id) continue;
+        employeesFound.push(emp);
+        recipients.set(emp._id.toString(), { user: emp, isManager: false });
       }
     }
 
@@ -400,13 +412,16 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
             });
             await savedMsg.save();
             results.push({ user: user.name, type: 'WhatsApp', success: true });
+            console.info(`[PROJECT][NOTIFICATION] employeeId=${user._id} sendStatus=success`);
           } else {
             console.warn(`[PROJECT-NOTIFICATION] Invalid phone length for ${user.name}: ${user.phone}`);
             results.push({ user: user.name, type: 'WhatsApp', success: false, error: 'Invalid phone length' });
+            console.info(`[PROJECT][NOTIFICATION] employeeId=${user._id} sendStatus=failed reason=invalid_phone_length`);
           }
         } catch (waErr) {
           console.error(`[PROJECT-NOTIFICATION] WhatsApp failed for ${user.name}:`, waErr.message);
           results.push({ user: user.name, type: 'WhatsApp', success: false, error: waErr.message });
+          console.info(`[PROJECT][NOTIFICATION] employeeId=${user._id} sendStatus=failed reason=${waErr.message}`);
         }
       }
     }

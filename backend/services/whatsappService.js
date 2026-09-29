@@ -66,9 +66,18 @@ const cache = {
 
 const formatCleanDigits = (phone) => {
   if (!phone) return '';
-  let clean = phone.replace(/\D/g, '');
+  // Handle JID formats like "919440720814:12@c.us" or "919440720814@c.us"
+  let clean = phone.toString().split('@')[0].split(':')[0].replace(/\D/g, '');
   if (clean.length === 10 && !clean.startsWith('91')) {
     clean = '91' + clean;
+  }
+  // Strip repeated country code e.g. 91919440720814
+  if (clean.length === 14 && clean.startsWith('9191')) {
+    clean = clean.slice(2);
+  }
+  // Normalize leading zero e.g. 09440720814
+  if (clean.length === 11 && clean.startsWith('0')) {
+    clean = '91' + clean.slice(1);
   }
   return clean;
 };
@@ -163,7 +172,6 @@ const mapCategory = (projectName, department) => {
 };
 
 const parseNewProjectMessage = (text) => {
-  const lines = text.split('\n').map(l => l.trim());
   const result = {
     client: '',
     projectName: '',
@@ -174,66 +182,125 @@ const parseNewProjectMessage = (text) => {
     drive: '',
     notes: ''
   };
-  
-  let currentKey = '';
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line) continue;
-    const lower = line.toLowerCase();
-    
-    if (lower.startsWith('client:')) {
-      currentKey = 'client';
-      result.client = line.substring(7).trim();
-    } else if (lower.startsWith('project:')) {
-      currentKey = 'projectName';
-      result.projectName = line.substring(8).trim();
-    } else if (lower.startsWith('department:')) {
-      currentKey = 'department';
-      result.department = line.substring(11).trim();
-    } else if (lower.startsWith('priority:')) {
-      currentKey = 'priority';
-      result.priority = line.substring(9).trim();
-    } else if (lower.startsWith('deadline:')) {
-      currentKey = 'deadline';
-      result.deadline = line.substring(9).trim();
-    } else if (lower.startsWith('editors:')) {
-      currentKey = 'editors';
-      const val = line.substring(8).trim();
-      result.editors = parseInt(val, 10) || 1;
-    } else if (lower.startsWith('drive:')) {
-      currentKey = 'drive';
-      result.drive = line.substring(6).trim();
-    } else if (lower.startsWith('notes:')) {
-      currentKey = 'notes';
-      result.notes = line.substring(6).trim();
+
+  // Strip carriage returns and prepare for tokenization
+  const cleanedText = (text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+
+  // Split by newlines first
+  const rawLines = cleanedText.split('\n');
+  const tokens = [];
+
+  for (const line of rawLines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) continue;
+
+    // If the line contains pipes '|', split into multiple tokens
+    // Protect Drive URLs from accidental pipe splits if ever present
+    if (trimmedLine.includes('|')) {
+      const parts = trimmedLine.split('|');
+      for (const p of parts) {
+        if (p.trim()) tokens.push(p.trim());
+      }
     } else {
+      tokens.push(trimmedLine);
+    }
+  }
+
+  let currentKey = '';
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i].trim();
+    if (!token) continue;
+
+    // Check key prefixes (supporting optional WhatsApp markdown like *Client:*)
+    const clientMatch = token.match(/^\*?\s*client\s*\*?\s*:\s*(.*)/i);
+    const projectMatch = token.match(/^\*?\s*(?:project(?:\s*name)?)\s*\*?\s*:\s*(.*)/i);
+    const deptMatch = token.match(/^\*?\s*(?:department|dept)\s*\*?\s*:\s*(.*)/i);
+    const deadlineMatch = token.match(/^\*?\s*(?:deadline|due(?:\s*date)?)\s*\*?\s*:\s*(.*)/i);
+    const driveMatch = token.match(/^\*?\s*(?:drive(?:\s*(?:url|link|folder))?|link|url)\s*\*?\s*:\s*(.*)/i);
+    const priorityMatch = token.match(/^\*?\s*priority\s*\*?\s*:\s*(.*)/i);
+    const editorsMatch = token.match(/^\*?\s*editors\s*\*?\s*:\s*(.*)/i);
+    const notesMatch = token.match(/^\*?\s*(?:notes|description)\s*\*?\s*:\s*(.*)/i);
+
+    if (clientMatch) {
+      currentKey = 'client';
+      result.client = clientMatch[1].trim();
+    } else if (projectMatch) {
+      currentKey = 'projectName';
+      result.projectName = projectMatch[1].trim();
+    } else if (deptMatch) {
+      currentKey = 'department';
+      result.department = deptMatch[1].trim();
+    } else if (deadlineMatch) {
+      currentKey = 'deadline';
+      result.deadline = deadlineMatch[1].trim();
+    } else if (driveMatch) {
+      currentKey = 'drive';
+      result.drive = driveMatch[1].trim();
+    } else if (priorityMatch) {
+      currentKey = 'priority';
+      result.priority = priorityMatch[1].trim();
+    } else if (editorsMatch) {
+      currentKey = 'editors';
+      const val = parseInt(editorsMatch[1].trim(), 10);
+      result.editors = isNaN(val) ? 1 : val;
+    } else if (notesMatch) {
+      currentKey = 'notes';
+      result.notes = notesMatch[1].trim();
+    } else {
+      // Continuation of previous key (multiline notes, client names, etc.)
       if (currentKey === 'notes') {
-        result.notes = (result.notes + '\n' + line).trim();
+        result.notes = (result.notes + '\n' + token).trim();
       } else if (currentKey === 'client') {
-        result.client = (result.client + ' ' + line).trim();
+        result.client = (result.client + ' ' + token).trim();
       } else if (currentKey === 'projectName') {
-        result.projectName = (result.projectName + ' ' + line).trim();
+        result.projectName = (result.projectName + ' ' + token).trim();
       } else if (currentKey === 'department') {
-        result.department = (result.department + ' ' + line).trim();
-      } else if (currentKey === 'priority') {
-        result.priority = (result.priority + ' ' + line).trim();
-      } else if (currentKey === 'deadline') {
-        result.deadline = (result.deadline + ' ' + line).trim();
+        result.department = (result.department + ' ' + token).trim();
       } else if (currentKey === 'drive') {
-        result.drive = (result.drive + ' ' + line).trim();
+        result.drive = (result.drive + ' ' + token).trim();
+      } else if (currentKey === 'deadline') {
+        result.deadline = (result.deadline + ' ' + token).trim();
       }
     }
   }
+
+  // Strip WhatsApp markdown formatting like *Editor* or *September Stories* from values
+  ['client', 'projectName', 'department', 'priority', 'deadline', 'drive', 'notes'].forEach(k => {
+    if (typeof result[k] === 'string') {
+      result[k] = result[k].replace(/^[*_~]+|[*_~]+$/g, '').trim();
+    }
+  });
+
   return result;
 };
 
 const parseDateString = (str) => {
   if (!str) return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const trimmed = str.trim();
+
+  // Support DD-MM-YYYY or DD/MM/YYYY (e.g. 30-09-2026)
+  const ddmmyyyy = trimmed.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    const d = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 18, 29, 59));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Support YYYY-MM-DD or YYYY/MM/DD
+  const yyyymmdd = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (yyyymmdd) {
+    const [, year, month, day] = yyyymmdd;
+    const d = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 18, 29, 59));
+    if (!isNaN(d.getTime())) return d;
+  }
+
   const currentYear = new Date().getFullYear();
-  let candidate = str;
-  if (!/\d{4}/.test(str)) {
-    candidate = `${str} ${currentYear}`;
+  let candidate = trimmed;
+  if (!/\d{4}/.test(trimmed)) {
+    candidate = `${trimmed} ${currentYear}`;
   }
   const timestamp = Date.parse(candidate);
   if (!isNaN(timestamp)) {
@@ -243,7 +310,8 @@ const parseDateString = (str) => {
 };
 
 const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
-  const textUpper = text.toUpperCase();
+  const cleanCmd = (text || '').replace(/[*_~]/g, '').trim();
+  const textUpper = cleanCmd.toUpperCase();
   logStep('Parser Started', { command: textUpper.split('\n')[0], sender: adminUser.name });
 
   if (textUpper === 'HELP') {
@@ -301,8 +369,10 @@ const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
 
   if (textUpper.startsWith('NEW PROJECT')) {
     try {
+      console.info('[WHATSAPP][PROJECT] NEW PROJECT detected');
       const parsed = parseNewProjectMessage(text);
-      
+      console.info(`[WHATSAPP][PROJECT] client="${parsed.client}" project="${parsed.projectName}" department="${parsed.department}" deadline="${parsed.deadline}" driveUrlPresent=${!!parsed.drive}`);
+
       // Provide robust fallback defaults for optional parameters to prevent parsing failure
       if (!parsed.client) parsed.client = 'General Client';
       if (!parsed.priority) parsed.priority = 'medium';
@@ -317,8 +387,28 @@ const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
 
       if (missingFields.length > 0) {
         logStep('Errors', `NEW PROJECT validation failed. Missing strictly required fields: ${missingFields.join(', ')}`);
-        await msg.reply(`Failed to create project. Please specify both "Project: <name>" and "Department: <department>".`);
+        if (msg && typeof msg.reply === 'function') {
+          try {
+            await msg.reply(`Failed to create project. Please specify both "Project: <name>" and "Department: <department>".`);
+          } catch (rErr) {}
+        }
         await logWhatsAppAudit(adminUser, senderPhone, 'NEW PROJECT', 'Validation Failed', null, null, `Missing: ${missingFields.join(', ')}`);
+        return;
+      }
+
+      // Idempotency check: prevent duplicate project creation if received multiple times within 60s
+      const escapedProjectName = parsed.projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
+      const duplicateProject = await Project.findOne({
+        name: new RegExp('^' + escapedProjectName + '$', 'i'),
+        createdAt: { $gte: new Date(Date.now() - 60 * 1000) }
+      });
+      if (duplicateProject) {
+        console.info(`[WHATSAPP][IDEMPOTENCY] Duplicate project request detected for "${parsed.projectName}" (${duplicateProject._id}). Skipping duplicate creation.`);
+        if (msg && typeof msg.reply === 'function') {
+          try {
+            await msg.reply(`⚠️ Project "${duplicateProject.name}" was already created recently. Skipping duplicate request.`);
+          } catch (rErr) {}
+        }
         return;
       }
 
@@ -369,6 +459,7 @@ const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
         driveShareableLink: parsed.drive || ''
       });
       await projectObj.save();
+      console.info(`[PROJECT][CREATED] projectId=${projectObj._id} department=${projectObj.department}`);
       logStep('Project Created', `Project saved to MongoDB: ${projectObj.name} (${projectObj._id})`);
 
       // Automatically link project reference in order
@@ -420,6 +511,11 @@ const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
         return false;
       });
 
+      console.info(`[PROJECT][ASSIGNMENT] department=${projectObj.department} matchingEmployees=${matchingEmployees.length}`);
+      for (const emp of matchingEmployees) {
+        console.info(`[PROJECT][ASSIGNMENT] employee=${emp._id} whatsappConfigured=${!!emp.phone}`);
+      }
+
       if (matchingEmployees && matchingEmployees.length > 0) {
         const assignedEmployees = [...matchingEmployees];
         const assignedEmployeeIds = assignedEmployees.map(e => e._id);
@@ -463,13 +559,21 @@ const handleAdminCommand = async (adminUser, text, msg, senderPhone) => {
 
       }
 
+      console.info(`[PROJECT][NOTIFICATION] projectId=${projectObj._id} targetEmployees=${matchingEmployees.length}`);
+
       sendTaskNotification(projectObj._id, []).catch(err => {
         console.error('[WA-NOTIFICATION] Failed to send WhatsApp notifications:', err.message);
       });
 
       const assignedCount = projectObj.employees ? projectObj.employees.length : 0;
       const successReply = `🚀 *Project Auto-Created successfully!*\n\n• Name: ${projectObj.name}\n• Client: ${clientObj.name}\n• Department: ${projectObj.department}\n• Priority: ${projectObj.priority.toUpperCase()}\n• Deadline: ${projectObj.estimatedCompletion.toDateString()}\n• Employees Assigned: ${assignedCount}\n• Sub-tasks Generated: 8\n\nWhatsApp notifications are being sent to all assigned employees.`;
-      await msg.reply(successReply);
+      if (msg && typeof msg.reply === 'function') {
+        try {
+          await msg.reply(successReply);
+        } catch (repErr) {
+          console.warn('[WA-AUTOMATION] Could not send reply to WhatsApp sender:', repErr.message);
+        }
+      }
 
       // Emit socket updates
       if (io) {
@@ -875,6 +979,7 @@ const whatsappService = {
 
         client.on('qr', async (qr) => {
           connectionStatus = 'DISCONNECTED';
+          console.info('[WHATSAPP] production client state=DISCONNECTED (QR code generated, waiting for scan)');
           lastQrGeneratedAt = Date.now();
           qrGeneratedCount++;
           sessionRestored = false;
@@ -901,6 +1006,7 @@ const whatsappService = {
           qrCodeData = '';
           lastHeartbeat = new Date();
           sessionRestored = true;
+          console.info(`[WHATSAPP] production client state=READY (CONNECTED as ${client?.info?.wid?.user})`);
           
           try {
             sessionRecord.connected = true;
@@ -933,6 +1039,7 @@ const whatsappService = {
 
         client.on('auth_failure', async (msg) => {
           connectionStatus = 'DISCONNECTED';
+          console.info(`[WHATSAPP] production client state=DISCONNECTED (auth_failure: ${msg})`);
           sessionRestored = false;
           console.error('WhatsApp authentication failure:', msg);
           try {
@@ -958,6 +1065,7 @@ const whatsappService = {
 
         client.on('disconnected', async (reason) => {
           connectionStatus = 'DISCONNECTED';
+          console.info(`[WHATSAPP] production client state=DISCONNECTED (reason: ${reason})`);
           sessionRestored = false;
           console.log('WhatsApp client was disconnected:', reason);
           try {
@@ -998,13 +1106,11 @@ const whatsappService = {
               return;
             }
 
-            console.log('[WHATSAPP] Message received');
-
-            const clientPhone = client.info.wid.user;
-            const senderRaw = msg.from;
-            const senderPhone = senderRaw.split('@')[0];
-            const recipientRaw = msg.to;
-            const recipientPhone = recipientRaw.split('@')[0];
+            const clientPhone = client.info?.wid?.user ? formatCleanDigits(client.info.wid.user) : '';
+            const senderRaw = msg.from || '';
+            const senderPhone = senderRaw.split('@')[0].split(':')[0];
+            const recipientRaw = msg.to || '';
+            const recipientPhone = recipientRaw ? recipientRaw.split('@')[0].split(':')[0] : '';
             const messageBody = msg.body ? msg.body.trim() : '';
 
             if (!messageBody) return;
@@ -1012,22 +1118,26 @@ const whatsappService = {
             const cleanSender = formatCleanDigits(senderPhone);
             const cleanClient = formatCleanDigits(clientPhone);
 
-            if (cache.ignoredPhones.has(cleanSender)) {
+            const maskedPhone = cleanSender ? (cleanSender.length > 5 ? cleanSender.slice(0, 4) + '***' + cleanSender.slice(-2) : '***') : 'unknown';
+            console.info(`[WHATSAPP][INCOMING] environment=${config.nodeEnv} from=${maskedPhone} messageType=text messageLength=${messageBody.length}`);
+            console.log('[WHATSAPP] Message received');
+
+            if (cache.ignoredPhones.has(cleanSender) && !msg.fromMe) {
               return;
             }
 
-            let isAdmin = (cleanSender === cache.adminPhone || cleanSender === cleanClient);
+            let isAdmin = (cleanSender === cache.adminPhone || cleanSender === cleanClient || msg.fromMe);
             let isEmployee = cache.employeePhones.has(cleanSender);
             let matchedUser = null;
 
             if (isAdmin) {
-              matchedUser = await User.findOne({ role: 'SUPER_ADMIN', status: 'active' });
+              matchedUser = await User.findOne({ role: 'SUPER_ADMIN', status: { $regex: /^active$/i } });
               if (matchedUser) {
                 const cleanDbPhone = formatCleanDigits(matchedUser.phone);
-                if (cleanDbPhone !== cleanSender) {
-                  matchedUser.phone = senderPhone;
+                if (cleanDbPhone !== cleanSender && cleanSender) {
+                  matchedUser.phone = cleanSender;
                   await matchedUser.save();
-                  console.log(`[CRM] [CACHE] Synced Admin phone in database: ${senderPhone}`);
+                  console.log(`[CRM] [CACHE] Synced Admin phone in database: ${cleanSender}`);
                 }
                 cache.adminPhone = cleanSender;
               }
@@ -1037,8 +1147,9 @@ const whatsappService = {
               const userObj = await User.findOne({
                 status: { $regex: /^active$/i },
                 $or: [
+                  { phone: cleanSender },
                   { phone: senderPhone },
-                  { phone: new RegExp(senderPhone.replace(/\D/g, '') + '$') }
+                  { phone: new RegExp(cleanSender.slice(-10) + '$') }
                 ]
               });
 
@@ -1054,8 +1165,10 @@ const whatsappService = {
                   isEmployee = true;
                 }
               } else {
-                cache.ignoredPhones.add(cleanSender);
-                return;
+                if (!msg.fromMe) {
+                  cache.ignoredPhones.add(cleanSender);
+                  return;
+                }
               }
             }
 
@@ -1064,17 +1177,22 @@ const whatsappService = {
                 role: 'EMPLOYEE',
                 status: { $regex: /^active$/i },
                 $or: [
+                  { phone: cleanSender },
                   { phone: senderPhone },
-                  { phone: new RegExp(senderPhone.replace(/\D/g, '') + '$') }
+                  { phone: new RegExp(cleanSender.slice(-10) + '$') }
                 ]
               });
+            }
+
+            if (!matchedUser && (msg.fromMe || isAdmin)) {
+              matchedUser = await User.findOne({ role: 'SUPER_ADMIN', status: { $regex: /^active$/i } });
             }
 
             if (!matchedUser) {
               return;
             }
 
-            const isFromSelf = (senderPhone && clientPhone && recipientPhone && senderPhone === clientPhone && recipientPhone === clientPhone) || (msg.fromMe && recipientPhone && recipientPhone === clientPhone);
+            const isFromSelf = (senderPhone && clientPhone && recipientPhone && senderPhone === clientPhone && recipientPhone === clientPhone) || (msg.fromMe && recipientPhone && recipientPhone === clientPhone) || msg.fromMe;
 
             const savedMsg = new WhatsAppMessage({
               from: senderPhone,
@@ -1338,6 +1456,9 @@ export const sendTaskNotification = async (projectId, employeeIds) => {
 };
 
 whatsappService.sendTaskNotification = sendTaskNotification;
+whatsappService.handleAdminCommand = handleAdminCommand;
+whatsappService.parseNewProjectMessage = parseNewProjectMessage;
+whatsappService.parseDateString = parseDateString;
 
 export default whatsappService;
 

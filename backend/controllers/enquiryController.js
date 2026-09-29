@@ -10,7 +10,7 @@ import ReferralVisit from '../models/ReferralVisit.js';
 import Notification from '../models/Notification.js';
 import { logEvent } from '../services/loggingService.js';
 import { generateSequentialOrderId } from '../services/orderService.js';
-import { getSuggestedEmployee } from '../services/routingService.js';
+import { getSuggestedEmployee, assignProjectStaffAndNotify } from '../services/routingService.js';
 import { sendEmail } from '../services/emailService.js';
 import { notifyStaff, notifyUser } from '../services/notificationService.js';
 import { emitToRoles, emitToUser } from '../services/realtimeService.js';
@@ -530,6 +530,25 @@ export const convertEnquiryToProject = async (req, res, next) => {
       return res.status(404).json({ error: 'Enquiry record not found.' });
     }
 
+    // 0. Idempotency check: prevent duplicate project creation on retry
+    if (enquiry.status === 'converted_project') {
+      const existingProject = await Project.findOne({
+        $or: [
+          { 'referral.enquiryId': enquiry._id },
+          { name: `Project for ${enquiry.name} (${enquiry.serviceCategory})` }
+        ]
+      }).populate('client').populate('manager', 'name email').populate('employees', 'name email');
+
+      if (existingProject) {
+        return res.status(200).json({
+          success: true,
+          message: 'Lead was already converted to an active Project.',
+          project: existingProject,
+          data: enquiry
+        });
+      }
+    }
+
     // 1. Ensure Client profile exists
     const client = await ensureClientProfile(enquiry);
 
@@ -552,22 +571,21 @@ export const convertEnquiryToProject = async (req, res, next) => {
     });
     await order.save();
 
-    // 3. Resolve suggested employee skills auto-routing
-    const suggestedId = await getSuggestedEmployee(enquiry.serviceCategory);
-
-    // 4. Create active Project
+    // 3. Create active Project record
     const project = new Project({
       order: order._id,
       client: client._id,
       name: `Project for ${enquiry.name} (${enquiry.serviceCategory})`,
       description: enquiry.description || 'Inbound service conversion',
       status: 'pending',
-      category: enquiry.serviceCategory,
-      suggestedEmployee: suggestedId
+      priority: 'medium',
+      category: enquiry.serviceCategory || 'Short Form Editing',
+      source: (enquiry.referral && enquiry.referral.isReferral) ? 'Partner Referral' : 'Lead Conversion',
+      createdBy: req.user?._id || null,
+      estimatedCompletion: new Date(Date.now() + 48 * 60 * 60 * 1000)
     });
-    await project.save();
 
-    // 4b. Preserve referral metadata on the converted project (used later for commission calculations)
+    // 3b. Preserve referral metadata on the converted project
     if (enquiry.referral && enquiry.referral.isReferral) {
       project.referral = {
         isReferral: true,
@@ -579,16 +597,26 @@ export const convertEnquiryToProject = async (req, res, next) => {
         referralCode: enquiry.referral.referralCode || ''
       };
       project.source = 'Partner Referral';
-      await project.save();
     }
 
+    await project.save();
+
+    // 4. Role-based employee & manager assignment and automated notifications
+    const ioDispatcher = req.app.get('socketio_dispatch');
+    await assignProjectStaffAndNotify({
+      project,
+      ioDispatcher,
+      createdBy: req.user?._id || null
+    });
+
+    // 5. Link project back to order and client
     order.project = project._id;
     await order.save();
 
     client.orders.push(order._id);
     await client.save();
 
-    // 5. Update enquiry status
+    // 6. Update enquiry status and timeline
     enquiry.status = 'converted_project';
     enquiry.timeline.push({ activity: `Converted to Active Project ${project.name}` });
     await enquiry.save();
@@ -600,7 +628,17 @@ export const convertEnquiryToProject = async (req, res, next) => {
       details: { message: `Converted lead ${enquiry.enquiryId} to active project ${project.name}` }
     });
 
-    return res.status(200).json({ success: true, message: 'Converted to project successfully.', data: enquiry });
+    const populatedProject = await Project.findById(project._id)
+      .populate('client')
+      .populate('manager', 'name email')
+      .populate('employees', 'name email');
+
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Lead successfully converted to an active Project! Role-based staff assigned and notified.', 
+      project: populatedProject || project, 
+      data: enquiry 
+    });
   } catch (err) {
     next(err);
   }

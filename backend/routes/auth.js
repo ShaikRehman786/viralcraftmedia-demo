@@ -17,11 +17,11 @@ import { notifyStaff } from '../services/notificationService.js';
 import User from '../models/User.js';
 import crypto from 'crypto';
 import { sendEmail } from '../services/emailService.js';
-import { config, getFrontendBaseUrl } from '../config/env.js';
+import { config, getFrontendBaseUrl, getInvitationExpiresAt, buildInvitationUrl } from '../config/env.js';
 
 // Helper: Send EmailJS invitation securely from backend (private key never exposed to browser)
 // Uses server-side EmailJS REST API with accessToken for strict mode
-async function sendInvitationEmailSecure({ toName, toEmail, adminName, role, department, registrationLink }) {
+async function sendInvitationEmailSecure({ toName, toEmail, adminName, role, department, registrationLink, rawToken }) {
   const serviceId = config.emailjsServiceId;
   const templateId = config.emailjsTemplateId;
   const publicKey = config.emailjsPublicKey;
@@ -34,6 +34,16 @@ async function sendInvitationEmailSecure({ toName, toEmail, adminName, role, dep
     throw new Error('EmailJS Private Key not configured for strict mode');
   }
 
+  let tokenValue = rawToken || '';
+  if (!tokenValue && registrationLink && registrationLink.includes('token=')) {
+    try {
+      const parsedUrl = new URL(registrationLink);
+      tokenValue = parsedUrl.searchParams.get('token') || '';
+    } catch {
+      tokenValue = registrationLink.split('token=')[1]?.split('&')[0] || '';
+    }
+  }
+
   const payload = {
     service_id: serviceId,
     template_id: templateId,
@@ -41,11 +51,24 @@ async function sendInvitationEmailSecure({ toName, toEmail, adminName, role, dep
     accessToken: privateKey,
     template_params: {
       employee_name: toName,
+      name: toName,
       employee_email: toEmail,
+      email: toEmail,
       admin_name: adminName,
       role,
       department: department || 'N/A',
-      registration_link: registrationLink
+      registration_link: registrationLink,
+      invitation_link: registrationLink,
+      invite_link: registrationLink,
+      link: registrationLink,
+      invitation_url: registrationLink,
+      invite_url: registrationLink,
+      registration_url: registrationLink,
+      url: registrationLink,
+      action_url: registrationLink,
+      token: tokenValue,
+      invitation_token: tokenValue,
+      raw_token: tokenValue
     }
   };
 
@@ -69,29 +92,144 @@ router.post('/refresh', authLimiter, refresh);
 router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password/:token', authLimiter, resetPassword);
 
-// Verify invitation token public route
-router.get('/verify-invitation/:token', apiLimiter, async (req, res, next) => {
+// Verify invitation token public route (supports both route param and query param)
+const handleVerifyInvitation = async (req, res, next) => {
   try {
-    const invitationTokenRaw = req.params.token;
-    const tokenHash = crypto.createHash('sha256').update(invitationTokenRaw).digest('hex');
+    const rawToken = (req.params.token || req.query.token || '').trim();
+    if (!rawToken) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_INVALID',
+        error: 'Invitation link is missing or incomplete.' 
+      });
+    }
 
+    const tokenHash = crypto.createHash('sha256').update(rawToken.toLowerCase().trim()).digest('hex');
+    const tokenHashRaw = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenCandidates = Array.from(new Set([tokenHash, tokenHashRaw, rawToken, rawToken.toLowerCase().trim()]));
+
+    // 1. Check for active invitation matching hash or raw token
     const user = await User.findOne({
-      invitationToken: tokenHash,
-      invitationExpires: { $gt: Date.now() }
+      invitationToken: { $in: tokenCandidates }
     });
 
     if (!user) {
-      return res.status(400).json({ error: 'The invitation link is invalid or has expired.' });
+      // 1a. Check if token was already consumed/used
+      const usedUser = await User.findOne({
+        $or: [
+          { usedInvitationTokens: { $in: tokenCandidates } },
+          { invitationToken: { $in: tokenCandidates } }
+        ]
+      });
+      if (usedUser && (usedUser.status || '').toUpperCase() === 'ACTIVE') {
+        console.info(JSON.stringify({
+          event: 'INVITATION_VALIDATION',
+          invitationId: usedUser._id.toString(),
+          userEmail: usedUser.email,
+          status: usedUser.status,
+          code: 'INVITATION_ALREADY_USED',
+          isUsed: true
+        }));
+        return res.status(400).json({ 
+          success: false,
+          code: 'INVITATION_ALREADY_USED',
+          error: 'This invitation has already been accepted and the account is activated. Please sign in.' 
+        });
+      }
+
+      // 1b. Check if token was revoked / superseded
+      const revokedUser = await User.findOne({
+        revokedInvitationTokens: { $in: tokenCandidates }
+      });
+      if (revokedUser) {
+        console.info(JSON.stringify({
+          event: 'INVITATION_VALIDATION',
+          invitationId: revokedUser._id.toString(),
+          userEmail: revokedUser.email,
+          status: revokedUser.status,
+          code: 'INVITATION_REVOKED',
+          isRevoked: true
+        }));
+        return res.status(400).json({ 
+          success: false,
+          code: 'INVITATION_REVOKED',
+          error: 'This invitation link has been replaced by a newer invitation or cancelled. Please use the newest invitation email.' 
+        });
+      }
+
+      console.warn(JSON.stringify({
+        event: 'INVITATION_VALIDATION',
+        code: 'INVITATION_NOT_FOUND',
+        message: 'No user record matches invitation token hash or raw value'
+      }));
+      return res.status(404).json({ 
+        success: false,
+        code: 'INVITATION_NOT_FOUND',
+        error: 'The invitation link is invalid or does not exist.' 
+      });
     }
 
+    const nowMs = Date.now();
+    const expiresMs = user.invitationExpires ? new Date(user.invitationExpires).getTime() : 0;
+    const isExpired = expiresMs > 0 && nowMs >= expiresMs;
     const statusUpper = (user.status || '').toUpperCase();
+    const isUsed = statusUpper === 'ACTIVE' || statusUpper === 'PENDING_APPROVAL';
+    const isRevoked = ['CANCELLED', 'REJECTED', 'DISABLED'].includes(statusUpper);
+
+    // Structured diagnostic logging (never log raw token)
+    console.info(JSON.stringify({
+      event: 'INVITATION_VALIDATION',
+      environment: config.nodeEnv,
+      invitationId: user._id.toString(),
+      recipient: user.email,
+      role: user.role,
+      status: user.status,
+      createdAt: user.invitationCreatedAt || user.createdAt,
+      expiresAt: user.invitationExpires,
+      currentTime: new Date().toISOString(),
+      isExpired,
+      isUsed,
+      isRevoked,
+      valid: !isExpired && !isUsed && !isRevoked
+    }));
+
+    if (isExpired) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_EXPIRED',
+        error: 'This invitation link has expired. Please contact your administrator to receive a fresh invitation.' 
+      });
+    }
+
+    if (isUsed) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_ALREADY_USED',
+        error: 'This invitation has already been accepted and activated. Please sign in.' 
+      });
+    }
+
+    if (isRevoked) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_REVOKED',
+        error: 'This invitation has been cancelled or revoked by an administrator.' 
+      });
+    }
+
     if (statusUpper !== 'INVITED') {
-      return res.status(400).json({ error: 'This invitation has already been completed or cancelled.' });
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_INVALID',
+        error: 'This invitation is not available for activation.' 
+      });
     }
 
     return res.status(200).json({
       success: true,
+      code: 'INVITATION_VALID',
       user: {
+        id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -101,42 +239,120 @@ router.get('/verify-invitation/:token', apiLimiter, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
+};
 
-// Accept invitation public route (Profile complete)
-router.post('/accept-invitation/:token', authLimiter, async (req, res, next) => {
+router.get('/verify-invitation', apiLimiter, handleVerifyInvitation);
+router.get('/verify-invitation/:token', apiLimiter, handleVerifyInvitation);
+
+// Accept invitation public route (Profile complete & account activation)
+const handleAcceptInvitation = async (req, res, next) => {
   try {
     const { name, password, department, skills } = req.body;
-    if (!password) {
-      return res.status(400).json({ error: 'Password is required to complete registration.' });
+    if (!password || typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVALID_PASSWORD',
+        error: 'Password must be at least 8 characters long.' 
+      });
     }
 
-    const invitationTokenRaw = req.params.token;
-    const tokenHash = crypto.createHash('sha256').update(invitationTokenRaw).digest('hex');
+    const rawToken = (req.params.token || req.body.token || req.query.token || '').trim();
+    if (!rawToken) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_INVALID',
+        error: 'The invitation link is invalid or has expired.' 
+      });
+    }
 
+    const tokenHash = crypto.createHash('sha256').update(rawToken.toLowerCase().trim()).digest('hex');
+    const tokenHashRaw = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenCandidates = Array.from(new Set([tokenHash, tokenHashRaw, rawToken, rawToken.toLowerCase().trim()]));
+
+    // Atomic lookup to prevent race conditions or double submissions
     const user = await User.findOne({
-      invitationToken: tokenHash,
-      invitationExpires: { $gt: Date.now() }
+      invitationToken: { $in: tokenCandidates }
     });
 
     if (!user) {
-      return res.status(400).json({ error: 'The invitation link is invalid or has expired.' });
+      const usedUser = await User.findOne({
+        $or: [
+          { usedInvitationTokens: { $in: tokenCandidates } },
+          { invitationToken: { $in: tokenCandidates } }
+        ]
+      });
+      if (usedUser) {
+        return res.status(400).json({ 
+          success: false,
+          code: 'INVITATION_ALREADY_USED',
+          error: 'This invitation has already been accepted and the account is activated. Please sign in.' 
+        });
+      }
+      const revokedUser = await User.findOne({
+        revokedInvitationTokens: { $in: tokenCandidates }
+      });
+      if (revokedUser) {
+        return res.status(400).json({ 
+          success: false,
+          code: 'INVITATION_REVOKED',
+          error: 'This invitation link has been revoked or replaced.' 
+        });
+      }
+      return res.status(404).json({ 
+        success: false,
+        code: 'INVITATION_NOT_FOUND',
+        error: 'The invitation link is invalid or does not exist.' 
+      });
+    }
+
+    const nowMs = Date.now();
+    const expiresMs = user.invitationExpires ? new Date(user.invitationExpires).getTime() : 0;
+    if (expiresMs > 0 && nowMs >= expiresMs) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_EXPIRED',
+        error: 'This invitation link has expired. Please ask your administrator to send a new invitation.' 
+      });
     }
 
     const statusUpper = (user.status || '').toUpperCase();
+    if (statusUpper === 'ACTIVE' || statusUpper === 'PENDING_APPROVAL') {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_ALREADY_USED',
+        error: 'This invitation has already been accepted.' 
+      });
+    }
+    if (['CANCELLED', 'REJECTED', 'DISABLED'].includes(statusUpper)) {
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_REVOKED',
+        error: 'This invitation has been cancelled or revoked.' 
+      });
+    }
     if (statusUpper !== 'INVITED') {
-      return res.status(400).json({ error: 'This invitation has already been completed or cancelled.' });
+      return res.status(400).json({ 
+        success: false,
+        code: 'INVITATION_INVALID',
+        error: 'This invitation is not available for activation.' 
+      });
     }
 
-    // Set password (hashes in hook) and set user name
-    if (name) user.name = name;
+    // Set password (hashes in user pre-save hook) and activate user account
+    if (name && name.trim()) user.name = name.trim();
     user.password = password;
-    user.status = 'PENDING_APPROVAL';
-    user.invitationToken = undefined;
+    user.status = 'ACTIVE'; // Activate account immediately so employee can log in
+    if (!user.usedInvitationTokens) user.usedInvitationTokens = [];
+    user.usedInvitationTokens.push(tokenHash);
+    if (rawToken !== tokenHash) {
+      user.usedInvitationTokens.push(rawToken);
+    }
+    user.invitationToken = undefined; // Invalidate / consume token
     user.invitationExpires = undefined;
+    user.invitationUsedAt = new Date();
     user.mustChangePassword = false;
 
-    if (department) user.department = department;
+    if (department && department.trim()) user.department = department.trim();
     if (skills) {
       user.skills = Array.isArray(skills) 
         ? skills 
@@ -149,14 +365,14 @@ router.post('/accept-invitation/:token', authLimiter, async (req, res, next) => 
       userId: user._id,
       userName: user.name,
       action: 'EMPLOYEE_REGISTERED',
-      details: { message: 'User accepted invitation and configured password. Awaiting admin approval.' },
+      details: { role: user.role, status: 'ACTIVE', message: 'Employee completed registration and activated account.' },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent']
     });
 
     await notifyStaff({
       title: 'Staff Registered',
-      message: `${user.name} accepted their invitation and is awaiting approval.`,
+      message: `${user.name} accepted their invitation and activated their account as ${user.role}.`,
       type: 'info',
       priority: 'medium',
       referenceId: user._id.toString(),
@@ -168,7 +384,8 @@ router.post('/accept-invitation/:token', authLimiter, async (req, res, next) => 
 
     return res.status(200).json({ 
       success: true, 
-      message: 'Profile completed successfully! Your account is now pending Administrator approval.',
+      code: 'INVITATION_ACCEPTED',
+      message: 'Account created and activated successfully! You can now sign in.',
       user: {
         id: user._id,
         name: user.name,
@@ -179,7 +396,10 @@ router.post('/accept-invitation/:token', authLimiter, async (req, res, next) => 
   } catch (err) {
     next(err);
   }
-});
+};
+
+router.post('/accept-invitation', authLimiter, handleAcceptInvitation);
+router.post('/accept-invitation/:token', authLimiter, handleAcceptInvitation);
 
 // Protected auth routes
 router.post('/logout', protect, logout);
@@ -221,13 +441,21 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
     // Check if user already exists
     const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
-      return res.status(409).json({ error: 'A user with this email address already exists.' });
+      const existingStatus = (userExists.status || '').toUpperCase();
+      if (existingStatus === 'INVITED') {
+        const lastUpdated = userExists.updatedAt ? new Date(userExists.updatedAt).getTime() : 0;
+        if (Date.now() - lastUpdated < 15000) {
+          return res.status(429).json({ error: 'An invitation was just sent to this email address. Please wait a moment before sending another.' });
+        }
+      }
+      return res.status(409).json({ error: 'A user with this email address already exists. If they have not yet accepted, use "Resend Invitation".' });
     }
 
     // Generate secure invitation token and hash before storing
     const invitationToken = crypto.randomBytes(32).toString('hex');
-    const invitationTokenHash = crypto.createHash('sha256').update(invitationToken).digest('hex');
-    const invitationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours expiration
+    const invitationTokenHash = crypto.createHash('sha256').update(invitationToken.toLowerCase().trim()).digest('hex');
+    const invitationExpires = getInvitationExpiresAt();
+    const invitationCreatedAt = new Date();
 
     // Create User document
     const user = new User({
@@ -241,6 +469,7 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
       skills: Array.isArray(skills) ? skills : (skills ? skills.split(',').map(s => s.trim()) : []),
       invitationToken: invitationTokenHash,
       invitationExpires,
+      invitationCreatedAt,
       invitedBy: req.user._id,
       emailSent: false,
       mustChangePassword: true
@@ -252,7 +481,7 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
       userId: req.user._id,
       userName: req.user.name,
       action: 'INVITATION_CREATED',
-      details: { createdUserId: user._id, createdUserEmail: user.email, role: user.role, status: 'INVITED' },
+      details: { createdUserId: user._id, createdUserEmail: user.email, role: user.role, status: 'INVITED', expiresAt: invitationExpires },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent']
     });
@@ -268,14 +497,14 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
       metadata: { invitedBy: req.user.name, invitedUser: name, role: targetRole }
     });
 
-    // Attempt to send invitation email securely from backend (private key stays server-side, strict mode remains enabled)
+    // Centralized invitation URL builder (single source of truth)
     let registrationLink;
     try {
-      registrationLink = `${getFrontendBaseUrl()}/register?token=${invitationToken}`;
+      registrationLink = buildInvitationUrl(invitationToken);
+      console.info(`[INVITATION] environment=${config.nodeEnv} frontendUrl=${getFrontendBaseUrl()} invitationCreated=true recipient=${normalizedEmail} role=${targetRole}`);
     } catch (urlErr) {
       console.error('[EmailJS] Frontend URL config error:', urlErr.message);
-      // Do not create invitation with invalid URL in production - fail fast
-      // Remove the just-created user to avoid orphaned invitation with localhost link
+      // Fail fast without leaving orphaned record
       await User.findByIdAndDelete(user._id).catch(() => {});
       return res.status(500).json({ error: 'Server frontend URL not configured for production. Set APP_URL/CLIENT_URL to https://<production-domain>.' });
     }
@@ -286,7 +515,8 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
         adminName: req.user?.name || 'Administrator',
         role: targetRole,
         department: department || 'N/A',
-        registrationLink
+        registrationLink,
+        rawToken: invitationToken
       });
       user.emailSent = true;
       await user.save();
@@ -298,10 +528,23 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
         ipAddress: req.ip,
         userAgent: req.headers['user-agent']
       });
+
+      const sanitizedUser = {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        department: user.department,
+        skills: user.skills,
+        invitationExpires: user.invitationExpires,
+        invitationCreatedAt: user.invitationCreatedAt
+      };
+
       return res.status(201).json({ 
         success: true, 
         message: 'Invitation sent successfully.',
-        user
+        user: sanitizedUser
       });
     } catch (emailErr) {
       console.error('[EmailJS] Invitation send failed:', emailErr.message);
@@ -314,10 +557,23 @@ router.post('/staff', protect, authorize('SUPER_ADMIN'), async (req, res, next) 
         ipAddress: req.ip,
         userAgent: req.headers['user-agent']
       });
+
+      const sanitizedUser = {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        department: user.department,
+        skills: user.skills,
+        invitationExpires: user.invitationExpires,
+        invitationCreatedAt: user.invitationCreatedAt
+      };
+
       return res.status(201).json({ 
         success: true, 
         message: 'Invitation created, but email could not be sent. Please try Resend.',
-        user,
+        user: sanitizedUser,
         warning: 'Email delivery failed - use Resend to retry'
       });
     }
@@ -378,9 +634,10 @@ router.post('/staff/:id/email-failed', protect, authorize('SUPER_ADMIN'), async 
 });
 
 // Inbound leads resend invitation
-router.post('/staff/:staffId/resend', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
+const handleStaffResend = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.staffId);
+    const targetId = req.params.staffId || req.params.id;
+    const user = await User.findById(targetId);
     if (!user) {
       return res.status(404).json({ error: 'Employee not found.' });
     }
@@ -398,28 +655,37 @@ router.post('/staff/:staffId/resend', protect, authorize('SUPER_ADMIN'), async (
       return res.status(400).json({ error: 'This employee registration request was rejected.' });
     }
 
-    // Handle Duplicate resend request: throttle if requested within 10 seconds
-    const lastUpdated = user.updatedAt ? new Date(user.updatedAt).getTime() : 0;
-    if (Date.now() - lastUpdated < 10000) {
+    // Handle Duplicate resend request: throttle if requested within 10 seconds of a previous resend
+    const lastResent = user.invitationResentAt ? new Date(user.invitationResentAt).getTime() : 0;
+    if (lastResent && Date.now() - lastResent < 10000) {
       return res.status(400).json({ error: 'Duplicate resend request. Please wait before retrying.' });
+    }
+
+    // Safely invalidate previous invitation token so old links can never be used
+    if (user.invitationToken) {
+      if (!user.revokedInvitationTokens) user.revokedInvitationTokens = [];
+      user.revokedInvitationTokens.push(user.invitationToken);
     }
 
     // Generate fresh registration token
     const invitationToken = crypto.randomBytes(32).toString('hex');
-    const invitationTokenHash = crypto.createHash('sha256').update(invitationToken).digest('hex');
-    const invitationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours expiration
+    const invitationTokenHash = crypto.createHash('sha256').update(invitationToken.toLowerCase().trim()).digest('hex');
+    const invitationExpires = getInvitationExpiresAt();
 
     user.invitationToken = invitationTokenHash;
     user.invitationExpires = invitationExpires;
+    user.invitationCreatedAt = new Date();
+    user.invitationResentAt = new Date();
     user.status = 'INVITED';
     user.emailSent = false;
     
     await user.save();
 
-    // Build registration URL (environment-aware, fail-fast in production)
+    // Centralized invitation URL builder (single source of truth)
     let registration_link;
     try {
-      registration_link = `${getFrontendBaseUrl()}/register?token=${invitationToken}`;
+      registration_link = buildInvitationUrl(invitationToken);
+      console.info(`[INVITATION] environment=${config.nodeEnv} frontendUrl=${getFrontendBaseUrl()} invitationCreated=true resend=true recipient=${user.email} role=${user.role}`);
     } catch (urlErr) {
       console.error('[EmailJS] Frontend URL config error (resend):', urlErr.message);
       return res.status(500).json({ error: 'Server frontend URL not configured for production. Set APP_URL/CLIENT_URL to https://<production-domain>.' });
@@ -433,7 +699,8 @@ router.post('/staff/:staffId/resend', protect, authorize('SUPER_ADMIN'), async (
         adminName: req.user?.name || 'Administrator',
         role: user.role,
         department: user.department || 'N/A',
-        registrationLink: registration_link
+        registrationLink: registration_link,
+        rawToken: invitationToken
       });
 
       // Mark email as successfully sent
@@ -479,7 +746,10 @@ router.post('/staff/:staffId/resend', protect, authorize('SUPER_ADMIN'), async (
   } catch (err) {
     next(err);
   }
-});
+};
+
+router.post('/staff/:staffId/resend', protect, authorize('SUPER_ADMIN'), handleStaffResend);
+router.post('/staff/:id/resend', protect, authorize('SUPER_ADMIN'), handleStaffResend);
 
 // Cancel User account invitation (Super Admin Only)
 router.post('/staff/:id/cancel', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {

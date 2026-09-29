@@ -33,7 +33,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     // Public pages must render immediately — never block on auth
     const p = window.location.pathname;
-    const isPublic = p === '/' || p.startsWith('/services/') || p === '/login' || p === '/register' || p.startsWith('/r/') || p.startsWith('/partner/login') || p.startsWith('/reset-password') || p.startsWith('/invite/') || p.startsWith('/accept-invitation');
+    const isPublic = p === '/' || 
+      p.startsWith('/services/') || 
+      p === '/login' || 
+      p.startsWith('/register') || 
+      p.startsWith('/r/') || 
+      p.startsWith('/partner/login') || 
+      p.startsWith('/reset-password') || 
+      p.startsWith('/invite') || 
+      p.startsWith('/employee/invite') ||
+      p.startsWith('/accept-invitation');
     if (isPublic) {
       setLoading(false);
       // Defer background auth check until browser is idle and after first paint
@@ -204,7 +213,11 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<AcceptInvitationPage />} />
           <Route path="/accept-invitation/:token" element={<AcceptInvitationPage />} />
+          <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
           <Route path="/invite/:token" element={<AcceptInvitationPage />} />
+          <Route path="/invite" element={<AcceptInvitationPage />} />
+          <Route path="/employee/invite/:token" element={<AcceptInvitationPage />} />
+          <Route path="/employee/invite" element={<AcceptInvitationPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/services/clip-editing" element={
             <Suspense fallback={<CRMGlobalLoader fullScreen message="Loading Clip Editing..." />}>

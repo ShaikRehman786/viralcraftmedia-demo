@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import mongoose from 'mongoose';
-import { config } from '../config/env.js';
+import { config, getFrontendBaseUrl } from '../config/env.js';
 
 // Initialize Nodemailer transporter
 let transporter = null;
@@ -157,7 +157,7 @@ export const sendEmployeeTaskAlertEmail = async (employeeName, email, taskName, 
       <p>Hello ${employeeName},</p>
       <p>A new video editing task has been assigned to you.</p>
       <p><strong>Task Title:</strong> ${taskName}</p>
-      <p><strong>Deadline:</strong> ${new Date(deadline).toLocaleString('en-IN')}</p>
+      <p><strong>Deadline:</strong> ${deadline ? new Date(deadline).toLocaleString('en-IN') : 'Not specified'}</p>
       <p>Please log in to your employee dashboard to review the instructions, download raw clips, and submit your finished edit.</p>
     </div>
   `;
@@ -165,6 +165,32 @@ export const sendEmployeeTaskAlertEmail = async (employeeName, email, taskName, 
   return await sendEmail({
     to: email,
     subject: `New Task Assigned — ${taskName}`,
+    html
+  });
+};
+
+/**
+ * Sends project assignment notifications to role-matched employees
+ */
+export const sendEmployeeProjectAlertEmail = async (employeeName, email, projectName, category, deadline) => {
+  const html = `
+    <div style="font-family: sans-serif; max-width: 600px; color: #111827; line-height: 1.6;">
+      <h3 style="color: #FF6A00;">🚀 New Project Assigned</h3>
+      <p>Hello ${employeeName},</p>
+      <p>A new project matching your role has been assigned to you in ViralCraftMedia.</p>
+      <p><strong>Project Name:</strong> ${projectName}</p>
+      <p><strong>Service / Category:</strong> ${category || 'Production'}</p>
+      <p><strong>Estimated Completion:</strong> ${deadline ? new Date(deadline).toLocaleDateString('en-IN') : 'Standard Delivery Window'}</p>
+      <p>Please log in to your employee dashboard to review project requirements, view assets, and begin work.</p>
+      <p style="margin-top: 24px;">
+        <a href="${getFrontendBaseUrl()}/login" style="background: #FF6A00; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; display: inline-block;">Open Employee Portal</a>
+      </p>
+    </div>
+  `;
+
+  return await sendEmail({
+    to: email,
+    subject: `New Project Assignment — ${projectName}`,
     html
   });
 };

@@ -664,7 +664,7 @@ export const employeeForgotPassword = async (req, res, next) => {
     user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins expiry
     await user.save();
 
-    const resetUrl = `${config.clientUrl || 'https://viralcraftmedia-demo.vercel.app'}/reset-password/${resetToken}`;
+    const resetUrl = `${getFrontendBaseUrl()}/reset-password/${resetToken}`;
     
     // Send email via EmailJS template_42dehut using REST API
     const emailjsData = {

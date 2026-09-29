@@ -50,6 +50,21 @@ const userSchema = new mongoose.Schema({
   invitationExpires: {
     type: Date
   },
+  invitationCreatedAt: {
+    type: Date
+  },
+  invitationUsedAt: {
+    type: Date
+  },
+  invitationRevokedAt: {
+    type: Date
+  },
+  usedInvitationTokens: [{
+    type: String
+  }],
+  revokedInvitationTokens: [{
+    type: String
+  }],
   invitedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

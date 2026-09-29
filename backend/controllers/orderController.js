@@ -15,7 +15,7 @@ import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import { generateInvoicePdf } from '../utils/pdfGenerator.js';
 import { sendEmail } from '../services/emailService.js';
-import { getSuggestedEmployee } from '../services/routingService.js';
+import { getSuggestedEmployee, assignProjectStaffAndNotify } from '../services/routingService.js';
 import { sendEnquiryWhatsAppNotification } from '../services/whatsappService.js';
 import { notifyStaff } from '../services/notificationService.js';
 
@@ -668,6 +668,9 @@ export const createEnquiry = async (req, res, next) => {
       suggestedEmployee: suggestedId
     });
     await project.save();
+
+    // 5b. Assign role-based staff (manager & employees) and send notifications
+    await assignProjectStaffAndNotify({ project, ioDispatcher: req.app.get('socketio_dispatch') });
 
     // Link back order
     order.project = project._id;

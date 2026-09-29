@@ -1,14 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { Lock, Loader2, CheckCircle, XCircle, AlertTriangle, User as UserIcon, Eye, EyeOff, ArrowRight, Check, ShieldCheck } from 'lucide-react';
+import { Lock, Loader2, CheckCircle, AlertTriangle, Clock, UserCheck, UserX, User as UserIcon, Eye, EyeOff, ArrowRight, Check } from 'lucide-react';
 
 axios.defaults.withCredentials = true;
+
+const getBackendApiBase = () => {
+  const isLocal = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocal) {
+    return (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
+  }
+  return (import.meta.env.VITE_API_URL || 'https://viralcraftmedia-demo.onrender.com').replace(/\/+$/, '');
+};
 
 export default function AcceptInvitationPage() {
   const { token: routeToken } = useParams();
   const queryToken = new URLSearchParams(window.location.search).get('token');
-  const token = routeToken || queryToken;
+  let extractedToken = (routeToken || queryToken || '').replace(/\/+$/, '').trim();
+  try {
+    if (extractedToken.includes('%')) {
+      extractedToken = decodeURIComponent(extractedToken).trim();
+    }
+  } catch {}
+  const token = extractedToken;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -17,10 +32,10 @@ export default function AcceptInvitationPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [department, setDepartment] = useState('');
   const [skills, setSkills] = useState('');
-  const [verifying, setVerifying] = useState(true);
-  const [invalidToken, setInvalidToken] = useState(false);
+
+  // Explicit lifecycle states: 'CHECKING' | 'VALID' | 'EXPIRED' | 'ALREADY_USED' | 'REVOKED' | 'INVALID' | 'SUCCESS'
+  const [pageState, setPageState] = useState('CHECKING');
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -40,26 +55,50 @@ export default function AcceptInvitationPage() {
 
   useEffect(() => {
     if (!token) {
-      setInvalidToken(true);
-      setVerifying(false);
+      setPageState('INVALID');
+      setError('Invitation link is missing or incomplete. Please check the full link in your email.');
       return;
     }
+
     const verifyToken = async () => {
       try {
-        const res = await axios.get(`/api/auth/verify-invitation/${token}`);
+        let res;
+        try {
+          res = await axios.get(`/api/auth/verify-invitation/${encodeURIComponent(token)}`);
+        } catch (initialErr) {
+          // If relative proxy returns 404 or fails, fallback to environment-matched backend
+          if (initialErr.response?.status === 404 || !initialErr.response) {
+            res = await axios.get(`${getBackendApiBase()}/api/auth/verify-invitation/${encodeURIComponent(token)}`);
+          } else {
+            throw initialErr;
+          }
+        }
+
         if (res.data.success) {
           setName(res.data.user.name || '');
           setEmail(res.data.user.email || '');
           setRole(res.data.user.role || '');
           setDepartment(res.data.user.department || '');
+          setPageState('VALID');
         }
       } catch (err) {
-        setInvalidToken(true);
-        setError(err.response?.data?.error || 'This invitation link is invalid or has expired.');
-      } finally {
-        setVerifying(false);
+        const errData = err.response?.data;
+        const code = errData?.code;
+        const msg = errData?.error || 'This invitation link could not be verified.';
+        setError(msg);
+
+        if (code === 'INVITATION_EXPIRED') {
+          setPageState('EXPIRED');
+        } else if (code === 'INVITATION_ALREADY_USED') {
+          setPageState('ALREADY_USED');
+        } else if (code === 'INVITATION_REVOKED') {
+          setPageState('REVOKED');
+        } else {
+          setPageState('INVALID');
+        }
       }
     };
+
     verifyToken();
   }, [token]);
 
@@ -84,9 +123,34 @@ export default function AcceptInvitationPage() {
     if (loading) return;
     setError('');
     setLoading(true);
+
     try {
-      const res = await axios.post(`/api/auth/accept-invitation/${token}`, { name, password, department, skills });
-      if (res.data.success) setSuccess(true);
+      let res;
+      try {
+        res = await axios.post(`/api/auth/accept-invitation/${encodeURIComponent(token)}`, {
+          token,
+          name,
+          password,
+          department,
+          skills
+        });
+      } catch (initialErr) {
+        if (initialErr.response?.status === 404 || !initialErr.response) {
+          res = await axios.post(`${getBackendApiBase()}/api/auth/accept-invitation/${encodeURIComponent(token)}`, {
+            token,
+            name,
+            password,
+            department,
+            skills
+          });
+        } else {
+          throw initialErr;
+        }
+      }
+
+      if (res.data.success) {
+        setPageState('SUCCESS');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to complete registration.');
     } finally {
@@ -99,27 +163,37 @@ export default function AcceptInvitationPage() {
     match: !!password && password === confirmPassword && confirmPassword.length > 0,
   }), [password, confirmPassword]);
 
-  if (verifying) {
+  // STATE: CHECKING INVITATION
+  if (pageState === 'CHECKING') {
     return (
       <div className="reg-page">
         <div className="reg-verify">
-          <Loader2 size={20} className="spin" />
-          <span>Verifying invitation…</span>
+          <Loader2 size={22} className="spin" style={{ color: '#FF6A00' }} />
+          <span style={{ fontSize: '0.95rem', fontWeight: 500, color: '#3F3F46' }}>Verifying invitation credentials…</span>
         </div>
         <style>{regStyles}</style>
       </div>
     );
   }
 
-  if (invalidToken) {
+  // STATE: INVITATION EXPIRED
+  if (pageState === 'EXPIRED') {
     return (
       <div className="reg-page">
         <div className="reg-shell reg-shell--narrow">
           <div className="reg-card reg-card--state">
-            <div className="reg-state-icon reg-state-icon--error"><AlertTriangle size={18} /></div>
-            <h1 className="reg-state-title">Invitation unavailable</h1>
-            <p className="reg-state-desc">{error || 'This registration link is invalid, expired, or already used. Ask your administrator to send a new invitation.'}</p>
-            <Link to="/" className="reg-btn reg-btn--primary">Back to home</Link>
+            <div className="reg-state-icon reg-state-icon--warning"><Clock size={20} /></div>
+            <h1 className="reg-state-title">Invitation Link Expired</h1>
+            <p className="reg-state-desc">
+              {error || 'This invitation link has expired. For security, invitations are active for 7 days.'}
+            </p>
+            <p className="reg-state-note">
+              Please contact your administrator or manager to request a fresh invitation link.
+            </p>
+            <div className="reg-actions-row">
+              <Link to="/login" className="reg-btn reg-btn--secondary">Sign In</Link>
+              <Link to="/" className="reg-btn reg-btn--primary">Back to Home</Link>
+            </div>
           </div>
         </div>
         <style>{regStyles}</style>
@@ -127,16 +201,21 @@ export default function AcceptInvitationPage() {
     );
   }
 
-  if (success) {
+  // STATE: INVITATION ALREADY USED
+  if (pageState === 'ALREADY_USED') {
     return (
       <div className="reg-page">
         <div className="reg-shell reg-shell--narrow">
           <div className="reg-card reg-card--state">
-            <div className="reg-state-icon reg-state-icon--success"><CheckCircle size={18} /></div>
-            <h1 className="reg-state-title">Registration complete</h1>
-            <p className="reg-state-desc">Your profile is now <strong>pending approval</strong>. An administrator will activate your access shortly. You will be able to sign in once approved.</p>
-            <Link to="/login" className="reg-btn reg-btn--primary">Go to sign in <ArrowRight size={14} /></Link>
-            <p className="reg-hint">You can close this window. No further action is needed.</p>
+            <div className="reg-state-icon reg-state-icon--info"><UserCheck size={20} /></div>
+            <h1 className="reg-state-title">Invitation Already Accepted</h1>
+            <p className="reg-state-desc">
+              {error || 'This invitation has already been accepted and your account is active.'}
+            </p>
+            <p className="reg-state-note">
+              You can log in directly using your email address and the password you chose during setup.
+            </p>
+            <Link to="/login" className="reg-btn reg-btn--primary">Go to Sign In <ArrowRight size={14} /></Link>
           </div>
         </div>
         <style>{regStyles}</style>
@@ -144,6 +223,74 @@ export default function AcceptInvitationPage() {
     );
   }
 
+  // STATE: INVITATION REVOKED OR SUPERSEDED
+  if (pageState === 'REVOKED') {
+    return (
+      <div className="reg-page">
+        <div className="reg-shell reg-shell--narrow">
+          <div className="reg-card reg-card--state">
+            <div className="reg-state-icon reg-state-icon--warning"><UserX size={20} /></div>
+            <h1 className="reg-state-title">Invitation Revoked or Replaced</h1>
+            <p className="reg-state-desc">
+              {error || 'This invitation link has been cancelled or replaced with a newer invitation.'}
+            </p>
+            <p className="reg-state-note">
+              If an administrator resent your invitation, please check your inbox for the most recent email.
+            </p>
+            <div className="reg-actions-row">
+              <Link to="/login" className="reg-btn reg-btn--secondary">Sign In</Link>
+              <Link to="/" className="reg-btn reg-btn--primary">Back to Home</Link>
+            </div>
+          </div>
+        </div>
+        <style>{regStyles}</style>
+      </div>
+    );
+  }
+
+  // STATE: INVALID / MALFORMED INVITATION
+  if (pageState === 'INVALID') {
+    return (
+      <div className="reg-page">
+        <div className="reg-shell reg-shell--narrow">
+          <div className="reg-card reg-card--state">
+            <div className="reg-state-icon reg-state-icon--error"><AlertTriangle size={20} /></div>
+            <h1 className="reg-state-title">Invalid Invitation Link</h1>
+            <p className="reg-state-desc">
+              {error || 'This invitation link is not recognized or may be incomplete.'}
+            </p>
+            <p className="reg-state-note">
+              Please ensure you copied the entire URL from the email you received, or ask your administrator to send a new invitation.
+            </p>
+            <Link to="/" className="reg-btn reg-btn--primary">Back to Home</Link>
+          </div>
+        </div>
+        <style>{regStyles}</style>
+      </div>
+    );
+  }
+
+  // STATE: SUCCESS (ACCOUNT ACTIVATED)
+  if (pageState === 'SUCCESS') {
+    return (
+      <div className="reg-page">
+        <div className="reg-shell reg-shell--narrow">
+          <div className="reg-card reg-card--state">
+            <div className="reg-state-icon reg-state-icon--success"><CheckCircle size={22} /></div>
+            <h1 className="reg-state-title">Account Created Successfully</h1>
+            <p className="reg-state-desc">
+              Your profile is now <strong>active</strong>. You can sign in immediately to access your workspace and assigned projects.
+            </p>
+            <Link to="/login" className="reg-btn reg-btn--primary">Go to Sign In <ArrowRight size={14} /></Link>
+            <p className="reg-hint" style={{ marginTop: '14px' }}>Sign in using your email (<strong>{email}</strong>) and password.</p>
+          </div>
+        </div>
+        <style>{regStyles}</style>
+      </div>
+    );
+  }
+
+  // STATE: VALID INVITATION -> RENDER SIGNUP FORM
   return (
     <div className="reg-page">
       <header className="reg-topbar">
@@ -177,74 +324,119 @@ export default function AcceptInvitationPage() {
                 <span className="reg-meta-value">{email || '—'}</span>
               </div>
               <div className="reg-meta-row">
-                <span className="reg-meta-label">Access</span>
-                <span className="reg-meta-value"><ShieldCheck size={12} /> Pending administrator approval after registration</span>
+                <span className="reg-meta-label">Role Assignment</span>
+                <span className="reg-meta-value">{roleLabel}</span>
               </div>
+              {department && (
+                <div className="reg-meta-row">
+                  <span className="reg-meta-label">Department</span>
+                  <span className="reg-meta-value">{department}</span>
+                </div>
+              )}
             </div>
             <ol className="reg-steps">
-              <li><strong>Set password</strong> — minimum 8 characters</li>
-              <li><strong>Submit</strong> — profile marked as pending</li>
-              <li><strong>Admin approves</strong> — you can then sign in</li>
+              <li><strong>Activate access:</strong> Choose a secure password (8+ characters).</li>
+              <li><strong>Instant access:</strong> Log in immediately to view your dashboard.</li>
             </ol>
-            <p className="reg-footnote">Invitation links expire after 24 hours. If yours expired, ask your administrator to resend it.</p>
+            <p className="reg-footnote">Need assistance? Reach our team at <a href="mailto:support@viralcraftmedia.com" style={{ color: '#FF6A00', textDecoration: 'none' }}>support@viralcraftmedia.com</a>.</p>
           </div>
 
           <div className="reg-card">
             <div className="reg-card-head">
-              <h2 className="reg-card-title">Complete your profile</h2>
-              <p className="reg-card-desc">Review your details and choose a password. Fields marked with * are required.</p>
+              <h2 className="reg-card-title">Account details</h2>
+              <p className="reg-card-desc">Complete your profile to activate your account.</p>
             </div>
 
             {error && (
               <div className="reg-alert reg-alert--error" role="alert">
-                <XCircle size={14} />
+                <AlertTriangle size={15} />
                 <span>{error}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} noValidate className="reg-form">
+            <form onSubmit={handleSubmit} className="reg-form" noValidate>
               <div className="reg-field">
-                <label className="reg-label" htmlFor="reg-name">Full name <span className="reg-req">*</span></label>
+                <label className="reg-label" htmlFor="reg-email">Work Email</label>
+                <div className="reg-input-wrap is-readonly">
+                  <input id="reg-email" type="email" value={email} readOnly disabled />
+                </div>
+                <span className="reg-hint">Invitations are strictly bound to this email address.</span>
+              </div>
+
+              <div className="reg-field">
+                <label className="reg-label" htmlFor="reg-name">Full Name <span className="reg-req">*</span></label>
                 <div className={`reg-input-wrap ${focusedInput === 'name' ? 'is-focused' : ''} ${fieldErrors.name ? 'has-error' : ''}`}>
-                  <UserIcon size={15} className="reg-input-icon" />
-                  <input id="reg-name" type="text" autoComplete="name" value={name} onChange={e => { setName(e.target.value); if (fieldErrors.name) setFieldErrors(s => ({ ...s, name: undefined })); }} onFocus={() => setFocusedInput('name')} onBlur={() => setFocusedInput(null)} placeholder="Your full name" />
+                  <UserIcon size={16} className="reg-input-icon" />
+                  <input
+                    id="reg-name"
+                    type="text"
+                    value={name}
+                    onChange={e => { setName(e.target.value); setFieldErrors(prev => ({ ...prev, name: '' })); }}
+                    onFocus={() => setFocusedInput('name')}
+                    onBlur={() => setFocusedInput(null)}
+                    placeholder="Sri Harsha"
+                    autoComplete="name"
+                    required
+                  />
                 </div>
                 {fieldErrors.name && <span className="reg-field-error">{fieldErrors.name}</span>}
               </div>
 
               <div className="reg-field">
-                <label className="reg-label" htmlFor="reg-email">Email address</label>
-                <div className="reg-input-wrap is-readonly">
-                  <input id="reg-email" type="text" value={email} readOnly tabIndex={-1} aria-readonly="true" />
-                </div>
-                <span className="reg-hint">Email is set by your invitation and cannot be changed.</span>
-              </div>
-
-              <div className="reg-field">
                 <label className="reg-label" htmlFor="reg-password">Password <span className="reg-req">*</span></label>
-                <div className={`reg-input-wrap ${focusedInput === 'password' ? 'is-focused' : ''} ${fieldErrors.password ? 'has-error' : ''}`}>
-                  <Lock size={15} className="reg-input-icon" />
-                  <input id="reg-password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={e => { setPassword(e.target.value); if (fieldErrors.password || fieldErrors.confirmPassword) setFieldErrors(s => ({ ...s, password: undefined, confirmPassword: undefined })); }} onFocus={() => setFocusedInput('password')} onBlur={() => setFocusedInput(null)} placeholder="At least 8 characters" />
-                  <button type="button" className="reg-visibility" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                <div className={`reg-input-wrap ${focusedInput === 'pw' ? 'is-focused' : ''} ${fieldErrors.password ? 'has-error' : ''}`}>
+                  <Lock size={16} className="reg-input-icon" />
+                  <input
+                    id="reg-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: '' })); }}
+                    onFocus={() => setFocusedInput('pw')}
+                    onBlur={() => setFocusedInput(null)}
+                    placeholder="At least 8 characters"
+                    autoComplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="reg-visibility"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
-                {fieldErrors.password ? <span className="reg-field-error">{fieldErrors.password}</span> : <span className="reg-hint">Minimum 8 characters. Use a strong, unique password.</span>}
+                {fieldErrors.password && <span className="reg-field-error">{fieldErrors.password}</span>}
               </div>
 
               <div className="reg-field">
-                <label className="reg-label" htmlFor="reg-confirm">Confirm password <span className="reg-req">*</span></label>
-                <div className={`reg-input-wrap ${focusedInput === 'confirm' ? 'is-focused' : ''} ${fieldErrors.confirmPassword ? 'has-error' : ''}`}>
-                  <Lock size={15} className="reg-input-icon" />
-                  <input id="reg-confirm" type={showConfirm ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); if (fieldErrors.confirmPassword) setFieldErrors(s => ({ ...s, confirmPassword: undefined })); }} onFocus={() => setFocusedInput('confirm')} onBlur={() => setFocusedInput(null)} placeholder="Repeat password" />
-                  <button type="button" className="reg-visibility" onClick={() => setShowConfirm(v => !v)} aria-label={showConfirm ? 'Hide password' : 'Show password'} aria-pressed={showConfirm}>
-                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                <label className="reg-label" htmlFor="reg-confirm">Confirm Password <span className="reg-req">*</span></label>
+                <div className={`reg-input-wrap ${focusedInput === 'cpw' ? 'is-focused' : ''} ${fieldErrors.confirmPassword ? 'has-error' : ''}`}>
+                  <Lock size={16} className="reg-input-icon" />
+                  <input
+                    id="reg-confirm"
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => { setConfirmPassword(e.target.value); setFieldErrors(prev => ({ ...prev, confirmPassword: '' })); }}
+                    onFocus={() => setFocusedInput('cpw')}
+                    onBlur={() => setFocusedInput(null)}
+                    placeholder="Repeat password"
+                    autoComplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="reg-visibility"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
                 {fieldErrors.confirmPassword && <span className="reg-field-error">{fieldErrors.confirmPassword}</span>}
               </div>
 
-              <div className="reg-checks" aria-live="polite">
+              <div className="reg-checks">
                 <span className={`reg-check ${pwChecks.length ? 'is-ok' : ''}`}><Check size={12} /> 8+ characters</span>
                 <span className={`reg-check ${pwChecks.match ? 'is-ok' : ''}`}><Check size={12} /> Passwords match</span>
               </div>
@@ -266,9 +458,9 @@ export default function AcceptInvitationPage() {
               </div>
 
               <button type="submit" disabled={loading} className="reg-btn reg-btn--primary reg-btn--submit">
-                {loading ? <><Loader2 size={15} className="spin" /> Creating account…</> : <>Create account <ArrowRight size={15} /></>}
+                {loading ? <><Loader2 size={15} className="spin" /> Activating account…</> : <>Create account <ArrowRight size={15} /></>}
               </button>
-              <p className="reg-legal">By continuing, you agree to your administrator activating your account after review.</p>
+              <p className="reg-legal">By clicking "Create account", your login credentials will be activated immediately.</p>
             </form>
           </div>
         </div>
@@ -289,7 +481,7 @@ const regStyles = `
 .reg-topbar-link { font-size: 0.8125rem; font-weight: 600; color: #18181B; text-decoration: none; border: 1px solid #E4E4E7; padding: 7px 12px; border-radius: 999px; background: #FFFFFF; }
 .reg-topbar-link:hover { background: #F4F4F5; }
 .reg-shell { width: 100%; max-width: 980px; margin: 0 auto; padding: 32px 20px 40px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
-.reg-shell--narrow { max-width: 520px; }
+.reg-shell--narrow { max-width: 480px; }
 .reg-layout { display: grid; grid-template-columns: 380px 1fr; gap: 32px; align-items: start; }
 .reg-intro { padding-top: 8px; }
 .reg-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #71717A; margin-bottom: 12px; }
@@ -307,7 +499,7 @@ const regStyles = `
 .reg-steps strong { color: #18181B; font-weight: 600; }
 .reg-footnote { font-size: 0.75rem; color: #71717A; line-height: 1.5; margin: 0; }
 .reg-card { background: #FFFFFF; border: 1px solid #E4E4E7; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(16,24,40,0.04); }
-.reg-card--state { padding: 28px 24px; text-align: center; }
+.reg-card--state { padding: 36px 28px; text-align: center; }
 .reg-card-head { margin-bottom: 16px; }
 .reg-card-title { font-size: 0.9375rem; font-weight: 650; color: #111827; margin: 0 0 4px 0; letter-spacing: -0.01em; }
 .reg-card-desc { font-size: 0.8125rem; color: #71717A; margin: 0; line-height: 1.5; }
@@ -339,19 +531,25 @@ const regStyles = `
 .reg-check.is-ok svg { background: #DCFCE7; color: #15803D; }
 .reg-divider { height: 1px; background: #E4E4E7; margin: 2px 0; }
 .reg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; border-radius: 10px; border: 1px solid transparent; text-decoration: none; cursor: pointer; transition: background 150ms ease, transform 150ms ease, opacity 150ms ease, box-shadow 150ms ease; font-family: var(--font); }
-.reg-btn--primary { background: #111827; color: #FFFFFF; border-color: #111827; min-height: 44px; padding: 0 16px; font-size: 0.875rem; }
+.reg-btn--primary { background: #111827; color: #FFFFFF; border-color: #111827; min-height: 44px; padding: 0 18px; font-size: 0.875rem; }
 .reg-btn--primary:hover { background: #1F2937; }
 .reg-btn--primary:active { transform: scale(0.99); }
 .reg-btn--primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 .reg-btn--primary:focus-visible { outline: 2px solid #FF6A00; outline-offset: 2px; }
+.reg-btn--secondary { background: #FFFFFF; color: #374151; border-color: #D1D5DB; min-height: 44px; padding: 0 18px; font-size: 0.875rem; }
+.reg-btn--secondary:hover { background: #F9FAFB; }
 .reg-btn--submit { width: 100%; margin-top: 4px; }
+.reg-actions-row { display: flex; gap: 12px; justify-content: center; margin-top: 8px; }
 .reg-legal { font-size: 0.6875rem; color: #71717A; text-align: center; margin: 0; line-height: 1.5; }
-.reg-verify { display: inline-flex; align-items: center; gap: 10px; font-size: 0.875rem; color: #52525B; margin: auto; padding: 24px; }
-.reg-state-icon { width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
+.reg-verify { display: inline-flex; align-items: center; gap: 12px; font-size: 0.9375rem; color: #52525B; margin: auto; padding: 32px; }
+.reg-state-icon { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
 .reg-state-icon--error { background: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; }
+.reg-state-icon--warning { background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; }
+.reg-state-icon--info { background: #EFF6FF; color: #2563EB; border: 1px solid #BFDBFE; }
 .reg-state-icon--success { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
-.reg-state-title { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.02em; color: #111827; margin: 0 0 8px 0; }
-.reg-state-desc { font-size: 0.875rem; color: #52525B; line-height: 1.6; margin: 0 0 16px 0; }
+.reg-state-title { font-size: 1.25rem; font-weight: 750; letter-spacing: -0.02em; color: #111827; margin: 0 0 10px 0; }
+.reg-state-desc { font-size: 0.9rem; color: #4B5563; line-height: 1.6; margin: 0 0 8px 0; }
+.reg-state-note { font-size: 0.8125rem; color: #6B7280; line-height: 1.5; margin: 0 0 20px 0; }
 .spin { animation: regspin 0.8s linear infinite; }
 @keyframes regspin { to { transform: rotate(360deg); } }
 @media (max-width: 860px) {
@@ -365,7 +563,8 @@ const regStyles = `
   .reg-title { font-size: 1.375rem; }
   .reg-subtitle { font-size: 0.875rem; }
   .reg-card { padding: 16px; border-radius: 14px; }
-  .reg-card--state { padding: 20px 16px; }
+  .reg-card--state { padding: 24px 16px; }
+  .reg-actions-row { flex-direction: column; }
   .reg-brand img { height: 22px; }
 }
 `;

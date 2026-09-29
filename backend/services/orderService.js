@@ -9,7 +9,7 @@ import { sendOrderConfirmationWhatsApp } from './whatsappService.js';
 import { notifyStaff } from './notificationService.js';
 import crypto from 'crypto';
 import { sendOrderSuccessEmail, sendEmail } from './emailService.js';
-import { getSuggestedEmployee } from './routingService.js';
+import { getSuggestedEmployee, assignProjectStaffAndNotify } from './routingService.js';
 import { config, getFrontendBaseUrl } from '../config/env.js';
 
 /**
@@ -194,6 +194,9 @@ export const ingestVerifiedOrder = async (orderDetails, socketDispatcher = null)
     estimatedCompletion: new Date(Date.now() + 48 * 60 * 60 * 1000) // 48 Hours TAT
   });
   await project.save();
+
+  // Assign role-based staff (manager & employees) and send notifications
+  await assignProjectStaffAndNotify({ project, ioDispatcher: socketDispatcher });
 
   // Link client and project inside Order
   order.client = client._id;

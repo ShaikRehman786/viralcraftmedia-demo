@@ -890,13 +890,15 @@ export default function DashboardPage() {
 
   const handleConvertProject = async (enquiryId) => {
     try {
-      await axios.post(`/api/enquiries/${enquiryId}/convert-project`);
+      const res = await axios.post(`/api/enquiries/${enquiryId}/convert-project`);
       const projRes = await axios.get('/api/projects');
-      setProjects(projRes.data.data);
+      if (projRes.data?.data) {
+        setProjects(projRes.data.data);
+      }
       loadEnquiries();
-      addToast('Lead successfully converted to an active Project!', 'success');
+      addToast(res.data?.message || 'Lead successfully converted to an active Project!', 'success');
     } catch (err) {
-      addToast(err.response?.data?.error || 'Failed to convert project.');
+      addToast(err.response?.data?.error || 'Failed to convert project.', 'error');
     }
   };
 

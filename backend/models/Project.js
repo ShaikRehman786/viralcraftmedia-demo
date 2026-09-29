@@ -79,7 +79,13 @@ const projectSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['Short Form Editing', 'Podcast Editing', 'Marketing', 'Website Development', 'Branding', 'Consultation'],
+    enum: [
+      'Short Form Editing', 'Clip Editing',
+      'Podcast Editing',
+      'Marketing', 'Social Media Marketing',
+      'Website Development', 'Website Design & Development',
+      'Branding', 'Real Estate Editing', 'Consultation'
+    ],
     default: 'Short Form Editing'
   },
   suggestedEmployee: {

@@ -11,30 +11,29 @@ dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 // Also load root .env (lower priority) for shared variables
 dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
+// Normalize EmailJS variable aliases (supports both EMAILJS_* and VITE_EMAILJS_*)
+process.env.EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || '';
+process.env.EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID || '';
+process.env.EMAILJS_PUBLIC_KEY = process.env.EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || '';
+
+// Normalize FRONTEND_URL (supports FRONTEND_URL, CLIENT_URL, APP_URL)
+process.env.FRONTEND_URL = (process.env.FRONTEND_URL || process.env.CLIENT_URL || process.env.APP_URL || '').trim();
+process.env.CLIENT_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL;
+process.env.APP_URL = process.env.APP_URL || process.env.FRONTEND_URL;
+
 // Boot-required secrets/config. Fail-closed: server refuses to start if absent.
-// NOTE (config-architecture fix): PARTNER_JWT_REFRESH_SECRET and all EMAILJS_*
-// variables are intentionally NOT in this list:
-// - PARTNER_JWT_REFRESH_SECRET has zero consumers (partner flow issues only a
-//   24h access token signed with PARTNER_JWT_SECRET; nothing reads
-//   config.partnerJwtRefreshSecret). Requiring it at boot blocks deploys for
-//   no runtime benefit.
-// - EMAILJS_* are feature-gated, not boot-gated: backend/routes/auth.js
-//   `sendInvitationEmailSecure()` validates all four per request and throws a
-//   clear error if absent. The frontend uses VITE_EMAILJS_* at build time.
-//   Blocking the entire API boot because invitation emails are unconfigured
-//   is wrong granularity.
 const requiredEnv = [
   'RAZORPAY_KEY_ID',
   'RAZORPAY_KEY_SECRET',
   'JWT_SECRET',
   'JWT_REFRESH_SECRET',
-  'CLIENT_URL',
-  'APP_URL',
+  'FRONTEND_URL',
   'MONGO_URI',
   'BACKUP_JWT_SECRET',
   'PARTNER_JWT_SECRET',
   'BACKUP_ADMIN_EMAIL'
 ];
+
 
 // Feature-gated (optional at boot, required at use). Warn only — never exit,
 // never log values, never fall back to hardcoded secrets.
@@ -123,6 +122,37 @@ if (!process.env.BACKUP_ADMIN_PASSWORD) {
   }
 }
 
+// Environment validation for FRONTEND_URL
+const effectiveFrontendUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || process.env.APP_URL || '').trim();
+if (!effectiveFrontendUrl) {
+  console.error('\n=================================================');
+  console.error('❌ CRITICAL ERROR: FRONTEND_URL is missing.');
+  console.error('Configure FRONTEND_URL inside your .env file:');
+  console.error('  - Local Development: FRONTEND_URL=http://localhost:5173');
+  console.error('  - Production:        FRONTEND_URL=https://viralcraftmedia-demo.vercel.app');
+  console.error('Server boot halted to prevent misrouted emails/invitations.');
+  console.error('=================================================\n');
+  process.exit(1);
+}
+
+if (_isProductionEnv) {
+  if (effectiveFrontendUrl.includes('localhost') || effectiveFrontendUrl.includes('127.0.0.1')) {
+    console.error('\n=================================================');
+    console.error('❌ CRITICAL ERROR: Production mode (NODE_ENV=production) requires a public HTTPS FRONTEND_URL.');
+    console.error(`Current FRONTEND_URL is: "${effectiveFrontendUrl}"`);
+    console.error('Server boot halted to prevent localhost links in production.');
+    console.error('=================================================\n');
+    process.exit(1);
+  }
+  if (!effectiveFrontendUrl.startsWith('https://')) {
+    console.error('\n=================================================');
+    console.error('❌ CRITICAL ERROR: Production FRONTEND_URL must use HTTPS protocol.');
+    console.error(`Current FRONTEND_URL is: "${effectiveFrontendUrl}"`);
+    console.error('=================================================\n');
+    process.exit(1);
+  }
+}
+
 // Validate security-critical secrets — no hardcoded fallbacks allowed
 const missingSecurityEnv = requiredEnv.filter(key => !process.env[key]);
 if (missingSecurityEnv.length > 0) {
@@ -141,8 +171,10 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   emailFrom: process.env.EMAIL_FROM,
   adminEmail: process.env.ADMIN_EMAIL,
-  appUrl: process.env.APP_URL,
-  clientUrl: process.env.CLIENT_URL,
+  frontendUrl: effectiveFrontendUrl,
+  appUrl: effectiveFrontendUrl,
+  clientUrl: effectiveFrontendUrl,
+
   
   // ##################################
   // MONGODB CONFIGURATION
@@ -246,26 +278,55 @@ export const config = {
   emailjsServiceId: process.env.EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || '',
   emailjsTemplateId: process.env.EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID || '',
   emailjsPublicKey: process.env.EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || '',
-  emailjsPrivateKey: process.env.EMAILJS_PRIVATE_KEY || ''
+  emailjsPrivateKey: process.env.EMAILJS_PRIVATE_KEY || '',
+
+  // ##################################
+  // INVITATION LIFETIME (Single Source of Truth)
+  // Configured via EMPLOYEE_INVITATION_EXPIRY_HOURS (Default: 168 hours = 7 days)
+  // ##################################
+  employeeInvitationExpiryHours: parseInt(process.env.EMPLOYEE_INVITATION_EXPIRY_HOURS || '168', 10)
 };
+
+// Helper: Calculate absolute server-side expiration timestamp for invitations
+export function getInvitationExpiresAt(fromTime = Date.now()) {
+  const hours = config.employeeInvitationExpiryHours || 168;
+  const baseMs = fromTime instanceof Date 
+    ? fromTime.getTime() 
+    : (typeof fromTime === 'number' ? fromTime : (fromTime ? new Date(fromTime).getTime() : Date.now()));
+  return new Date(baseMs + hours * 60 * 60 * 1000);
+}
 
 // Helper: Environment-aware frontend base URL (single source of truth)
 // Production: requires explicit https://<production-frontend> and never falls back to localhost
-// Development: returns explicit config or localhost fallback
+// Development: returns explicit local config or localhost fallback, never production URL
 export function getFrontendBaseUrl() {
-  const rawUrl = (config.appUrl || config.clientUrl || process.env.FRONTEND_URL || process.env.APP_URL || process.env.CLIENT_URL || '').trim().replace(/\/+$/, '');
   const isProduction = (process.env.NODE_ENV || config.nodeEnv || 'development').toLowerCase() === 'production';
+  const rawUrl = (process.env.FRONTEND_URL || config.frontendUrl || config.appUrl || config.clientUrl || '').trim().replace(/\/+$/, '');
+
   if (isProduction) {
     if (!rawUrl) {
-      throw new Error('FRONTEND_URL / APP_URL / CLIENT_URL is not configured for production. Set APP_URL or CLIENT_URL to https://<production-frontend-domain> (e.g., https://viralcraftmedia-demo.vercel.app) in Render environment variables.');
+      throw new Error('FRONTEND_URL is not configured for production. Set FRONTEND_URL to https://<production-frontend-domain> (e.g., https://viralcraftmedia-demo.vercel.app) in Render environment variables.');
     }
     if (!rawUrl.startsWith('https://')) {
-      throw new Error(`Production frontend URL must use HTTPS: got "${rawUrl}"`);
+      throw new Error(`Production FRONTEND_URL must use HTTPS: got "${rawUrl}"`);
     }
     if (rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1')) {
-      throw new Error(`Production frontend URL must not be localhost: got "${rawUrl}"`);
+      throw new Error(`Production FRONTEND_URL must not be localhost: got "${rawUrl}"`);
     }
     return rawUrl;
   }
-  return rawUrl || 'http://localhost:5173';
+
+  // Local Development:
+  // If rawUrl is missing or points to production (leftover in local .env), guard and use localhost
+  if (!rawUrl || (rawUrl.includes('viralcraftmedia-demo.vercel.app') && !process.env.ALLOW_PROD_URL_IN_DEV)) {
+    return 'http://localhost:5173';
+  }
+  return rawUrl;
+}
+
+// Helper: Centralized invitation URL builder (single source of truth)
+// Constructs: ${FRONTEND_URL}/register?token=${rawToken}
+export function buildInvitationUrl(token) {
+  if (!token) throw new Error('Token is required to build invitation URL');
+  return `${getFrontendBaseUrl()}/register?token=${encodeURIComponent(token.trim())}`;
 }

@@ -84,10 +84,10 @@ export const seedBackupAdmin = async () => {
     const name = config.backupAdminName || 'Backup Administrator';
     const role = config.backupAdminRole || 'backup_admin';
 
-    // Remove backup user from Production Database to ensure complete isolation (only if not super admin email)
+    // Remove backup user from Production Database to ensure complete isolation (only if not super admin email and explicitly backup_admin role)
     const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase();
     if (email !== superAdminEmail) {
-      await User.deleteOne({ email }).catch(() => {});
+      await User.deleteOne({ email, role: 'backup_admin' }).catch(() => {});
     }
 
     // 2. Wait up to 10 seconds for Backup Database connection pool to be ready

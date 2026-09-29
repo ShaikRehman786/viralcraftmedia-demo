@@ -95,7 +95,8 @@ router.post('/reset-password/:token', authLimiter, resetPassword);
 // Verify invitation token public route (supports both route param and query param)
 const handleVerifyInvitation = async (req, res, next) => {
   try {
-    const rawToken = (req.params.token || req.query.token || '').trim();
+    let rawToken = (req.params.token || req.query.token || '').trim();
+    rawToken = rawToken.replace(/^["']|["']$/g, '').trim();
     if (!rawToken) {
       return res.status(400).json({ 
         success: false,
@@ -107,6 +108,15 @@ const handleVerifyInvitation = async (req, res, next) => {
     const tokenHash = crypto.createHash('sha256').update(rawToken.toLowerCase().trim()).digest('hex');
     const tokenHashRaw = crypto.createHash('sha256').update(rawToken).digest('hex');
     const tokenCandidates = Array.from(new Set([tokenHash, tokenHashRaw, rawToken, rawToken.toLowerCase().trim()]));
+
+    const hexMatch = rawToken.match(/^[a-fA-F0-9]{64}/);
+    if (hexMatch) {
+      const hex64 = hexMatch[0];
+      tokenCandidates.push(
+        crypto.createHash('sha256').update(hex64.toLowerCase().trim()).digest('hex'),
+        hex64
+      );
+    }
 
     // 1. Check for active invitation matching hash or raw token
     const user = await User.findOne({
@@ -256,7 +266,8 @@ const handleAcceptInvitation = async (req, res, next) => {
       });
     }
 
-    const rawToken = (req.params.token || req.body.token || req.query.token || '').trim();
+    let rawToken = (req.params.token || req.body.token || req.query.token || '').trim();
+    rawToken = rawToken.replace(/^["']|["']$/g, '').trim();
     if (!rawToken) {
       return res.status(400).json({ 
         success: false,
@@ -268,6 +279,15 @@ const handleAcceptInvitation = async (req, res, next) => {
     const tokenHash = crypto.createHash('sha256').update(rawToken.toLowerCase().trim()).digest('hex');
     const tokenHashRaw = crypto.createHash('sha256').update(rawToken).digest('hex');
     const tokenCandidates = Array.from(new Set([tokenHash, tokenHashRaw, rawToken, rawToken.toLowerCase().trim()]));
+
+    const hexMatch = rawToken.match(/^[a-fA-F0-9]{64}/);
+    if (hexMatch) {
+      const hex64 = hexMatch[0];
+      tokenCandidates.push(
+        crypto.createHash('sha256').update(hex64.toLowerCase().trim()).digest('hex'),
+        hex64
+      );
+    }
 
     // Atomic lookup to prevent race conditions or double submissions
     const user = await User.findOne({

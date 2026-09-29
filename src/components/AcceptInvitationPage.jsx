@@ -84,7 +84,9 @@ export default function AcceptInvitationPage() {
       } catch (err) {
         const errData = err.response?.data;
         const code = errData?.code;
-        const msg = errData?.error || 'This invitation link could not be verified.';
+        const status = err.response?.status;
+        const isNetworkOrServer = !err.response || status >= 500;
+        const msg = errData?.error || (isNetworkOrServer ? "We couldn't verify this invitation right now. Please try again." : 'This invitation link could not be verified.');
         setError(msg);
 
         if (code === 'INVITATION_EXPIRED') {
@@ -93,6 +95,8 @@ export default function AcceptInvitationPage() {
           setPageState('ALREADY_USED');
         } else if (code === 'INVITATION_REVOKED') {
           setPageState('REVOKED');
+        } else if (isNetworkOrServer) {
+          setPageState('SERVER_ERROR');
         } else {
           setPageState('INVALID');
         }
@@ -240,6 +244,31 @@ export default function AcceptInvitationPage() {
             <div className="reg-actions-row">
               <Link to="/login" className="reg-btn reg-btn--secondary">Sign In</Link>
               <Link to="/" className="reg-btn reg-btn--primary">Back to Home</Link>
+            </div>
+          </div>
+        </div>
+        <style>{regStyles}</style>
+      </div>
+    );
+  }
+
+  // STATE: SERVER OR NETWORK ERROR
+  if (pageState === 'SERVER_ERROR') {
+    return (
+      <div className="reg-page">
+        <div className="reg-shell reg-shell--narrow">
+          <div className="reg-card reg-card--state">
+            <div className="reg-state-icon reg-state-icon--warning"><AlertTriangle size={20} /></div>
+            <h1 className="reg-state-title">Verification Temporarily Unavailable</h1>
+            <p className="reg-state-desc">
+              {error || "We couldn't verify this invitation right now. Please try again."}
+            </p>
+            <p className="reg-state-note">
+              This may be due to a brief network issue or server maintenance. Please try refreshing the page.
+            </p>
+            <div className="reg-actions-row">
+              <button type="button" onClick={() => window.location.reload()} className="reg-btn reg-btn--primary">Retry Verification</button>
+              <Link to="/" className="reg-btn reg-btn--secondary">Back to Home</Link>
             </div>
           </div>
         </div>

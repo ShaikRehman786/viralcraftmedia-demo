@@ -1,4 +1,5 @@
 import { body, validationResult } from 'express-validator';
+import { getAllowedOrigins } from './corsConfig.js';
 
 // Strip HTML tags and escape input to prevent XSS
 export const sanitizeInput = (val) => {
@@ -68,24 +69,9 @@ export const validateCsrfToken = (req, res, next) => {
   const origin = req.headers.origin;
   const referer = req.headers.referer;
   
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  const isProduction = nodeEnv === 'production';
-  const clientUrl = process.env.CLIENT_URL;
-  const prodOrigins = [
-    clientUrl,
-    'https://viralcraftmedia-demo.vercel.app',
-    'https://viralcraftmedia-demo.onrender.com',
-    'https://viralcraftmedia.com',
-    'https://www.viralcraftmedia.com'
-  ].filter(Boolean);
-  const devOrigins = [
-    ...prodOrigins,
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5000',
-    'http://localhost:3000'
-  ];
-  const allowedOrigins = isProduction ? prodOrigins : devOrigins;
+  // Origin whitelist: single source of truth in ./corsConfig.js (config.clientUrl
+  // + canonical production origins; localhost additionally in non-production).
+  const allowedOrigins = getAllowedOrigins();
 
   // Skip CSRF check for GET/HEAD/OPTIONS requests and webhook endpoints
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {

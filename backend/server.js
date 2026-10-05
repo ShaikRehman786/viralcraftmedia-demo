@@ -7,6 +7,7 @@ import { config } from './config/env.js';
 import { seedSuperAdmin, seedBackupAdmin } from './config/seed.js';
 import whatsappService from './services/whatsappService.js';
 import { startReferralCampaignMonitor } from './services/referralCron.js';
+import { getAllowedOrigins } from './middleware/corsConfig.js';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.warn('Unhandled Promise Rejection (handled gracefully):', reason);
@@ -32,22 +33,8 @@ const startServer = async () => {
     const server = http.createServer(app);
 
     // Initialize Socket.io with CORS parameters matching Express - environment-aware
-    const isProduction = config.nodeEnv === 'production';
-    const prodOrigins = [
-      config.clientUrl,
-      'https://viralcraftmedia-demo.vercel.app',
-      'https://viralcraftmedia-demo.onrender.com',
-      'https://viralcraftmedia.com',
-      'https://www.viralcraftmedia.com'
-    ].filter(Boolean);
-    const devOrigins = [
-      ...prodOrigins,
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5000',
-      'http://localhost:3000'
-    ];
-    const allowedOrigins = isProduction ? prodOrigins : devOrigins;
+    // (single source of truth in middleware/corsConfig.js)
+    const allowedOrigins = getAllowedOrigins();
     const io = new Server(server, {
       cors: {
         origin: allowedOrigins,

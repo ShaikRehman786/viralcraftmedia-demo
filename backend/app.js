@@ -7,6 +7,7 @@ import { config } from './config/env.js';
 import routes from './routes/index.js';
 import { preventMongoInjection, sanitizeObject, validateCsrfToken } from './middleware/validate.js';
 import errorHandler from './middleware/error.js';
+import { corsOptions } from './middleware/corsConfig.js';
 
 const app = express();
 // Trust Render proxy (fixes ERR_ERL_UNEXPECTED_X_FORWARDED_FOR while preserving IP correctness)
@@ -44,39 +45,10 @@ app.use(helmet({
   xssFilter: false // CSP handles XSS, deprecated X-XSS-Protection
 }));
 
-// CORS Configuration - environment-aware: localhost only in non-production
-const isProduction = config.nodeEnv === 'production';
-const prodOrigins = [
-  config.clientUrl,
-  'https://viralcraftmedia-demo.vercel.app',
-  'https://viralcraftmedia-demo.onrender.com',
-  'https://viralcraftmedia.com',
-  'https://www.viralcraftmedia.com'
-].filter(Boolean);
-const devOrigins = [
-  ...prodOrigins,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5000',
-  'http://localhost:3000'
-];
-const allowedOrigins = isProduction ? prodOrigins : devOrigins;
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) {
-      return callback(null, true);
-    }
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    console.warn(`[CORS] Blocked request from disallowed origin: ${origin}`);
-    return callback(null, false);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
-}));
+// CORS — single source of truth in middleware/corsConfig.js (never origin '*').
+// Mounted before body parsers, CSRF check and all routes so preflight OPTIONS
+// (handled automatically here) and every API response carry CORS headers.
+app.use(cors(corsOptions));
 
 // Request body size limits & JSON parsers
 // Note: CORS preflight (OPTIONS) is handled automatically by the cors() middleware above.
@@ -114,6 +86,7 @@ app.use('/api', routes);
 // Duplicate mount was added for proxy compatibility (404 fix) but widens WAF surface.
 // Per SEC-014, expose fallback only in non-production where proxy stripping occurs;
 // production keeps single /api surface.
+const isProduction = config.nodeEnv === 'production';
 if (!isProduction) {
   app.use(validateCsrfToken);
   app.use(routes);

@@ -1,31 +1,5 @@
 import { config } from '../config/env.js';
-
-const isProduction = config.nodeEnv === 'production';
-const prodOrigins = [
-  config.clientUrl,
-  'https://viralcraftmedia-demo.vercel.app',
-  'https://viralcraftmedia-demo.onrender.com',
-  'https://viralcraftmedia.com',
-  'https://www.viralcraftmedia.com'
-].filter(Boolean);
-const devOrigins = [
-  ...prodOrigins,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5000',
-  'http://localhost:3000'
-];
-const allowedOrigins = isProduction ? prodOrigins : devOrigins;
-
-// Set CORS headers on error responses so the browser can read the error message.
-// Validate origin against whitelisted allowedOrigins
-const setCorsHeaders = (req, res) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-};
+import { setCorsHeaders } from './corsConfig.js';
 
 // Centralized error handling middleware
 export default function errorHandler(err, req, res, next) {

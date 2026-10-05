@@ -5,11 +5,20 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load backend-specific .env from the backend directory (with override enabled)
-dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
+// Load backend-specific .env from the backend directory (fills gaps only —
+// real environment variables, e.g. Render dashboard values, always win).
+// `override: true` must NEVER be used here: with dotenv v17 the file load also
+// resolves the repo-root .env convention cascade, and overriding would let the
+// committed localhost development values clobber production, crashing the
+// production boot (fail-closed validation) and taking down the whole API.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Also load root .env (lower priority) for shared variables
-dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
+// Also load root .env (lower priority) for shared variables — local development
+// convenience ONLY. Never loaded in production: production configuration comes
+// exclusively from the deployment environment (Render dashboard).
+if ((process.env.NODE_ENV || 'development').toLowerCase() !== 'production') {
+  dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+}
 
 // Normalize EmailJS variable aliases (supports both EMAILJS_* and VITE_EMAILJS_*)
 process.env.EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || '';

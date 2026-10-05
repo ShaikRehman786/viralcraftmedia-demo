@@ -8,6 +8,8 @@ import { seedSuperAdmin, seedBackupAdmin } from './config/seed.js';
 import whatsappService from './services/whatsappService.js';
 import { startReferralCampaignMonitor } from './services/referralCron.js';
 import { getAllowedOrigins } from './middleware/corsConfig.js';
+import { closeRedis } from './config/redis.js';
+import { shutdownBackupServices } from './services/backupService.js';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.warn('Unhandled Promise Rejection (handled gracefully):', reason);
@@ -16,6 +18,43 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (err) => {
   console.warn('Uncaught Exception (handled gracefully):', err.message);
 });
+
+// Graceful shutdown (Render SIGTERM on deploy/scale + local Ctrl+C).
+// Idempotent, safe when services never initialized, never throws.
+// Each step is individually guarded so one failing cleanup cannot block the rest.
+let httpServer = null;
+let shuttingDown = false;
+const shutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[SHUTDOWN] Received ${signal}; cleaning up resources...`);
+  // Fallback so a hanging cleanup cannot block process termination forever.
+  const forceTimer = setTimeout(() => {
+    console.warn('[SHUTDOWN] Cleanup timed out; forcing exit.');
+    process.exit(1);
+  }, 25000);
+  try {
+    try { await whatsappService.shutdown(); } catch (e) { console.warn('[SHUTDOWN] WhatsApp cleanup warning:', e.message); }
+    try { await shutdownBackupServices(); } catch (e) { console.warn('[SHUTDOWN] Backup cleanup warning:', e.message); }
+    try { await closeRedis(); } catch (e) { console.warn('[SHUTDOWN] Redis cleanup warning:', e.message); }
+    if (httpServer) {
+      await new Promise((resolve) => {
+        try {
+          httpServer.close(() => resolve());
+        } catch {
+          resolve();
+        }
+      });
+    }
+    // Mongoose pools close naturally on process exit; no forced disconnect
+    // here so in-flight writes can settle during the grace period.
+    console.log('[SHUTDOWN] Cleanup complete.');
+  } finally {
+    clearTimeout(forceTimer);
+  }
+};
+process.on('SIGTERM', () => { shutdown('SIGTERM').catch(() => {}); });
+process.on('SIGINT', () => { shutdown('SIGINT').catch(() => {}); });
 
 const PORT = config.port;
 
@@ -31,6 +70,7 @@ const startServer = async () => {
     await seedBackupAdmin();
 
     const server = http.createServer(app);
+    httpServer = server;
 
     // Initialize Socket.io with CORS parameters matching Express - environment-aware
     // (single source of truth in middleware/corsConfig.js)

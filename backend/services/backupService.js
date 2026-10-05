@@ -60,6 +60,9 @@ let retentionIntervalId = null;
 let changeStream = null;
 let isChangeStreamActive = false;
 let changeStreamReconnectTimeout = null;
+// Set during graceful shutdown: suppresses reconnect scheduling so closing
+// the stream for shutdown cannot spawn a replacement watcher.
+let changeStreamShutdown = false;
 
 // Track latency & connection metrics
 let prodDbLatencyMs = 0;
@@ -487,6 +490,9 @@ export const startChangeStreamWatcher = async () => {
 
     // Exactly ONE db.watch() per initialization
     changeStream = mongoose.connection.db.watch(pipeline, options);
+    // Instance token: identifies THIS watcher incarnation so a stale 'close'
+    // from a superseded stream cannot schedule a competing reconnect.
+    const thisWatcher = changeStream;
 
     let hasConfirmedOpen = false;
     const confirmActive = () => {
@@ -552,12 +558,19 @@ export const startChangeStreamWatcher = async () => {
         }
         console.warn('[CHANGE STREAM] Historical events between last checkpoint and now cannot be replayed - oplog window exceeded (expected after extended downtime)');
       }
-      scheduleChangeStreamReconnect();
+      if (!changeStreamShutdown) {
+        scheduleChangeStreamReconnect();
+      }
     });
 
     // Exactly ONE close listener
     changeStream.on('close', () => {
       clearTimeout(activeConfirmTimer);
+      // Stale-close guard: if a newer watcher already replaced this stream
+      // (intentional pre-close in startChangeStreamWatcher), do nothing.
+      if (changeStream !== thisWatcher) {
+        return;
+      }
       if (hasConfirmedOpen || isChangeStreamActive) {
         console.warn('[CHANGE STREAM CLOSED]. Scheduling reconnect...');
       } else {
@@ -566,7 +579,9 @@ export const startChangeStreamWatcher = async () => {
       hasConfirmedOpen = false;
       isChangeStreamActive = false;
       changeStream = null;
-      scheduleChangeStreamReconnect();
+      if (!changeStreamShutdown) {
+        scheduleChangeStreamReconnect();
+      }
     });
   } catch (err) {
     if (isHistoryLostError(err)) {
@@ -584,6 +599,7 @@ export const startChangeStreamWatcher = async () => {
 };
 
 const scheduleChangeStreamReconnect = () => {
+  if (changeStreamShutdown) return;
   if (changeStreamReconnectTimeout) clearTimeout(changeStreamReconnectTimeout);
   changeStreamReconnectTimeout = setTimeout(() => {
     changeStreamReconnectTimeout = null;
@@ -591,6 +607,41 @@ const scheduleChangeStreamReconnect = () => {
       console.warn('[CHANGE STREAM RECONNECT WARN]:', err.message);
     });
   }, 10000);
+};
+
+/**
+ * Graceful-shutdown helper for the backup subsystem (idempotent, never throws).
+ * Stops the change-stream watcher (without scheduling a replacement),
+ * clears pending reconnects and stops the retention/worker intervals.
+ * Database connections are left for the process to close naturally.
+ */
+export const shutdownBackupServices = async () => {
+  try {
+    changeStreamShutdown = true;
+    if (changeStreamReconnectTimeout) {
+      clearTimeout(changeStreamReconnectTimeout);
+      changeStreamReconnectTimeout = null;
+    }
+    if (workerIntervalId) {
+      clearInterval(workerIntervalId);
+      workerIntervalId = null;
+    }
+    if (retentionIntervalId) {
+      clearInterval(retentionIntervalId);
+      retentionIntervalId = null;
+    }
+    if (changeStream) {
+      const stream = changeStream;
+      changeStream = null;
+      isChangeStreamActive = false;
+      try {
+        await stream.close();
+      } catch {}
+    }
+    console.log('[BACKUP] Backup services shutdown complete.');
+  } catch (err) {
+    console.warn('[BACKUP] Backup shutdown warning:', err.message);
+  }
 };
 
 /**
@@ -693,8 +744,12 @@ export const processRetryQueue = async () => {
 };
 
 /**
- * Force Sync Engine: Scans all monitored production collections and inserts missing backup records
+ * Force Sync Engine: Scans all monitored production collections and inserts missing backup records.
+ * Memory-bounded: each collection is streamed via cursor in fixed-size batches —
+ * an entire collection is NEVER materialized with toArray().
  */
+const FORCE_SYNC_BATCH_SIZE = 200;
+
 export const runForceSync = async () => {
   if (!isBackupConnected || !backupConnection) {
     throw new Error('Backup Database is not connected.');
@@ -718,42 +773,67 @@ export const runForceSync = async () => {
 
   const collectionResults = [];
 
+  // Bounded per-document check+insert — same coverage and dedup semantics as
+  // before, but operates on one fixed-size batch at a time.
+  const processBatch = async (colName, batch) => {
+    let missingInBatch = 0;
+    for (const doc of batch) {
+      totalScanned++;
+      const docIdStr = doc._id ? doc._id.toString() : null;
+      if (!docIdStr) continue;
+
+      // Check if backup entry exists
+      const hasBackup = await BackupRecord.exists({ collectionName: colName, documentId: docIdStr });
+
+      if (!hasBackup) {
+        missingInBatch++;
+        totalMissing++;
+        await recordBackupEntry({
+          collectionName: colName,
+          documentId: docIdStr,
+          operation: 'FORCE_SYNC',
+          previousData: null,
+          currentData: doc,
+          changedFields: Object.keys(doc).filter(k => !k.startsWith('_')),
+          performedBy: {
+            userId: 'Admin',
+            email: 'admin@viralcraftmedia.com',
+            name: 'Force Sync Engine',
+            role: 'SUPER_ADMIN'
+          },
+          source: 'FORCE_SYNC'
+        });
+        totalBackedUp++;
+      }
+    }
+    return missingInBatch;
+  };
+
   for (const colName of monitoredCollections) {
+    let missingInCol = 0;
+    let scannedInCol = 0;
     try {
       const collection = mongoose.connection.db.collection(colName);
-      const docs = await collection.find({}).lean ? await collection.find({}).toArray() : await collection.find({}).toArray();
-
-      let missingInCol = 0;
-      let scannedInCol = docs.length;
-
-      for (const doc of docs) {
-        totalScanned++;
-        const docIdStr = doc._id ? doc._id.toString() : null;
-        if (!docIdStr) continue;
-
-        // Check if backup entry exists
-        const hasBackup = await BackupRecord.exists({ collectionName: colName, documentId: docIdStr });
-
-        if (!hasBackup) {
-          missingInCol++;
-          totalMissing++;
-          await recordBackupEntry({
-            collectionName: colName,
-            documentId: docIdStr,
-            operation: 'FORCE_SYNC',
-            previousData: null,
-            currentData: doc,
-            changedFields: Object.keys(doc).filter(k => !k.startsWith('_')),
-            performedBy: {
-              userId: 'Admin',
-              email: 'admin@viralcraftmedia.com',
-              name: 'Force Sync Engine',
-              role: 'SUPER_ADMIN'
-            },
-            source: 'FORCE_SYNC'
-          });
-          totalBackedUp++;
+      const cursor = collection.find({}).batchSize(FORCE_SYNC_BATCH_SIZE);
+      try {
+        let batch = [];
+        while (await cursor.hasNext()) {
+          const doc = await cursor.next();
+          if (!doc) continue;
+          batch.push(doc);
+          if (batch.length >= FORCE_SYNC_BATCH_SIZE) {
+            missingInCol += await processBatch(colName, batch);
+            scannedInCol += batch.length;
+            batch = [];
+          }
         }
+        if (batch.length > 0) {
+          missingInCol += await processBatch(colName, batch);
+          scannedInCol += batch.length;
+          batch = [];
+        }
+      } finally {
+        try { await cursor.close(); } catch {}
       }
 
       collectionResults.push({
@@ -780,7 +860,10 @@ export const runForceSync = async () => {
 };
 
 /**
- * Automated Initial Migration Engine: Populate Backup DB with historical production records on boot if empty
+ * Automated Initial Migration Engine: Populate Backup DB with historical production records on boot if empty.
+ * Skips the full scan when backup coverage already exists and the change stream
+ * checkpoint is fresh (real-time protection is covering new writes). A full
+ * recovery sync remains available at any time via runForceSync().
  */
 export const migrateInitialProductionData = async () => {
   if (!isBackupConnected || !backupConnection) return;
@@ -789,6 +872,20 @@ export const migrateInitialProductionData = async () => {
 
   const count = await BackupRecord.countDocuments({});
   console.log(`[INITIAL MIGRATION] Current Backup DB records count: ${count}`);
+
+  if (count > 0) {
+    try {
+      const tokenDoc = await ChangeStreamToken.findOne({ streamId: 'global_production_stream' }).lean();
+      const lastEvent = tokenDoc?.lastEventTime ? new Date(tokenDoc.lastEventTime).getTime() : 0;
+      const tokenFresh = lastEvent > 0 && (Date.now() - lastEvent) < 24 * 60 * 60 * 1000;
+      if (tokenFresh) {
+        console.log('[INITIAL MIGRATION] Backup coverage exists with a fresh change-stream checkpoint — skipping full sync.');
+        return { success: true, skipped: true, reason: 'coverage-exists-token-fresh' };
+      }
+    } catch (tokenErr) {
+      console.warn('[INITIAL MIGRATION] Token freshness check warning:', tokenErr.message);
+    }
+  }
 
   // Run full initial sync to ensure every production record is captured
   return runForceSync();
@@ -926,8 +1023,11 @@ export const backupPlugin = (schema) => {
     const operation = this._wasNew ? 'CREATE' : 'UPDATE';
     const docData = doc.toObject ? doc.toObject() : doc;
 
+    // Canonical collection name (matches Change Stream ns.coll, e.g. 'users'
+    // not the Mongoose model name 'User') so cross-source dedup keeps working.
+    const collectionName = this.constructor?.collection?.name || modelName;
     recordBackupEntry({
-      collectionName: modelName,
+      collectionName,
       documentId: doc._id,
       operation,
       currentData: docData,
@@ -940,8 +1040,9 @@ export const backupPlugin = (schema) => {
     if (!modelName || EXCLUDED_MODELS.includes(modelName)) return;
     if (this.db && this.db !== mongoose.connection) return;
 
+    const collectionName = this.constructor?.collection?.name || modelName;
     recordBackupEntry({
-      collectionName: modelName,
+      collectionName,
       documentId: doc._id,
       operation: 'DELETE',
       source: 'HOOK'

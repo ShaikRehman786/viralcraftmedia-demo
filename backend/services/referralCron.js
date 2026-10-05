@@ -4,7 +4,17 @@ import User from '../models/User.js';
 import { sendEmail } from './emailService.js';
 import { logEvent } from './loggingService.js';
 
+// Lifecycle guard: never run two scans concurrently (boot scan vs scheduled
+// tick, or overlapping slow ticks). Always released via try/finally.
+let scanInProgress = false;
+
 export const checkCampaignExpirations = async () => {
+  if (scanInProgress) {
+    console.log('[MONITOR] Referral scan already running; skipping overlapping tick.');
+    return;
+  }
+  scanInProgress = true;
+  try {
   const now = new Date();
   
   try {
@@ -113,6 +123,9 @@ export const checkCampaignExpirations = async () => {
 
   } catch (err) {
     console.error('[Referral Campaign Monitor Error]:', err.message);
+  }
+  } finally {
+    scanInProgress = false;
   }
 };
 

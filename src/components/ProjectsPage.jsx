@@ -556,7 +556,7 @@ export default function ProjectsPage({
             {project.status?.replace(/_/g, ' ')}
           </span>
           {project.referral?.isReferral && (
-            <span className="badge badge-warning" title={`${project.referral.partnerAgency || 'Partner'} — ${project.referral.referralCode || ''}`}>🔗 Referral</span>
+            <span className="badge badge-warning" title={`${project.referral.partnerAgency || 'Partner'} — ${project.referral.referralCode || ''}`}>Referral</span>
           )}
         </div>
         <div className="kanban-card-footer">
@@ -597,18 +597,12 @@ export default function ProjectsPage({
         <span className="kanban-col-count">{projectsList.length}</span>
       </div>
       {projectsList.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '2rem 1rem',
-          background: 'var(--bg-secondary)',
-          borderRadius: 12,
-          border: '1px solid var(--border)'
-        }}>
-          <Briefcase size={48} style={{ color: 'var(--text-muted)', opacity: 0.4, marginBottom: '1rem' }} />
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.5rem' }}>
+        <div className="kanban-empty">
+          <Briefcase size={28} className="kanban-empty__icon" />
+          <h3 className="kanban-empty__title">
             No projects
           </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: 300, margin: '0 auto' }}>
+          <p className="kanban-empty__desc">
             Projects will appear here when assigned to this stage.
           </p>
         </div>
@@ -660,7 +654,7 @@ export default function ProjectsPage({
             <span className={getStatusBadge(project.status)}>{project.status?.replace(/_/g, ' ')}</span>
             <span className={getPriorityBadge(project.priority)}>{project.priority}</span>
             {project.referral?.isReferral && (
-              <span className="badge badge-warning">🔗 Referral</span>
+              <span className="badge badge-warning">Referral</span>
             )}
             {!project.referral?.isReferral && (
               <span className="badge badge-accent">Source: {project.source || 'Website'}</span>
@@ -723,7 +717,7 @@ export default function ProjectsPage({
                         ) : (
                           <div className="vcm-task-mini__actions">
                             <button
-                              className="btn btn-accent btn-xs"
+                              className="btn btn-secondary btn-xs"
                               onClick={() => handleAcceptTask(tId)}
                               disabled={acceptingId === tId}
                             >
@@ -884,7 +878,7 @@ export default function ProjectsPage({
   };
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in projects-workspace">
       {/* ─── Mobile Layout (<768px) ─── */}
       <div className="mobile-only">
         <div className="mobile-filters">
@@ -939,7 +933,7 @@ export default function ProjectsPage({
               <button className="btn btn-primary btn-sm flex-1" onClick={openNewProjectModal}>
                 <Plus size={14} /> Project
               </button>
-              <button className="btn btn-accent btn-sm flex-1" onClick={() => openNewTaskModal()}>
+              <button className="btn btn-secondary btn-sm flex-1" onClick={() => openNewTaskModal()}>
                 <Plus size={14} /> Task
               </button>
               <button className="btn btn-secondary btn-sm" onClick={handleExportCSV}>
@@ -1037,9 +1031,9 @@ export default function ProjectsPage({
 
       {/* ─── Desktop Layout (≥768px) — pixel-perfect original ─── */}
       <div className="desktop-only">
-        <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+        <div className="projects-toolbar">
           {!isEmployee ? (
-            <div className="tabs">
+            <div className="tabs projects-toolbar__tabs">
               {activeTabs.map(tab => (
                 <button
                   key={tab}
@@ -1055,22 +1049,21 @@ export default function ProjectsPage({
               My Assigned Projects
             </h2>
           )}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="search-wrap">
+          <div className="projects-toolbar__controls">
+            <div className="search-wrap projects-toolbar__search">
               <Search size={16} />
               <input
                 className="input input-sm"
-                style={{ width: 180 }}
                 placeholder="Search projects..."
                 value={projectSearch}
                 onChange={e => setProjectSearch(e.target.value)}
               />
             </div>
             <select
-              className="select select-sm"
-              style={{ width: 120 }}
+              className="select select-sm projects-toolbar__select"
               value={projectStatusFilter}
               onChange={e => setProjectStatusFilter(e.target.value)}
+              aria-label="Filter by status"
             >
               <option value="all">All Status</option>
               <option value="new">New</option>
@@ -1081,10 +1074,10 @@ export default function ProjectsPage({
               <option value="cancelled">Cancelled</option>
             </select>
             <select
-              className="select select-sm"
-              style={{ width: 110 }}
+              className="select select-sm projects-toolbar__select"
               value={projectPriorityFilter}
               onChange={e => setProjectPriorityFilter(e.target.value)}
+              aria-label="Filter by priority"
             >
               <option value="all">All Priority</option>
               <option value="low">Low</option>
@@ -1094,13 +1087,13 @@ export default function ProjectsPage({
             </select>
             {isAdmin && (
               <>
-                <button className="btn btn-primary btn-sm" onClick={openNewProjectModal}>
+                <button className="btn btn-primary btn-sm projects-toolbar__primary" onClick={openNewProjectModal}>
                   <Plus size={14} /> New Project
                 </button>
-                <button className="btn btn-accent btn-sm" onClick={() => openNewTaskModal()}>
+                <button className="btn btn-secondary btn-sm projects-toolbar__secondary" onClick={() => openNewTaskModal()}>
                   <Plus size={14} /> New Task
                 </button>
-                <button className="btn btn-secondary btn-sm" onClick={handleExportCSV}>
+                <button className="btn btn-ghost btn-sm projects-toolbar__tertiary" onClick={handleExportCSV}>
                   <Download size={14} /> Export
                 </button>
               </>
@@ -1108,13 +1101,13 @@ export default function ProjectsPage({
           </div>
         </div>
 
-        <div className="kanban-grid mb-6">
+        <div className="kanban-grid projects-kanban mb-6">
           {renderKanbanColumn('To Do', kanbanTodo, <Circle size={14} className="icon-gray" />)}
           {renderKanbanColumn('In Progress', kanbanInProgress, <Clock size={14} className="icon-blue" />)}
           {renderKanbanColumn('Completed', kanbanCompleted, <CheckCircle2 size={14} className="icon-green" />)}
         </div>
 
-        <div className="section-header">
+        <div className="section-header projects-section-header">
           <div>
             <h2 className="section-title">{isEmployee ? 'My Assigned Projects' : 'All Projects'}</h2>
             <p className="section-subtitle">{filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} found</p>
@@ -1140,7 +1133,7 @@ export default function ProjectsPage({
             </div>
           </div>
         ) : (
-          <div className="data-grid data-grid-2">
+          <div className="data-grid data-grid-2 projects-grid">
             {filteredProjects.map(renderDataCard)}
           </div>
         )}
@@ -1316,7 +1309,7 @@ export default function ProjectsPage({
                     <span className="badge badge-accent">Source: {activeTaskDetails.source || 'Website'}</span>
                   )}
                   {activeTaskDetails.referral?.isReferral && (
-                    <span className="badge badge-warning">🔗 Partner Referral</span>
+                    <span className="badge badge-warning">Partner Referral</span>
                   )}
                 </div>
                 <h2 className="vcm-modal__title">{activeTaskDetails.name}</h2>
@@ -1361,7 +1354,7 @@ export default function ProjectsPage({
 
                   {activeTaskDetails.referral?.isReferral ? (
                     <div className="vcm-section vcm-section--referral">
-                      <h3 className="vcm-section__title">🔗 Referral Partner Details</h3>
+                      <h3 className="vcm-section__title">Referral Partner Details</h3>
                       <div className="vcm-referral-grid">
                         <div><span className="vcm-label">Partner</span><span className="vcm-value">{activeTaskDetails.referral.partnerAgency || 'Partner'}</span></div>
                         <div><span className="vcm-label">Campaign</span><span className="vcm-value">{activeTaskDetails.referral.campaignName || 'General'}</span></div>
@@ -1446,7 +1439,7 @@ export default function ProjectsPage({
                   <div className="vcm-section">
                     <div className="vcm-section__head">
                       <h3 className="vcm-section__title"><CheckCircle2 size={16}/> Project Tasks ({projTasks.length})</h3>
-                      {isAdmin && <button className="btn btn-accent btn-sm" onClick={() => openNewTaskModal(activeTaskDetails._id)}><Plus size={14}/> Add Task</button>}
+                      {isAdmin && <button className="btn btn-secondary btn-sm" onClick={() => openNewTaskModal(activeTaskDetails._id)}><Plus size={14}/> Add Task</button>}
                     </div>
                     <div className="vcm-progress">
                       <div className="vcm-progress__bar"><div className="vcm-progress__fill" style={{ width: `${progressPct}%` }} /></div>

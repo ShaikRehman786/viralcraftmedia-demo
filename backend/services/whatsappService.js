@@ -876,6 +876,68 @@ const handleEmployeeCommand = async (employeeUser, text, msg, senderPhone) => {
   await msg.reply('Commands available for Employees: ACCEPT, DECLINE, START, PAUSE, RESUME, DONE.');
 };
 
+// ---------------------------------------------------------------------------
+// PRODUCTION-ONLY browser resolution (Render fix — local behavior untouched).
+// whatsapp-web.js@1.34.7 -> puppeteer@24.38.0 expects Chrome 146.x inside the
+// Puppeteer cache. Locally `npm install` populates the user cache
+// (~/.cache/puppeteer), but on Render the default cache dir
+// (/opt/render/.cache/puppeteer) lives outside the project directory and does
+// not survive the build -> runtime handoff, so the runtime cache is empty.
+// This resolver runs ONLY when NODE_ENV=production: it probes
+// PUPPETEER_EXECUTABLE_PATH plus project-local/default cache locations and
+// returns a path ONLY if the binary actually exists on disk. Otherwise it
+// returns undefined and Puppeteer falls back to its default resolution.
+// Local (non-production) always resolves to undefined -> default behavior.
+// ---------------------------------------------------------------------------
+const resolveProductionBrowserExecutable = () => {
+  const candidates = [];
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    candidates.push(process.env.PUPPETEER_EXECUTABLE_PATH);
+  }
+
+  const cacheDirs = [
+    process.env.PUPPETEER_CACHE_DIR,
+    path.join(process.cwd(), '.cache', 'puppeteer'),
+    path.join(process.cwd(), 'backend', '.cache', 'puppeteer'),
+    '/opt/render/.cache/puppeteer'
+  ].filter(Boolean);
+
+  const binaryRelPaths = [
+    path.join('chrome-linux64', 'chrome'),
+    path.join('chrome-win64', 'chrome.exe'),
+    path.join('chrome-linux', 'chrome')
+  ];
+
+  for (const cacheDir of cacheDirs) {
+    try {
+      const chromeDir = path.join(cacheDir, 'chrome');
+      if (!fs.existsSync(chromeDir)) continue;
+      for (const build of fs.readdirSync(chromeDir)) {
+        for (const rel of binaryRelPaths) {
+          candidates.push(path.join(chromeDir, build, rel));
+        }
+      }
+    } catch {
+      // Ignore unreadable cache dirs and keep probing.
+    }
+  }
+
+  // System-wide Chromium fallbacks — used only when the file truly exists.
+  // No local Windows paths are listed here; production is Linux-only.
+  for (const sysPath of ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser']) {
+    candidates.push(sysPath);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fs.existsSync(candidate)) return candidate;
+    } catch {
+      // Ignore and keep probing.
+    }
+  }
+  return undefined;
+};
+
 const whatsappService = {
   client: null,
 
@@ -944,6 +1006,18 @@ const whatsappService = {
           await sessionRecord.save();
         }
 
+        // Production-only browser path: local keeps Puppeteer's default
+        // resolution (working setup untouched). Only in production do we pin
+        // executablePath, and only to a binary verified to exist on disk.
+        const isProdEnv = (config.nodeEnv || process.env.NODE_ENV || 'development').toLowerCase() === 'production';
+        const productionExecutablePath = isProdEnv ? resolveProductionBrowserExecutable() : undefined;
+        if (isProdEnv) {
+          console.info('[WHATSAPP] Environment: production');
+          console.info(`[WHATSAPP] PUPPETEER_CACHE_DIR: ${process.env.PUPPETEER_CACHE_DIR || '(not set, using puppeteer default)'}`);
+          console.info(`[WHATSAPP] Puppeteer executable: ${productionExecutablePath || 'unavailable (falling back to puppeteer default resolution)'}`);
+          console.info(`[WHATSAPP] Browser installation status: ${productionExecutablePath ? 'binary found' : 'no browser binary found'}`);
+        }
+
         client = new Client({
           authStrategy: new LocalAuth({
             clientId: 'vcm-crm-whatsapp'
@@ -953,6 +1027,7 @@ const whatsappService = {
           takeoverOnConflict: true,
           puppeteer: {
             headless: true,
+            ...(productionExecutablePath ? { executablePath: productionExecutablePath } : {}),
             args: [
               '--no-sandbox',
               '--disable-setuid-sandbox',
@@ -1222,6 +1297,10 @@ const whatsappService = {
           console.log('[WA-AUTOMATION] WhatsApp client initialized successfully.');
         } catch (initErr) {
           console.error('[WA-AUTOMATION] WhatsApp Web client initialization crash:', initErr.message);
+          console.error('[WHATSAPP] Browser launch failed');
+          console.error(`[WHATSAPP] Environment: ${config.nodeEnv || process.env.NODE_ENV || 'development'}`);
+          console.error(`[WHATSAPP] Puppeteer executable: ${productionExecutablePath || 'unavailable'}`);
+          console.error(`[WHATSAPP] Browser installation status: ${productionExecutablePath ? 'binary present but launch failed' : 'no browser binary found — ensure the Render build ran `npm run setup:chrome` with PUPPETEER_CACHE_DIR set inside the project directory'}`);
           connectionStatus = 'DISCONNECTED';
           qrCodeData = '';
           if (io) {

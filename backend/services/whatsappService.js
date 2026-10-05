@@ -15,6 +15,7 @@ import AuditLog from '../models/AuditLog.js';
 import { notifyStaff } from './notificationService.js';
 import { logEvent } from './loggingService.js';
 import { config } from '../config/env.js';
+import { getAuthoritativeCacheDir, findChromeBinary } from '../scripts/puppeteer-cache.js';
 
 let client = null;
 let io = null;
@@ -893,6 +894,16 @@ const resolveProductionBrowserExecutable = () => {
   const candidates = [];
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     candidates.push(process.env.PUPPETEER_EXECUTABLE_PATH);
+  }
+
+  // Authoritative project-local cache FIRST: this is exactly where the build
+  // (`npm run setup:chrome` / postinstall) installed Chrome, resolved from
+  // the same shared helper — build and runtime cannot disagree.
+  try {
+    const authoritative = findChromeBinary(getAuthoritativeCacheDir());
+    if (authoritative) return authoritative;
+  } catch {
+    // Fall through to the remaining probes.
   }
 
   const cacheDirs = [

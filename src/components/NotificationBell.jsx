@@ -70,7 +70,8 @@ export default function NotificationBell({
   unreadCount,
   onMarkRead,
   onMarkAllRead,
-  onNavigateToCenter
+  onNavigateToCenter,
+  onOpenNotification
 }) {
   const [open, setOpen] = useState(false);
   const [animating, setAnimating] = useState(false);
@@ -99,6 +100,17 @@ export default function NotificationBell({
   }, [open]);
 
   const recentNotifs = (notifications || []).slice(0, 5);
+
+  const handleItemOpen = (n) => {
+    if (!n.isRead && onMarkRead) onMarkRead(n._id);
+    if (n.actionUrl && /^https?:\/\//i.test(n.actionUrl)) {
+      window.open(n.actionUrl, '_blank', 'noopener');
+      return;
+    }
+    setOpen(false);
+    if (onOpenNotification) onOpenNotification(n);
+    else onNavigateToCenter?.();
+  };
 
   const grouped = {};
   const now = new Date();
@@ -167,12 +179,15 @@ export default function NotificationBell({
                       return (
                         <div
                           key={n._id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${n.title}. ${n.isRead ? 'Read' : 'Unread'}. Open related record.`}
                           className={`notif-item${!n.isRead ? ' notif-item-unread' : ''}`}
-                          onClick={() => {
-                            if (!n.isRead && onMarkRead) onMarkRead(n._id);
-                            if (n.actionUrl) {
-                              if (n.actionUrl.startsWith('http')) window.open(n.actionUrl, '_blank');
-                              else onNavigateToCenter?.();
+                          onClick={() => handleItemOpen(n)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleItemOpen(n);
                             }
                           }}
                         >

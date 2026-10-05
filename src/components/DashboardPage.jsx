@@ -10,6 +10,7 @@ import { requestNotificationPermission, getNotificationPermission, showBrowserNo
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 import CRMGlobalLoader from './shared/CRMGlobalLoader.jsx';
+import { resolveNotificationTarget } from '../utils/notificationTarget.js';
 
 const OverviewPage = lazy(() => import('./OverviewPage.jsx'));
 const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'));
@@ -80,7 +81,6 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [staff, setStaff] = useState([]);
-  const [logs, setLogs] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [analytics, setAnalytics] = useState(null);
@@ -259,16 +259,8 @@ export default function DashboardPage() {
     refreshAllData();
   }, [refreshAllData]);
 
-  // Dynamic tab fetches: fetch logs and calendar events only when specific tabs are active
-  useEffect(() => {
-    if (!user) return;
-    if (activeTab === 'logs' && user.role === 'SUPER_ADMIN') {
-      axios.get('/api/logs?limit=1000')
-        .then(res => setLogs(res.data.data))
-        .catch(console.error);
-    }
-  }, [activeTab, user]);
-
+  // Dynamic tab fetches: fetch calendar events only when the calendar tab is active.
+  // Security logs are fetched with server-side pagination by LogsPage itself.
   useEffect(() => {
     if (!user) return;
     if (activeTab === 'calendar' && (user.role === 'SUPER_ADMIN' || user.role === 'MANAGER')) {
@@ -942,6 +934,33 @@ export default function DashboardPage() {
     } catch (e) {}
   };
 
+  // Single notification navigation handler (bell + notification center).
+  // Resolves the existing notification metadata to an existing CRM tab and
+  // navigates via React Router history. Never blocks on the mark-read API.
+  const openNotificationTarget = useCallback((notification) => {
+    const resolved = resolveNotificationTarget(notification, user?.role);
+    if (resolved?.external) {
+      window.open(resolved.external, '_blank', 'noopener');
+      return;
+    }
+    if (resolved?.error === 'unauthorized') {
+      addToast("You're not authorized to view this item.", 'error');
+      return;
+    }
+    if (!resolved || resolved.error || !resolved.tab) {
+      addToast('That item is no longer available.', 'error');
+      return;
+    }
+    const parts = location.pathname.split('/').filter(Boolean);
+    const basePath = parts[0] || 'dashboard';
+    const search = resolved.focusId ? `?focus=${encodeURIComponent(resolved.focusId)}` : '';
+    if (resolved.tab === 'overview') {
+      navigate(`/${basePath}${search}`, { replace: false });
+    } else {
+      navigate(`/${basePath}/${resolved.tab}${search}`, { replace: false });
+    }
+  }, [user?.role, location.pathname, navigate, addToast]);
+
   const triggerDownload = (invoiceUrl, orderId) => {
     if (!invoiceUrl) return;
     const a = document.createElement('a');
@@ -983,7 +1002,7 @@ export default function DashboardPage() {
       <div className="app">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} user={user} />
         <div className="app-main">
-          <TopBar user={user} unreadCount={unreadCount} notifications={notifications} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} activeTab={activeTab} onNavigate={setActiveTab} onMarkRead={markNotifRead} onMarkAllRead={handleMarkAllNotifRead} />
+          <TopBar user={user} unreadCount={unreadCount} notifications={notifications} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} activeTab={activeTab} onNavigate={setActiveTab} onMarkRead={markNotifRead} onMarkAllRead={handleMarkAllNotifRead} onOpenNotification={openNotificationTarget} />
           {notifBanner && (
             <div style={{
               padding: '10px 20px',
@@ -1170,7 +1189,7 @@ export default function DashboardPage() {
                 />
               )}
               {activeTab === 'logs' && (
-                <LogsPage user={user} logs={logs} staff={staff} />
+                <LogsPage user={user} staff={staff} />
               )}
               {activeTab === 'enquiries' && (
                 <EnquiriesPage
@@ -1204,7 +1223,7 @@ export default function DashboardPage() {
                 <PaymentsPage user={user} projects={projects} triggerDownload={triggerDownload} />
               )}
               {activeTab === 'notification-center' && (
-                <NotificationCenterPage user={user} formatTimeAgo={formatTimeAgo} />
+                <NotificationCenterPage user={user} formatTimeAgo={formatTimeAgo} onNavigateNotification={openNotificationTarget} />
               )}
               {activeTab === 'referrals' && (
                 <ReferralManagementPage user={user} addToast={addToast} />

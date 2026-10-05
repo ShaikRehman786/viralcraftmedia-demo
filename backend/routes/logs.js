@@ -6,17 +6,22 @@ const router = express.Router();
 
 router.get('/', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page || '1', 10);
-    const limit = parseInt(req.query.limit || '50', 10);
+    const rawPage = parseInt(req.query.page || '1', 10);
+    const rawLimit = parseInt(req.query.limit || '50', 10);
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+    const limit = Number.isFinite(rawLimit) ? Math.min(200, Math.max(1, rawLimit)) : 50;
     const skip = (page - 1) * limit;
 
-    const logs = await AuditLog.find()
-      .populate('user', 'name email role')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    const [logs, total] = await Promise.all([
+      AuditLog.find()
+        .populate('user', 'name email role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      AuditLog.countDocuments()
+    ]);
 
-    const total = await AuditLog.countDocuments();
+    const totalPages = Math.max(1, Math.ceil(total / limit));
 
     return res.status(200).json({
       success: true,
@@ -25,7 +30,8 @@ router.get('/', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit)
+        pages: totalPages,
+        totalPages
       }
     });
   } catch (err) {

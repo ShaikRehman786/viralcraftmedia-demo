@@ -6,7 +6,7 @@ const SOCKET_URL = import.meta.env.VITE_API_URL;
 const getSocketUrl = () => SOCKET_URL;
 import {
   Bell, CheckCheck, Trash2, X, Search, Filter, ChevronDown,
-  Clock, ArrowUpDown, Loader2, Inbox
+  Clock, ArrowUpDown, Loader2, Inbox, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 function formatTimeAgo(date) {
@@ -61,13 +61,13 @@ function getIconComponent(iconName) {
   return icons[iconName] || Bell;
 }
 
-export default function NotificationCenterPage({ user, formatTimeAgo: externalFormatTimeAgo }) {
+export default function NotificationCenterPage({ user, formatTimeAgo: externalFormatTimeAgo, onNavigateNotification }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [paging, setPaging] = useState(false);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -80,8 +80,12 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
   const searchTimeout = useRef(null);
 
   const abortControllerRef = useRef(null);
+  const requestIdRef = useRef(0);
+  const listEmptyRef = useRef(true);
 
-  const fetchNotifications = useCallback(async (pageNum = 1, append = false) => {
+  const fetchNotifications = useCallback(async (pageNum = 1) => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -89,8 +93,10 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
     abortControllerRef.current = controller;
 
     try {
-      if (append) setLoadingMore(true);
-      else setLoading(true);
+      // Full loader only when nothing is on screen yet; otherwise keep the
+      // layout and show a lightweight pager spinner.
+      if (listEmptyRef.current) setLoading(true);
+      else setPaging(true);
 
       const params = { page: pageNum, limit: 20 };
       if (search) params.search = search;
@@ -99,26 +105,26 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
       if (readFilter) params.read = readFilter;
 
       const res = await axios.get('/api/notifications', { params, signal: controller.signal });
+      if (requestIdRef.current !== requestId) return; // superseded by a newer request
       const { data, unreadCount: unc, pagination } = res.data;
 
-      if (append) {
-        setNotifications(prev => [...prev, ...data]);
-      } else {
-        setNotifications(data);
-      }
+      setNotifications(data);
       setUnreadCount(unc);
       setTotal(pagination.total);
-      setHasMore(pagination.hasMore);
-      setPage(pageNum);
+      const serverTotalPages = Math.max(1, pagination.totalPages || 1);
+      setTotalPages(serverTotalPages);
+      setPage(Math.min(pagination.page || pageNum, serverTotalPages));
     } catch (err) {
       if (axios.isCancel(err)) {
         return;
       }
       // silent
     } finally {
-      if (!controller.signal.aborted) {
+      // Only the latest request may clear the loading state, so an aborted
+      // (superseded) request can never leave the spinner stuck on.
+      if (requestIdRef.current === requestId) {
         setLoading(false);
-        setLoadingMore(false);
+        setPaging(false);
       }
     }
   }, [search, typeFilter, priorityFilter, readFilter]);
@@ -139,32 +145,42 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
     return () => clearTimeout(searchTimeout.current);
   }, [search, typeFilter, priorityFilter, readFilter]);
 
-  const loadMore = async () => {
-    if (loadingMore || !hasMore) return;
-    await fetchNotifications(page + 1, true);
-  };
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!scrollRef.current || !hasMore || loadingMore) return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      if (scrollTop + clientHeight >= scrollHeight - 100) {
-        loadMore();
+  const goToPage = useCallback(async (next) => {
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    if (clamped === page || loading || paging) return;
+    await fetchNotifications(clamped);
+    // Return the list to the top so the new page starts in view.
+    if (scrollRef.current) {
+      if (typeof scrollRef.current.scrollTo === 'function') {
+        scrollRef.current.scrollTo({ top: 0 });
+      } else {
+        scrollRef.current.scrollTop = 0;
       }
-    };
-    const el = scrollRef.current;
-    if (el) el.addEventListener('scroll', handleScroll);
-    return () => { if (el) el.removeEventListener('scroll', handleScroll); };
-  }, [hasMore, loadingMore, page]);
+    }
+  }, [page, totalPages, loading, paging, fetchNotifications]);
+
+  // Tracks the current view for realtime updates without resubscribing.
+  const viewRef = useRef({ page: 1, hasFilter: false });
+  viewRef.current = {
+    page,
+    hasFilter: Boolean(search || typeFilter || priorityFilter || readFilter)
+  };
 
   useEffect(() => {
     if (!user?._id) return;
     const socket = io(getSocketUrl(), { withCredentials: true });
     socket.emit('register', user._id);
     socket.on('new_notification', (notification) => {
-      setNotifications(prev => [notification, ...prev]);
+      const { page: currentPage, hasFilter } = viewRef.current;
+      // Never yank the user off the page they are reading: only prepend when
+      // viewing the unfiltered first page; otherwise just update the counts.
+      if (currentPage === 1 && !hasFilter) {
+        setNotifications(prev => [notification, ...prev.slice(0, 19)]);
+        setTotal(prev => prev + 1);
+      } else {
+        setTotal(prev => prev + 1);
+      }
       setUnreadCount(prev => prev + 1);
-      setTotal(prev => prev + 1);
     });
     return () => socket.disconnect();
   }, [user?._id]);
@@ -175,6 +191,24 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
       setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (e) {}
+  };
+
+  // Click a notification: mark read in the background (navigation never waits
+  // for it and never fails because of it), then go to the exact destination.
+  const handleOpen = (n) => {
+    if (selectMode) {
+      toggleSelect(n._id);
+      return;
+    }
+    if (!n.isRead) handleMarkRead(n._id);
+    if (onNavigateNotification) onNavigateNotification(n);
+  };
+
+  const handleItemKeyDown = (e, n) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleOpen(n);
+    }
   };
 
   const handleMarkAllRead = async () => {
@@ -230,6 +264,7 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
   };
 
   const timeAgo = externalFormatTimeAgo || formatTimeAgo;
+  listEmptyRef.current = notifications.length === 0;
 
   return (
     <div className="notif-center">
@@ -366,11 +401,12 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
               return (
                 <div
                   key={n._id}
+                  role={selectMode ? undefined : 'button'}
+                  tabIndex={selectMode ? -1 : 0}
+                  aria-label={selectMode ? undefined : `${n.title}. ${n.isRead ? 'Read' : 'Unread'}. Open related record.`}
                   className={`notif-center-item${!n.isRead ? ' notif-center-item-unread' : ''}${selectMode ? ' notif-center-item-selectable' : ''}`}
-                  onClick={() => {
-                    if (selectMode) { toggleSelect(n._id); return; }
-                    if (!n.isRead) handleMarkRead(n._id);
-                  }}
+                  onClick={() => handleOpen(n)}
+                  onKeyDown={(e) => handleItemKeyDown(e, n)}
                 >
                   {selectMode && (
                     <div className="notif-center-item-check">
@@ -429,14 +465,39 @@ export default function NotificationCenterPage({ user, formatTimeAgo: externalFo
               );
             })}
 
-            {loadingMore && (
-              <div className="notif-center-loading-more">
-                <Loader2 size={20} className="spinner" />
-                <span>Loading more...</span>
+            {totalPages > 1 && (
+              <div className="notif-pager">
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm notif-pager-btn"
+                  onClick={() => goToPage(page - 1)}
+                  disabled={page <= 1 || loading || paging}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={16} />
+                  <span>Previous</span>
+                </button>
+                <span className="notif-pager-info" aria-live="polite">
+                  {paging ? (
+                    <span className="notif-pager-loading"><Loader2 size={14} className="spinner" /> Loading…</span>
+                  ) : (
+                    <>Page {page} of {totalPages}</>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm notif-pager-btn"
+                  onClick={() => goToPage(page + 1)}
+                  disabled={page >= totalPages || loading || paging}
+                  aria-label="Next page"
+                >
+                  <span>Next</span>
+                  <ChevronRight size={16} />
+                </button>
               </div>
             )}
 
-            {!hasMore && notifications.length > 0 && (
+            {totalPages <= 1 && !paging && notifications.length > 0 && (
               <div className="notif-center-end">
                 <span>You've reached the end</span>
               </div>

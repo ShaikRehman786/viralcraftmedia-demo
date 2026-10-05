@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import {
   Search,
   ShieldAlert,
   Download,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 
 const parseUA = (ua) => {
@@ -36,16 +38,58 @@ const formatDuration = (ms) => {
   return `${minutes}m`;
 };
 
-export default function LogsPage({ user, logs, staff }) {
+const LOGS_PAGE_SIZE = 100;
+
+export default function LogsPage({ user, staff }) {
   const [timeframe, setTimeframe] = useState('all'); // all, today, yesterday, 7days, 30days
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Server-side pagination (GET /api/logs?page&limit)
+  const [logs, setLogs] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
+
+  const fetchLogs = useCallback(async (pageNum) => {
+    setLoading(true);
+    setFetchError('');
+    try {
+      const res = await axios.get('/api/logs', { params: { page: pageNum, limit: LOGS_PAGE_SIZE } });
+      const p = res.data?.pagination || {};
+      const tp = Math.max(1, p.totalPages || p.pages || 1);
+      setLogs(res.data?.data || []);
+      setTotalLogs(p.total || 0);
+      setTotalPages(tp);
+      // Clamp to the last available page if data shrank since the request.
+      setPage(Math.min(Math.max(1, pageNum), tp));
+    } catch (err) {
+      setFetchError(err.response?.data?.error || 'Could not load security logs.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLogs(1);
+  }, [fetchLogs]);
+
+  const goToPage = useCallback((next) => {
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    if (clamped === page || loading) return;
+    setPage(clamped);
+    fetchLogs(clamped);
+  }, [page, totalPages, loading, fetchLogs]);
+
+  const resetToFirstPage = useCallback(() => {
+    if (page === 1 && logs.length > 0) return; // filters apply client-side; no refetch needed
+    setPage(1);
+    fetchLogs(1);
+  }, [page, logs.length, fetchLogs]);
 
   // Gather unique departments from staff roster for select dropdown
   const departments = useMemo(() => {
@@ -197,16 +241,12 @@ export default function LogsPage({ user, logs, staff }) {
     });
   }, [loginHistory, timeframe, selectedRole, selectedDept, selectedEmployee, searchQuery]);
 
-  // Paginated sessions
-  const paginatedSessions = useMemo(() => {
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    return filteredSessions.slice(startIndex, startIndex + rowsPerPage);
-  }, [filteredSessions, currentPage, rowsPerPage]);
-
-  const totalPages = Math.ceil(filteredSessions.length / rowsPerPage);
+  // Sessions on the current server page (filters apply to the loaded page;
+  // page navigation preserves filters, filter changes reset to page 1)
+  const paginatedSessions = filteredSessions;
 
   const getInitials = (name) =>
-    name.split(' ').map(n => n[0]).join('').toUpperCase();
+    (name || 'Guest').split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'G';
 
   // Export CSV Handler
   const handleExportCSV = () => {
@@ -258,7 +298,7 @@ export default function LogsPage({ user, logs, staff }) {
                 type="text"
                 placeholder="Search name, email, IP..."
                 value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                onChange={e => { setSearchQuery(e.target.value); resetToFirstPage(); }}
                 className="input"
               />
             </div>
@@ -267,7 +307,7 @@ export default function LogsPage({ user, logs, staff }) {
           {/* Timeframe selector */}
           <div className="form-group">
             <label className="form-label">Timeframe</label>
-            <select value={timeframe} onChange={e => { setTimeframe(e.target.value); setCurrentPage(1); }} className="select">
+            <select value={timeframe} onChange={e => { setTimeframe(e.target.value); resetToFirstPage(); }} className="select">
               <option value="all">All Dates</option>
               <option value="today">Today</option>
               <option value="yesterday">Yesterday</option>
@@ -279,7 +319,7 @@ export default function LogsPage({ user, logs, staff }) {
           {/* Roster list filter */}
           <div className="form-group">
             <label className="form-label">Employee</label>
-            <select value={selectedEmployee} onChange={e => { setSelectedEmployee(e.target.value); setCurrentPage(1); }} className="select">
+            <select value={selectedEmployee} onChange={e => { setSelectedEmployee(e.target.value); resetToFirstPage(); }} className="select">
               <option value="">All Employees</option>
               {staff?.map(s => (
                 <option key={s._id} value={s._id}>{s.name}</option>
@@ -290,7 +330,7 @@ export default function LogsPage({ user, logs, staff }) {
           {/* Role Filter */}
           <div className="form-group">
             <label className="form-label">Role</label>
-            <select value={selectedRole} onChange={e => { setSelectedRole(e.target.value); setCurrentPage(1); }} className="select">
+            <select value={selectedRole} onChange={e => { setSelectedRole(e.target.value); resetToFirstPage(); }} className="select">
               <option value="">All Roles</option>
               <option value="SUPER_ADMIN">Super Admin</option>
               <option value="MANAGER">Manager</option>
@@ -302,7 +342,7 @@ export default function LogsPage({ user, logs, staff }) {
           {/* Department Filter */}
           <div className="form-group">
             <label className="form-label">Department</label>
-            <select value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setCurrentPage(1); }} className="select">
+            <select value={selectedDept} onChange={e => { setSelectedDept(e.target.value); resetToFirstPage(); }} className="select">
               <option value="">All Departments</option>
               {departments.map(d => (
                 <option key={d} value={d}>{d}</option>
@@ -312,7 +352,17 @@ export default function LogsPage({ user, logs, staff }) {
         </div>
       </div>
 
-      {filteredSessions.length === 0 ? (
+      {loading && logs.length === 0 ? (
+        <div className="enq-empty">
+          <Loader2 size={20} className="spinner" />
+          <div><strong>Loading security logs</strong><span>Fetching page {page}…</span></div>
+        </div>
+      ) : fetchError && logs.length === 0 ? (
+        <div className="enq-empty">
+          <ShieldAlert size={20} />
+          <div><strong>Could not load logs</strong><span>{fetchError} <button type="button" className="btn btn-ghost btn-sm" onClick={() => fetchLogs(page)}>Retry</button></span></div>
+        </div>
+      ) : filteredSessions.length === 0 ? (
         <div className="enq-empty">
           <ShieldAlert size={20} />
           <div><strong>No login history</strong><span>Adjust search or filters to locate specific audits.</span></div>
@@ -417,22 +467,22 @@ export default function LogsPage({ user, logs, staff }) {
             </div>
           ))}
         </div>
-        <style>{` .logs-table-wrap{border:1px solid var(--gray-200);border-radius:12px;background:var(--white);overflow:auto;} .logs-cards{display:none;flex-direction:column;gap:10px;} .logs-card{border:1px solid var(--gray-200);border-radius:12px;background:var(--white);padding:12px;display:flex;flex-direction:column;gap:4px;} .logs-card-head{display:flex;justify-content:space-between;align-items:center;} .logs-card-action{font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gray-500);} .logs-card-name{font-weight:600;color:var(--gray-900);font-size:0.875rem;} .logs-card-meta{font-size:0.75rem;color:var(--gray-600);} .logs-card-time{font-size:0.75rem;color:var(--gray-700);} .logs-card-foot{font-size:0.6875rem;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:6px;margin-top:4px;} @media(max-width:768px){.logs-table-wrap{display:none;} .logs-cards{display:flex;} .logs-filters-grid{grid-template-columns:1fr !important;}} `}</style>
-          {totalPages > 1 && (
-            <div className="card-footer flex items-center justify-between border-top px-4 py-3" style={{ marginTop: '12px', border: '1px solid var(--gray-200)', borderRadius: '12px', background: 'var(--white)' }}>
-              <div className="text-xs text-muted">
-                Showing <span className="font-semibold">{(currentPage - 1) * rowsPerPage + 1}</span> to{' '}
-                <span className="font-semibold">{Math.min(currentPage * rowsPerPage, filteredSessions.length)}</span>{' '}
-                of <span className="font-semibold">{filteredSessions.length}</span> logins
-              </div>
-              <div className="flex gap-2 items-center">
-                <button className="btn btn-outline btn-sm p-1 btn-icon" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}><ChevronLeft size={16} /></button>
-                <span className="text-xs font-semibold px-2">Page {currentPage} of {totalPages}</span>
-                <button className="btn btn-outline btn-sm p-1 btn-icon" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}><ChevronRight size={16} /></button>
-              </div>
-            </div>
-          )}
+        <style>{` .logs-table-wrap{border:1px solid var(--gray-200);border-radius:12px;background:var(--white);overflow:auto;} .logs-cards{display:none;flex-direction:column;gap:10px;} .logs-card{border:1px solid var(--gray-200);border-radius:12px;background:var(--white);padding:12px;display:flex;flex-direction:column;gap:4px;} .logs-card-head{display:flex;justify-content:space-between;align-items:center;} .logs-card-action{font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gray-500);} .logs-card-name{font-weight:600;color:var(--gray-900);font-size:0.875rem;} .logs-card-meta{font-size:0.75rem;color:var(--gray-600);} .logs-card-time{font-size:0.75rem;color:var(--gray-700);} .logs-card-foot{font-size:0.6875rem;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:6px;margin-top:4px;} @media(max-width:768px){.logs-table-wrap{display:none;} .logs-cards{display:flex;} .logs-filters-grid{grid-template-columns:1fr !important;}} .logs-pager .btn{padding:6px 12px;font-size:0.75rem;border-radius:var(--r-sm);overflow:visible;min-height:34px;border:1px solid var(--gray-300);background:transparent;color:var(--gray-700);} .logs-pager .btn svg{width:14px;height:14px;flex-shrink:0;} .logs-pager .btn:hover:not(:disabled){background:var(--gray-50);border-color:var(--gray-400);} .logs-pager .btn:active:not(:disabled){background:var(--gray-100);} .logs-pager .btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px;} .logs-pager .btn:disabled{opacity:0.55;} `}</style>
         </>
+      )}
+      {totalLogs > 0 && (
+        <div className="card-footer logs-pager flex items-center justify-between border-top px-4 py-3" style={{ marginTop: '12px', border: '1px solid var(--gray-200)', borderRadius: '12px', background: 'var(--white)' }}>
+          <div className="text-xs text-muted">
+            Showing <span className="font-semibold">{paginatedSessions.length}</span>{' '}
+            of <span className="font-semibold">{totalLogs}</span> logs
+            {loading && <span> · Loading…</span>}
+          </div>
+          <div className="flex gap-2 items-center">
+            <button type="button" aria-label="Previous page" className="btn btn-outline btn-sm" onClick={() => goToPage(page - 1)} disabled={page <= 1 || loading}><ChevronLeft size={16} /><span>Previous</span></button>
+            <span className="text-xs font-semibold px-2">Page {page} of {totalPages}</span>
+            <button type="button" aria-label="Next page" className="btn btn-outline btn-sm" onClick={() => goToPage(page + 1)} disabled={page >= totalPages || loading}><span>Next</span><ChevronRight size={16} /></button>
+          </div>
+        </div>
       )}
     </div>
   );

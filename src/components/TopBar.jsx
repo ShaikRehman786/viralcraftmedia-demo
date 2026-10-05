@@ -56,7 +56,7 @@ function canAccess(pageId, role) {
   return allowed.includes(role);
 }
 
-export default function TopBar({ user, unreadCount, notifications, sidebarOpen, setSidebarOpen, activeTab, onNavigate, onMarkRead, onMarkAllRead }) {
+export default function TopBar({ user, unreadCount, notifications, sidebarOpen, setSidebarOpen, activeTab, onNavigate, onMarkRead, onMarkAllRead, onOpenNotification }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
 
@@ -226,6 +226,7 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
             onMarkRead={onMarkRead}
             onMarkAllRead={onMarkAllRead}
             onNavigateToCenter={() => onNavigate?.('notification-center')}
+            onOpenNotification={onOpenNotification}
           />
 
           <div className="header-account" ref={accountRef}>

@@ -9,6 +9,14 @@ const securityIncidentSchema = new mongoose.Schema({
   lastFailedAt: { type: Date, default: Date.now },
   lockedAt: { type: Date, default: null },
   ipBlockedAt: { type: Date, default: null },
+  // Explicit end of the temporary IP restriction. A block is active only while
+  // now < ipBlockedUntil. Records predating this field (legacy permanent-style
+  // blocks) are interpreted as expiring 30 minutes after ipBlockedAt and are
+  // backfilled lazily — never bulk-modified, never deleted.
+  ipBlockedUntil: { type: Date, default: null },
+  // Bounded escalation counter: how many temporary blocks this key has served.
+  // Used for repeated-attack alerts; never auto-resets so history is preserved.
+  blockCount: { type: Number, default: 0 },
   status: { type: String, enum: ['ACTIVE', 'RESOLVED'], default: 'ACTIVE' },
   resolvedAt: { type: Date, default: null },
   resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
@@ -17,6 +25,7 @@ const securityIncidentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 securityIncidentSchema.index({ normalizedIp: 1, status: 1 });
+securityIncidentSchema.index({ normalizedIp: 1, status: 1, ipBlockedUntil: 1 });
 securityIncidentSchema.index({ affectedUserId: 1, status: 1 });
 securityIncidentSchema.index({ status: 1, createdAt: -1 });
 securityIncidentSchema.index({ attemptedEmail: 1, status: 1 });

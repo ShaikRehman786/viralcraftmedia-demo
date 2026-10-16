@@ -52,7 +52,10 @@ export const protect = async (req, res, next) => {
       user = await User.findById(decoded.id);
     }
 
-    if (!user || user.status === 'inactive') {
+    // Login blocks INACTIVE/DISABLED (any case); mirror that here so a stale
+    // cookie for a disabled account cannot pass protect / /me.
+    const accountStatus = String(user.status || '').toLowerCase();
+    if (!user || accountStatus === 'inactive' || accountStatus === 'disabled') {
       return res.status(401).json({ error: 'User is inactive or no longer exists.' });
     }
 

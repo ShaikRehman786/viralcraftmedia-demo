@@ -39,6 +39,9 @@ router.get('/', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res, n
           } else if (event.recurrence === 'monthly') {
             currStart.setMonth(currStart.getMonth() + 1);
             currEnd.setMonth(currEnd.getMonth() + 1);
+          } else if (event.recurrence === 'yearly') {
+            currStart.setFullYear(currStart.getFullYear() + 1);
+            currEnd.setFullYear(currEnd.getFullYear() + 1);
           }
 
           if (currStart > limitDate) break;
@@ -77,11 +80,25 @@ router.post('/', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res, 
       recurrenceEnd
     } = req.body;
 
+    // Return a useful 400 instead of a 500 CastError/ValidationError so the
+    // UI can tell the user what to fix (required by calendar acceptance criteria).
+    if (!title || !start || !end) {
+      return res.status(400).json({ error: 'Title, Start, and End times are required.' });
+    }
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ error: 'Start and End must be valid dates.' });
+    }
+    if (endDate < startDate) {
+      return res.status(400).json({ error: 'End time must be after Start time.' });
+    }
+
     const event = new CalendarEvent({
       title,
       description,
-      start: new Date(start),
-      end: new Date(end),
+      start: startDate,
+      end: endDate,
       allDay: allDay || false,
       assignedTo: assignedTo || null,
       project: projectId || null,

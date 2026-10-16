@@ -67,7 +67,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
               </button>
             )}
 
-            {user.role === 'SUPER_ADMIN' && (
+            {(user.role === 'SUPER_ADMIN' || user.role === 'MANAGER') && (
               <button type="button"
                 className={`sidebar-link${activeTab === 'calendar' ? ' active' : ''}`}
                 onClick={() => handleNav('calendar')}

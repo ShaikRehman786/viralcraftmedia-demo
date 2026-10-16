@@ -38,12 +38,12 @@ const calendarEventSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['deadline', 'meeting', 'reminder', 'leave', 'custom'],
+    enum: ['deadline', 'meeting', 'reminder', 'leave', 'custom', 'review', 'shoot', 'edit', 'upload'],
     default: 'custom'
   },
   recurrence: {
     type: String,
-    enum: ['none', 'daily', 'weekly', 'monthly'],
+    enum: ['none', 'daily', 'weekly', 'monthly', 'yearly'],
     default: 'none'
   },
   recurrenceEnd: {

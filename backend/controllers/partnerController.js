@@ -51,8 +51,16 @@ export const loginPartner = async (req, res, next) => {
     return res.status(400).json({ error: 'Please provide an email and password' });
   }
 
+  // Normalize exactly like account creation/storage (schema: trim + lowercase).
+  // Without this, a stored 'agency@x.com' never matches a typed 'Agency@x.com '
+  // and every such login falsely fails with Invalid Credentials.
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!normalizedEmail || typeof password !== 'string' || !password) {
+    return res.status(400).json({ error: 'Please provide an email and password' });
+  }
+
   try {
-    const partner = await Partner.findOne({ email }).select('+password');
+    const partner = await Partner.findOne({ email: normalizedEmail }).select('+password');
 
     if (!partner || partner.status === 'INACTIVE') {
       return res.status(401).json({ error: 'Invalid credentials or inactive account' });
@@ -64,7 +72,7 @@ export const loginPartner = async (req, res, next) => {
       // Log login failure
       await logEvent({
         action: 'LOGIN_FAILURE',
-        userName: email,
+        userName: normalizedEmail,
         details: { message: 'Partner login attempt with incorrect password' },
         ipAddress: req.ip,
         userAgent: req.headers['user-agent']

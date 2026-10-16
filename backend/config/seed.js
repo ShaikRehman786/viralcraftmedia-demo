@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import { logEvent } from '../services/loggingService.js';
 import { config } from './env.js';
@@ -19,7 +20,7 @@ export const seedSuperAdmin = async () => {
     const email = rawEmail.toLowerCase();
 
     // Check if a SUPER_ADMIN already exists in the system
-    const existingAdmin = await User.findOne({ role: 'SUPER_ADMIN' });
+    const existingAdmin = await User.findOne({ role: 'SUPER_ADMIN' }).select('+password');
 
     if (existingAdmin) {
       // Check whether another user already owns the configured email
@@ -30,6 +31,20 @@ export const seedSuperAdmin = async () => {
       }
 
       console.log('Production Super Admin found');
+      // Skip the rewrite when the stored credentials already match .env.
+      // Blindly re-saving on every boot re-hashes the password each restart and
+      // masks whether the sync actually changed anything, which previously made
+      // "Credentials synchronized from .env" misleading during login diagnosis.
+      // (Comparison only — plaintext password is never logged.)
+      const sameIdentity = existingAdmin.name === name && existingAdmin.email === email;
+      let samePassword = false;
+      try {
+        samePassword = await bcrypt.compare(password, existingAdmin.password);
+      } catch {}
+      if (sameIdentity && samePassword) {
+        console.log('✓ Credentials already in sync with .env (no change)');
+        return;
+      }
       // Update credentials
       existingAdmin.name = name;
       existingAdmin.email = email;

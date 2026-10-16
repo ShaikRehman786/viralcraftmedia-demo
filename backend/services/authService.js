@@ -67,7 +67,11 @@ export const getSignedTokenResponse = async (user, statusCode, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      // Required by the login page's forced-password-change branch;
+      // without it users on temporary passwords are redirected and then
+      // blocked by the protect guard, appearing as a login failure.
+      mustChangePassword: user.mustChangePassword
     }
   });
 };

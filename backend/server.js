@@ -138,6 +138,19 @@ const startServer = async () => {
     app.set('socketio_io', io);
     app.set('socketio_clients', activeClients);
 
+    server.on('error', (err) => {
+      // Without this, EADDRINUSE (stale process already on PORT) throws on the
+      // EventEmitter, is swallowed by the uncaughtException handler, and
+      // leaves the process alive but NOT listening — every frontend request
+      // then fails with ERR_CONNECTION_REFUSED while the terminal looks fine.
+      if (err && err.code === 'EADDRINUSE') {
+        console.error(`[FATAL] Port ${PORT} is already in use. Stop the stale backend process holding it, then restart.`);
+      } else {
+        console.error('[FATAL] HTTP server error:', err && err.message ? err.message : err);
+      }
+      process.exit(1);
+    });
+
     server.listen(PORT, () => {
       console.log(`=================================================`);
       console.log(`🚀 VIRALCRAFTMEDIA BACKEND LISTENING ON PORT ${PORT}`);

@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CRMGlobalLoader from './components/shared/CRMGlobalLoader.jsx';
 import { LoadingProvider } from './context/LoadingContext.jsx';
 import { ToastProvider } from './components/Toast.jsx';
+import { PARTNER_LOGIN_PATH, isPartnerPath, isPartnerApiUrl } from './utils/partnerAuth.js';
 
 const LandingPage = lazy(() => import('./components/LandingPage.jsx'));
 const LoginPage = lazy(() => import('./components/LoginPage.jsx'));
@@ -38,7 +39,7 @@ export function AuthProvider({ children }) {
       p === '/login' || 
       p.startsWith('/register') || 
       p.startsWith('/r/') || 
-      p.startsWith('/partner/login') || 
+      p.startsWith(PARTNER_LOGIN_PATH) || 
       p.startsWith('/reset-password') || 
       p.startsWith('/invite') || 
       p.startsWith('/employee/invite') ||
@@ -122,7 +123,7 @@ export function PartnerAuthProvider({ children }) {
       setLoading(false);
       return;
     }
-    axios.get('/api/partners/me')
+    axios.get('/api/partners/me', { silent: true })
       .then(res => {
         setPartner(res.data.partner);
         setLoading(false);
@@ -154,7 +155,7 @@ function PartnerProtectedRoute({ children }) {
   }
 
   if (!partner) {
-    return <Navigate to="/partner/login" replace />;
+    return <Navigate to={PARTNER_LOGIN_PATH} replace />;
   }
 
   return children;
@@ -178,10 +179,21 @@ function setupSessionInterceptor() {
       const isAuthEndpoint = (err.config?.url || '').includes('/api/auth/');
       // Ignore auth endpoint 401s (login failures) and silent background checks
       if (isSessionExpiry && !isAuthEndpoint && err.config?.silent !== true && !sessionExpiredHandled) {
-        sessionExpiredHandled = true;
-        try { sessionStorage.setItem('sessionExpired', '1'); } catch {}
-        // Clear any cached protected state is handled by AuthProvider on next load
-        setTimeout(() => { window.location.href = '/login'; }, 80);
+        // Partner-portal contexts must return to the dedicated partner login,
+        // never the generic CRM /login (a partner session 401 previously
+        // bounced partners into the wrong flow, including every fresh visit
+        // to /partner/login via the background session check).
+        const url = err.config?.url || '';
+        const target = (isPartnerApiUrl(url) || isPartnerPath(window.location.pathname))
+          ? PARTNER_LOGIN_PATH
+          : '/login';
+        // Never redirect a page that is already correct (prevents reload loops).
+        if (window.location.pathname !== target) {
+          sessionExpiredHandled = true;
+          try { sessionStorage.setItem('sessionExpired', '1'); } catch {}
+          // Clear any cached protected state is handled by AuthProvider on next load
+          setTimeout(() => { window.location.href = target; }, 80);
+        }
       }
       return Promise.reject(err);
     }
@@ -200,7 +212,7 @@ export default function App() {
       <Suspense fallback={<PublicFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/partner/login" element={<PartnerLoginPage />} />
+          <Route path={PARTNER_LOGIN_PATH} element={<PartnerLoginPage />} />
           <Route path="/r/:referralCode" element={<ReferralRedirect />} />
           <Route 
             path="/partner/*" 

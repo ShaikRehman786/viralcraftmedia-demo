@@ -28,7 +28,7 @@ const COMMANDS = [
 const ROLE_ACCESS = {
   overview: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
   projects: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
-  calendar: ['SUPER_ADMIN'],
+  calendar: ['SUPER_ADMIN', 'MANAGER'],
   staff: ['SUPER_ADMIN', 'MANAGER'],
   logs: ['SUPER_ADMIN'],
   enquiries: ['SUPER_ADMIN', 'MANAGER'],

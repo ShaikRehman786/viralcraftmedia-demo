@@ -32,7 +32,7 @@ const getSocketUrl = () => SOCKET_URL;
 const ROLE_ACCESS = {
   overview: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE'],
   projects: ['SUPER_ADMIN', 'MANAGER', 'EMPLOYEE', 'CLIENT'],
-  calendar: ['SUPER_ADMIN'],
+  calendar: ['SUPER_ADMIN', 'MANAGER'],
   staff: ['SUPER_ADMIN', 'MANAGER'],
   logs: ['SUPER_ADMIN'],
   backup: ['SUPER_ADMIN', 'BACKUP_ADMIN'],
@@ -677,7 +677,7 @@ export default function DashboardPage() {
       setCalRecurrence('none');
       setCalRecurrenceEnd('');
     } catch (err) {
-      addToast('Failed to save calendar event.', 'error');
+      addToast(err.response?.data?.error || 'Failed to save calendar event.', 'error');
     }
   };
 

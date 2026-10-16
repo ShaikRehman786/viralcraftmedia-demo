@@ -708,11 +708,33 @@ export const createBookingCommission = async (req, res, next) => {
       return res.status(200).json({ success: true, message: 'Commission reset successfully' });
     }
 
-    const val = booking.bookingValue;
-    const pct = booking.commissionPercentage;
+    // Use the admin-configured values from the request when provided;
+    // otherwise fall back to the values already stored on the booking.
+    let val = booking.bookingValue;
+    let pct = booking.commissionPercentage;
+    if (bookingValue !== undefined && bookingValue !== null && bookingValue !== '') {
+      val = Number(bookingValue);
+    }
+    if (commissionPercentage !== undefined && commissionPercentage !== null && commissionPercentage !== '') {
+      pct = Number(commissionPercentage);
+    }
+
+    // Validate explicitly instead of silently persisting a zero commission.
+    if (!Number.isFinite(val) || val < 0) {
+      return res.status(400).json({ error: 'A valid non-negative project value (bookingValue) is required' });
+    }
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      return res.status(400).json({ error: 'A valid commission percentage between 0 and 100 is required' });
+    }
+    if (val === 0) {
+      return res.status(400).json({ error: 'Project value must be greater than zero to generate a commission' });
+    }
     const commissionAmount = val * (pct / 100);
 
     // 2. Otherwise update booking commission details
+    booking.bookingValue = val;
+    booking.commissionPercentage = pct;
+    booking.commissionAmount = commissionAmount;
     booking.status = 'Completed';
     await booking.save();
 
@@ -729,14 +751,16 @@ export const createBookingCommission = async (req, res, next) => {
 
     // 3. Find or create PartnerCommission record
     let commission = await PartnerCommission.findOne({ booking: booking._id });
+    const partnerId = booking.partner?._id || booking.partner;
     if (!commission) {
       commission = new PartnerCommission({
         booking: booking._id,
-        partner: booking.partner._id,
+        partner: partnerId,
         commissionPercentage: pct,
         commissionAmount: commissionAmount
       });
     } else {
+      commission.partner = partnerId;
       commission.commissionPercentage = pct;
       commission.commissionAmount = commissionAmount;
     }
@@ -763,7 +787,7 @@ export const createBookingCommission = async (req, res, next) => {
       let payment = await PartnerPayment.findOne({ commission: commission._id });
       if (!payment) {
         payment = new PartnerPayment({
-          partner: booking.partner._id,
+          partner: partnerId,
           commission: commission._id
         });
       }
@@ -848,7 +872,7 @@ export const getAdminCommissions = async (req, res, next) => {
       .populate('partner', 'agencyName ownerName email')
       .populate({
         path: 'booking',
-        populate: { path: 'campaign', select: 'campaignName' }
+        populate: { path: 'campaign', select: 'campaignName minCommissionPercentage maxCommissionPercentage' }
       })
       .sort({ createdAt: -1 });
 
@@ -935,16 +959,21 @@ export const payCommission = async (req, res, next) => {
     commission.internalNotes = internalNotes || '';
     await commission.save();
 
-    // Create PartnerPayment transaction audit record
-    const payment = await PartnerPayment.create({
-      partner: commission.partner._id,
-      commission: commission._id,
-      amount: commission.commissionAmount,
-      paymentDate: new Date(paymentDate),
-      referenceNumber: transactionReference,
-      status: 'Paid',
-      internalNotes: internalNotes || ''
-    });
+    // Create or update PartnerPayment transaction audit record
+    const partnerId = commission.partner?._id || commission.partner;
+    let payment = await PartnerPayment.findOne({ commission: commission._id });
+    if (!payment) {
+      payment = new PartnerPayment({
+        partner: partnerId,
+        commission: commission._id
+      });
+    }
+    payment.amount = commission.commissionAmount;
+    payment.paymentDate = commission.paymentDate;
+    payment.referenceNumber = transactionReference;
+    payment.status = 'Paid';
+    payment.internalNotes = internalNotes || '';
+    await payment.save();
 
     // Notify Partner
     await createPartnerNotification(

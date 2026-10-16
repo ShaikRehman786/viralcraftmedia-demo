@@ -19,8 +19,94 @@ function normalizeIp(raw) {
   return ip.toLowerCase();
 }
 
+// ---- Temporary IP-block policy (single source of truth for these values) ----
+// IP restrictions are strictly time-boxed and self-expiring. Account lockout
+// (User.lockUntil) is a SEPARATE persistent mechanism requiring admin review
+// and is never cleared by IP-block expiry.
+export const IP_BLOCK_THRESHOLD = 5; // failed attempts before a temporary IP block
+export const IP_BLOCK_DURATION_MS = 30 * 60 * 1000; // exactly 30 minutes
+export const FAILED_ATTEMPT_WINDOW_MS = 60 * 60 * 1000; // attempts counted in a trailing 60-min window
+export const MAX_ACTIVE_INCIDENTS_PER_IP = 20; // bound on distinct-key records per IP (enumeration guard)
+
+// Effective end of an IP restriction. New records carry ipBlockedUntil.
+// Legacy records (ipBlockedUntil == null) are interpreted as expiring exactly
+// 30 minutes after their own block start — a well-defined reference time taken
+// from the record itself, never invented.
+export function getIpBlockEffectiveUntil(incident) {
+  if (!incident || !incident.ipBlockedAt) return null;
+  if (incident.ipBlockedUntil) return new Date(incident.ipBlockedUntil);
+  const base = incident.ipBlockedAt || incident.lastFailedAt || incident.createdAt;
+  if (!base) return null;
+  return new Date(new Date(base).getTime() + IP_BLOCK_DURATION_MS);
+}
+
+export function isIpBlockActive(incident, now = Date.now()) {
+  const until = getIpBlockEffectiveUntil(incident);
+  return !!until && until.getTime() > now;
+}
+
+// Returns the currently-enforcing block record for an IP, or null.
+// Expired restrictions never block. Legacy records encountered after expiry get
+// a one-time atomic backfill of ipBlockedUntil (conditional update, so
+// concurrent requests cannot corrupt state); nothing is deleted or resolved.
+export async function findActiveIpBlock(normIp) {
+  const now = new Date();
+  const candidates = await SecurityIncident.find({
+    normalizedIp: normIp,
+    status: 'ACTIVE',
+    ipBlockedAt: { $ne: null },
+    $or: [{ ipBlockedUntil: null }, { ipBlockedUntil: { $gt: now } }]
+  }).lean();
+  for (const c of candidates) {
+    if (isIpBlockActive(c, now.getTime())) return c;
+    if (!c.ipBlockedUntil) {
+      const until = getIpBlockEffectiveUntil(c);
+      if (until) {
+        await SecurityIncident.updateOne(
+          { _id: c._id, ipBlockedUntil: null },
+          { $set: { ipBlockedUntil: until } }
+        ).catch(() => {});
+      }
+    }
+  }
+  return null;
+}
+
+// Starts (or re-starts after expiry) a 30-minute IP restriction on a record.
+// Never extends an already-active block; repeated blocks increment blockCount
+// for escalation. Returns { blockedUntil, reBlocked }.
+export function applyTemporaryIpBlock(record, now = Date.now()) {
+  if (isIpBlockActive(record, now)) {
+    return { blockedUntil: getIpBlockEffectiveUntil(record), reBlocked: false };
+  }
+  const blockedUntil = new Date(now + IP_BLOCK_DURATION_MS);
+  record.ipBlockedAt = new Date(now);
+  record.ipBlockedUntil = blockedUntil;
+  record.blockCount = (record.blockCount || 0) + 1;
+  return { blockedUntil, reBlocked: record.blockCount > 1 };
+}
+
+// Windowed counting: attempts outside the trailing window start a fresh
+// episode instead of accumulating forever against history.
+export function countWindowedAttempt(record, now = Date.now()) {
+  const last = record.lastFailedAt ? new Date(record.lastFailedAt).getTime() : 0;
+  if (!last || now - last > FAILED_ATTEMPT_WINDOW_MS) {
+    record.failedAttempts = 1;
+    record.firstFailedAt = new Date(now);
+  } else {
+    record.failedAttempts = (record.failedAttempts || 0) + 1;
+  }
+  record.lastFailedAt = new Date(now);
+  return record.failedAttempts;
+}
+
 /**
- * Login user with lockout logic (5 failed attempts = 30 min lock)
+ * Login with layered restrictions (kept separate by design):
+ * - Temporary IP block: 5 failures in a 60-min window => source IP restricted
+ *   for exactly 30 minutes, then expires automatically (history preserved).
+ * - Account lockout: 5 wrong passwords for a known account => persistent lock
+ *   requiring admin review via the authorized unlock workflow. IP-block expiry
+ *   never clears an account lock.
  * Route: POST /api/auth/login
  */
 export const login = async (req, res, next) => {
@@ -29,10 +115,17 @@ export const login = async (req, res, next) => {
     const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
+    // Normalize email consistently with account creation (trim + lowercase).
+    // Guards against pasted whitespace and prevents a TypeError crash on missing fields.
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!normalizedEmail || typeof password !== 'string' || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
+
     // Intercept backup admin account for database isolation and Backup Database validation
     const backupAdminEmail = config.backupAdminEmail.toLowerCase();
     
-    if (email && email.toLowerCase() === backupAdminEmail) {
+    if (normalizedEmail === backupAdminEmail) {
 
       const { backupConnection, getBackupModel } = await import('../services/backupService.js');
       if (!backupConnection || backupConnection.readyState !== 1) {
@@ -117,50 +210,85 @@ export const login = async (req, res, next) => {
       });
     }
 
-    // IP block enforcement — before authentication (persistent MongoDB state)
+    // IP block enforcement — before authentication. Only restrictions whose
+    // 30-minute window has not yet expired are enforced; expired records are
+    // finalized lazily (backfill) and preserved for audit, never deleted.
     const normIp = normalizeIp(clientIp);
     try {
-      const ipBlocked = await SecurityIncident.findOne({ normalizedIp: normIp, status: 'ACTIVE', ipBlockedAt: { $ne: null } });
+      const ipBlocked = await findActiveIpBlock(normIp);
       if (ipBlocked) {
-        await logEvent({ action: 'LOGIN_FAILURE', userName: email, details: { message: 'Blocked IP attempt', normalizedIp: normIp, incidentId: ipBlocked._id }, ipAddress: clientIp, userAgent });
-        return res.status(403).json({ error: 'Access is temporarily restricted. Please contact the administrator.' });
+        const retryAfterSec = Math.max(1, Math.ceil((getIpBlockEffectiveUntil(ipBlocked).getTime() - Date.now()) / 1000));
+        await logEvent({ action: 'LOGIN_FAILURE', userName: normalizedEmail, details: { message: 'Blocked IP attempt (temporary restriction active)', category: 'temporary-ip-block', normalizedIp: normIp, incidentId: ipBlocked._id, blockedUntil: getIpBlockEffectiveUntil(ipBlocked), expired: false }, ipAddress: clientIp, userAgent });
+        res.set('Retry-After', String(retryAfterSec));
+        return res.status(403).json({ error: `Access is temporarily restricted due to repeated failed attempts. Please try again in ${Math.ceil(retryAfterSec / 60)} minute(s).` });
       }
     } catch {}
 
     // Look up user
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
       await logEvent({
         action: 'LOGIN_FAILURE',
-        userName: email,
+        userName: normalizedEmail,
         details: { message: 'User not found in system database' },
         ipAddress: clientIp,
         userAgent
       });
-      // Track fake-identifier attempts per IP for IP-block threshold (no fake user created)
+      // Track unknown-identifier attempts per (email, IP). Threshold evaluated
+      // against a trailing time window (not lifetime history); reaching it
+      // starts a 30-minute IP restriction that expires automatically.
+      // Record creation per IP is bounded to prevent enumeration flooding.
       try {
-        const fakeExisting = await SecurityIncident.findOne({ attemptedEmail: email.toLowerCase(), normalizedIp: normIp, status: 'ACTIVE' });
+        let fakeExisting = await SecurityIncident.findOne({ attemptedEmail: normalizedEmail, normalizedIp: normIp, status: 'ACTIVE' });
+        if (!fakeExisting) {
+          const activeForIp = await SecurityIncident.countDocuments({ normalizedIp: normIp, status: 'ACTIVE' });
+          if (activeForIp >= MAX_ACTIVE_INCIDENTS_PER_IP) {
+            // Bound reached: fold into the most recent record for this IP
+            // instead of creating another; original evidence is kept.
+            fakeExisting = await SecurityIncident.findOne({ normalizedIp: normIp, status: 'ACTIVE' }).sort({ lastFailedAt: -1 });
+            if (fakeExisting) {
+              fakeExisting.metadata = { ...((fakeExisting.metadata && typeof fakeExisting.metadata === 'object') ? fakeExisting.metadata : {}), cappedMerge: normalizedEmail };
+            }
+          }
+        }
         if (!fakeExisting) {
           await SecurityIncident.create({
-            attemptedEmail: email.toLowerCase(),
+            attemptedEmail: normalizedEmail,
             normalizedIp: normIp,
             failedAttempts: 1,
             firstFailedAt: new Date(),
             lastFailedAt: new Date(),
             status: 'ACTIVE',
-            userAgent
+            userAgent,
+            metadata: { category: 'unknown-identifier', route: 'POST /api/auth/login', severity: 'low' }
           });
         } else {
-          fakeExisting.failedAttempts += 1;
-          fakeExisting.lastFailedAt = new Date();
-          if (fakeExisting.failedAttempts >= 5 && !fakeExisting.ipBlockedAt) {
-            fakeExisting.ipBlockedAt = new Date();
-            fakeExisting.lockedAt = new Date();
+          const attempts = countWindowedAttempt(fakeExisting);
+          if (attempts >= IP_BLOCK_THRESHOLD && !isIpBlockActive(fakeExisting)) {
+            const { blockedUntil, reBlocked } = applyTemporaryIpBlock(fakeExisting);
+            fakeExisting.lockedAt = fakeExisting.lockedAt || new Date();
+            fakeExisting.metadata = { ...((fakeExisting.metadata && typeof fakeExisting.metadata === 'object') ? fakeExisting.metadata : {}), category: 'unknown-identifier', route: 'POST /api/auth/login', severity: reBlocked ? 'critical' : 'high', blockReason: `Threshold reached: ${attempts} failed attempts within ${FAILED_ATTEMPT_WINDOW_MS / 60000} minutes` };
             await fakeExisting.save();
             try {
               const { notifyStaff } = await import('../services/notificationService.js');
-              await notifyStaff({ title: 'Security alert — suspicious activity', message: `Multiple failed sign-in attempts for unknown identifier ${email} from IP ${normIp}. IP blocked.`, type: 'error', priority: 'critical', referenceId: fakeExisting._id.toString(), referenceModel: 'SecurityIncident', metadata: { attemptedEmail: email, normalizedIp: normIp } });
+              await notifyStaff({
+                title: reBlocked ? 'Security alert — repeated attack pattern, IP temporarily blocked' : 'Security alert — suspicious activity, IP temporarily blocked',
+                message: `Multiple failed sign-in attempts for unknown identifier ${normalizedEmail} from IP ${normIp}. IP temporarily blocked for 30 minutes until ${blockedUntil.toISOString()}${reBlocked ? ` (block #${fakeExisting.blockCount} for this key)` : ''}. Incident: ${fakeExisting._id}.`,
+                type: 'error',
+                priority: 'critical',
+                referenceId: fakeExisting._id.toString(),
+                referenceModel: 'SecurityIncident',
+                actionUrl: '/admin?tab=logs',
+                metadata: { attemptedEmail: normalizedEmail, normalizedIp: normIp, attempts, windowMinutes: FAILED_ATTEMPT_WINDOW_MS / 60000, blockedUntil: blockedUntil.toISOString(), reBlocked }
+              });
             } catch {}
+            await logEvent({
+              action: 'LOGIN_FAILURE',
+              userName: normalizedEmail,
+              details: { message: 'Temporary IP block started', category: 'temporary-ip-block', normalizedIp: normIp, incidentId: fakeExisting._id, attempts, blockedUntil, expired: false },
+              ipAddress: clientIp,
+              userAgent
+            });
           } else {
             await fakeExisting.save();
           }
@@ -277,11 +405,18 @@ export const login = async (req, res, next) => {
       });
 
       if (isLockedNow) {
-        // Create single Security Incident + IP block (deduplicated)
+        // Single Security Incident + TEMPORARY (30-minute, self-expiring) IP
+        // restriction, deduplicated per (account email, IP). The account lock
+        // above stays persistent pending admin review; only the IP restriction
+        // expires. Repeated blocks after expiry escalate the alert.
+        let incidentId = null;
+        let blockedUntil = null;
+        let reBlocked = false;
         try {
           const existing = await SecurityIncident.findOne({ attemptedEmail: user.email.toLowerCase(), normalizedIp: normIp, status: 'ACTIVE' });
           if (!existing) {
-            await SecurityIncident.create({
+            blockedUntil = new Date(Date.now() + IP_BLOCK_DURATION_MS);
+            const created = await SecurityIncident.create({
               affectedUserId: user._id,
               attemptedEmail: user.email.toLowerCase(),
               normalizedIp: normIp,
@@ -290,28 +425,38 @@ export const login = async (req, res, next) => {
               lastFailedAt: new Date(),
               lockedAt: new Date(),
               ipBlockedAt: new Date(),
+              ipBlockedUntil: blockedUntil,
+              blockCount: 1,
               status: 'ACTIVE',
-              userAgent
+              userAgent,
+              metadata: { category: 'invalid-credentials', route: 'POST /api/auth/login', severity: 'high', blockReason: 'Account lock threshold reached (5 failed attempts)' }
             });
+            incidentId = created._id;
           } else {
             existing.failedAttempts = 5;
             existing.lastFailedAt = new Date();
             existing.lockedAt = existing.lockedAt || new Date();
-            existing.ipBlockedAt = existing.ipBlockedAt || new Date();
+            const res = applyTemporaryIpBlock(existing);
+            blockedUntil = res.blockedUntil;
+            reBlocked = res.reBlocked;
+            existing.metadata = { ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}), category: 'invalid-credentials', route: 'POST /api/auth/login', severity: reBlocked ? 'critical' : 'high', blockReason: 'Account lock threshold reached (5 failed attempts)' };
             await existing.save();
+            incidentId = existing._id;
           }
         } catch {}
         // Controlled single alert to Backup Admin / SUPER_ADMIN via existing notification pipeline
+        // (one alert per block start only — never per request — preventing storms)
         try {
           const { notifyStaff } = await import('../services/notificationService.js');
           await notifyStaff({
-            title: 'Security alert — account locked',
-            message: `Repeated failed login attempts detected. Account ${user.email} locked pending administrator review. IP ${normIp} blocked.`,
+            title: reBlocked ? 'Security alert — account locked, repeated attack pattern' : 'Security alert — account locked',
+            message: `Repeated failed login attempts detected. Account ${user.email} locked pending administrator review. IP ${normIp} temporarily blocked for 30 minutes${blockedUntil ? ` until ${blockedUntil.toISOString()}` : ''}${reBlocked ? ' (repeated block after expiry)' : ''}${incidentId ? ` Incident: ${incidentId}.` : ''}`,
             type: 'error',
             priority: 'critical',
             referenceId: user._id.toString(),
             referenceModel: 'User',
-            metadata: { email: user.email, ip: clientIp, normalizedIp: normIp }
+            actionUrl: '/admin?tab=logs',
+            metadata: { email: user.email, ip: clientIp, normalizedIp: normIp, incidentId: incidentId ? String(incidentId) : null, blockedUntil: blockedUntil ? blockedUntil.toISOString() : null, reBlocked }
           });
         } catch {}
         return res.status(403).json({ 

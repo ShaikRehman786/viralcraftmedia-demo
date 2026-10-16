@@ -41,7 +41,7 @@ router.post('/employee/reset-password/:token', authLimiter, employeeResetPasswor
 router.use('/projects', projectRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/analytics', analyticsRoutes);
-router.use('/calendar', protect, authorize('SUPER_ADMIN'), calendarRoutes);
+router.use('/calendar', protect, authorize('SUPER_ADMIN', 'MANAGER'), calendarRoutes);
 router.use('/logs', protect, authorize('SUPER_ADMIN'), logRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/teamlogger', teamLoggerRoutes);

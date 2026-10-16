@@ -1027,9 +1027,15 @@ router.post('/unlock/:userId', protect, authorize('BACKUP_ADMIN', 'SUPER_ADMIN')
     target.failedLoginAttempts = 0;
     await target.save();
     // Also resolve active security incidents for this user (IP block)
+    // Covers both the account-tied record (affectedUserId) and the same-email
+    // unknown-identifier records (attemptedEmail): the login IP-block gate runs
+    // before anything else and matches on IP alone, so without this an
+    // authorized unlock still leaves the user 403-blocked. Records are
+    // resolved (audit-preserved), never deleted; other IPs/emails untouched.
     try {
       const SecurityIncident = (await import('../models/SecurityIncident.js')).default;
       await SecurityIncident.updateMany({ affectedUserId: target._id, status: 'ACTIVE' }, { status: 'RESOLVED', resolvedAt: new Date(), resolvedBy: req.user._id });
+      await SecurityIncident.updateMany({ attemptedEmail: target.email.toLowerCase(), status: 'ACTIVE' }, { status: 'RESOLVED', resolvedAt: new Date(), resolvedBy: req.user._id });
     } catch {}
     await logEvent({
       userId: req.user._id,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Lock, Mail, ArrowLeft, Loader2, Key, Eye, EyeOff } from 'lucide-react';
+import { PARTNER_PORTAL_PATH, PARTNER_API_LOGIN } from '../utils/partnerAuth.js';
 
 axios.defaults.withCredentials = true;
 
@@ -21,9 +22,9 @@ export default function PartnerLoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await axios.post('/api/partners/login', { email, password });
+      const res = await axios.post(PARTNER_API_LOGIN, { email, password });
       if (res.data.success) {
-        window.location.href = '/partner';
+        window.location.href = PARTNER_PORTAL_PATH;
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please check your credentials.');

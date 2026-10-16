@@ -6,6 +6,7 @@ import {
   Copy, Layers, BarChart2, Briefcase, CreditCard, FileText, AlertTriangle, RefreshCw,
   Mail, Phone, ExternalLink, Lock, ShieldX, Key, EyeOff, Pause, Play
 } from 'lucide-react';
+import { getPartnerLoginUrl } from '../utils/partnerAuth.js';
 
 function ReferralEmptyState({ message, subMessage }) {
   return (
@@ -337,9 +338,9 @@ export default function ReferralManagementPage({ user, addToast }) {
     }
   };
 
-  // Copy Login credentials to clipboard
+  // Copy Login credentials to clipboard (always the dedicated partner URL)
   const handleCopyLogin = (p) => {
-    const loginLink = `${window.location.origin}/partner/login`;
+    const loginLink = getPartnerLoginUrl(window.location.origin);
     navigator.clipboard.writeText(loginLink);
     addToast(`Partner login template copied to clipboard!`, 'success');
   };
@@ -480,11 +481,29 @@ export default function ReferralManagementPage({ user, addToast }) {
   // Booking Commission details and status management
   const openCalculateCommission = (bookingObj) => {
     setSelectedBooking(bookingObj);
-    setBookingRevenue(bookingObj.bookingValue || '');
-    setSelectedCommissionPercentage(bookingObj.commissionPercentage || bookingObj.campaign?.minCommissionPercentage || 10);
     
     // Find matching commission in loaded list
-    const matchedComm = commissions.find(c => c.booking?._id === bookingObj._id || c.booking === bookingObj._id);
+    const matchedComm = commissions.find(c => {
+      const cBookingId = c.booking?._id ? c.booking._id.toString() : c.booking?.toString();
+      const bId = bookingObj?._id ? bookingObj._id.toString() : bookingObj?.toString();
+      return Boolean(cBookingId && bId && cBookingId === bId);
+    });
+
+    const effectivePct = (bookingObj.commissionPercentage !== undefined && bookingObj.commissionPercentage !== null && Number(bookingObj.commissionPercentage) > 0)
+      ? Number(bookingObj.commissionPercentage)
+      : (matchedComm?.commissionPercentage !== undefined && matchedComm?.commissionPercentage !== null && Number(matchedComm.commissionPercentage) > 0)
+        ? Number(matchedComm.commissionPercentage)
+        : (bookingObj.campaign?.minCommissionPercentage || 10);
+
+    const effectiveRevenue = (bookingObj.bookingValue !== undefined && bookingObj.bookingValue !== null && Number(bookingObj.bookingValue) > 0)
+      ? bookingObj.bookingValue
+      : (matchedComm?.commissionAmount && effectivePct > 0)
+        ? Math.round(Number(matchedComm.commissionAmount) / (effectivePct / 100))
+        : '';
+
+    setBookingRevenue(effectiveRevenue);
+    setSelectedCommissionPercentage(effectivePct);
+
     if (matchedComm) {
       setCommissionStatus(matchedComm.status);
       setPaymentDate(matchedComm.paymentDate ? matchedComm.paymentDate.split('T')[0] : new Date().toISOString().split('T')[0]);
@@ -501,14 +520,26 @@ export default function ReferralManagementPage({ user, addToast }) {
   const handleUpdateCommissionDetails = async (e, forcedStatus = null) => {
     if (e) e.preventDefault();
     const targetStatus = forcedStatus || commissionStatus;
-    
+
     // Validations
+    // Guard against silently discarding entered values: saving a booking that
+    // has no commission record yet with the default 'Commission Not Generated'
+    // status deletes/zeroes instead of generating. Require a generating status.
+    const matchedExistingCommission = commissions.find(c => {
+      const cBookingId = c.booking?._id ? c.booking._id.toString() : c.booking?.toString();
+      const bId = selectedBooking?._id ? selectedBooking._id.toString() : selectedBooking?.toString();
+      return Boolean(cBookingId && bId && cBookingId === bId);
+    });
+    if (targetStatus === 'Commission Not Generated' && !matchedExistingCommission && Number(bookingRevenue || 0) > 0) {
+      addToast('Select a commission status (e.g. Pending Approval or Approved) to generate the commission. Saving as "Commission Not Generated" discards the entered values.', 'warning');
+      return;
+    }
     if (targetStatus !== 'Commission Not Generated') {
       if (!bookingRevenue || isNaN(bookingRevenue)) {
         addToast('Please enter a valid project value.', 'warning');
         return;
       }
-      if (selectedCommissionPercentage === undefined || isNaN(selectedCommissionPercentage)) {
+      if (selectedCommissionPercentage === undefined || selectedCommissionPercentage === null || selectedCommissionPercentage === '' || isNaN(Number(selectedCommissionPercentage))) {
         addToast('Please enter a valid commission percentage.', 'warning');
         return;
       }
@@ -1094,6 +1125,15 @@ export default function ReferralManagementPage({ user, addToast }) {
                           </td>
                           <td className="text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {c?.booking && (
+                                <button
+                                  onClick={() => openCalculateCommission(c.booking)}
+                                  className="btn btn-secondary btn-sm"
+                                  title="Manage Commission"
+                                >
+                                  Manage
+                                </button>
+                              )}
                               {c?.status === 'Pending' && (
                                 <>
                                   <button 

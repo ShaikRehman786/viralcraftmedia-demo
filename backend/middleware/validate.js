@@ -11,7 +11,11 @@ export const sanitizeInput = (val) => {
 };
 
 // Recursively sanitize all string fields in an object (prototype-pollution safe)
+// NOTE: password fields are passed through untouched — stripping characters
+// (e.g. < > " ') from a password corrupts it before bcrypt.compare and causes
+// false "Invalid credentials" failures on otherwise-correct logins.
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const PASSWORD_KEYS = new Set(['password', 'newpassword', 'confirmpassword', 'currentpassword', 'oldpassword']);
 
 export const sanitizeObject = (obj) => {
   if (typeof obj === 'string') return sanitizeInput(obj);
@@ -22,6 +26,11 @@ export const sanitizeObject = (obj) => {
       if (DANGEROUS_KEYS.has(key)) continue;
       // Also block keys containing prototype pollution patterns or dot-notation abuse
       if (key.includes('.') && DANGEROUS_KEYS.has(key.split('.')[0])) continue;
+      // Never mutate credential fields — bcrypt comparison requires the exact input
+      if (PASSWORD_KEYS.has(key.toLowerCase())) {
+        sanitized[key] = value;
+        continue;
+      }
       sanitized[key] = sanitizeObject(value);
     }
     return sanitized;

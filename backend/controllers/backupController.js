@@ -240,6 +240,14 @@ export const getBackupStats = async (req, res, next) => {
     const totalOps = totalBackupRecords + totalFailedOps;
     const successRateVal = totalOps > 0 ? (((totalBackupRecords) / totalOps) * 100).toFixed(1) + '%' : '100%';
 
+    const memUsage = process.memoryUsage();
+    const processMemory = {
+      rssMb: Math.round(memUsage.rss / (1024 * 1024)),
+      heapUsedMb: Math.round(memUsage.heapUsed / (1024 * 1024)),
+      heapTotalMb: Math.round(memUsage.heapTotal / (1024 * 1024)),
+      externalMb: Math.round(memUsage.external / (1024 * 1024))
+    };
+
     return res.status(200).json({
       success: true,
       stats: {
@@ -265,7 +273,8 @@ export const getBackupStats = async (req, res, next) => {
         lastFailedBackup: health.lastFailedBackupTimestamp,
         lastSynchronization: health.lastSyncTimestamp || lastBackupTime,
         collectionsCountMap,
-        recentLogs
+        recentLogs,
+        processMemory
       },
       health: {
         productionDb: health.productionDb.status,
@@ -419,7 +428,11 @@ export const exportAuditLogController = async (req, res, next) => {
       query.collectionName = { $regex: new RegExp(`^${escapedCollection}$`, 'i') };
     }
 
-    const records = await BackupRecord.find(query).sort({ timestamp: -1 }).limit(limit).lean();
+    const queryBuilder = BackupRecord.find(query).sort({ timestamp: -1 }).limit(limit);
+    if (format === 'csv') {
+      queryBuilder.select('timestamp collectionName operation documentId performedBy ip restoreVersion createdAt');
+    }
+    const records = await queryBuilder.lean();
 
     if (format === 'csv') {
       res.setHeader('Content-Type', 'text/csv');

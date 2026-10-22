@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../App.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { Clock, X } from 'lucide-react';
 import ToastContainer, { useToast } from './Toast.jsx';
 import { io } from 'socket.io-client';
@@ -44,7 +44,7 @@ const ROLE_ACCESS = {
 };
 
 export default function DashboardPage() {
-  const { user, setUser } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -397,12 +397,14 @@ export default function DashboardPage() {
   }, [user, location.pathname, navigate]);
 
   const handleLogout = async () => {
+    if (logout) {
+      await logout();
+      return;
+    }
     try {
       await axios.post('/api/auth/logout');
-      window.location.href = '/';
-    } catch (err) {
-      window.location.href = '/';
-    }
+    } catch (_) {}
+    window.location.href = '/login';
   };
 
   const handlePostChat = async (e) => {
@@ -999,10 +1001,10 @@ export default function DashboardPage() {
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <div className="app">
+      <div className="app app-container">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} user={user} />
         <div className="app-main">
-          <TopBar user={user} unreadCount={unreadCount} notifications={notifications} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} activeTab={activeTab} onNavigate={setActiveTab} onMarkRead={markNotifRead} onMarkAllRead={handleMarkAllNotifRead} onOpenNotification={openNotificationTarget} />
+          <TopBar user={user} unreadCount={unreadCount} notifications={notifications} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} activeTab={activeTab} onNavigate={setActiveTab} onMarkRead={markNotifRead} onMarkAllRead={handleMarkAllNotifRead} onOpenNotification={openNotificationTarget} onLogout={handleLogout} />
           {notifBanner && (
             <div style={{
               padding: '10px 20px',

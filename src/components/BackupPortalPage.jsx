@@ -244,10 +244,14 @@ export default function BackupPortalPage({ embedded = false }) {
   const handleLogout = async () => {
     try {
       await axios.post('/api/auth/logout');
-      window.location.href = '/login';
-    } catch (err) {
-      window.location.href = '/login';
-    }
+    } catch (err) {}
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem('partner_token');
+      localStorage.removeItem('activeTab');
+      localStorage.removeItem('crm_filter_cache');
+    } catch (_) {}
+    window.location.href = '/login';
   };
 
   const handleTriggerForceSync = async () => {

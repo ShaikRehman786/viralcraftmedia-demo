@@ -64,6 +64,11 @@ let changeStreamReconnectTimeout = null;
 // the stream for shutdown cannot spawn a replacement watcher.
 let changeStreamShutdown = false;
 
+// Concurrency and shutdown guards (Step 3)
+let isProcessingRetryQueue = false;
+let isForceSyncInProgress = false;
+let isBackupShuttingDown = false;
+
 // Track latency & connection metrics
 let prodDbLatencyMs = 0;
 let backupDbLatencyMs = 0;
@@ -382,11 +387,25 @@ export const initBackupSystem = async () => {
     return;
   }
 
+  // Reset shutdown flag only if no background operations are currently active
+  if (!isProcessingRetryQueue && !isForceSyncInProgress) {
+    isBackupShuttingDown = false;
+  }
+
+  // Idempotency: prevent duplicate pools across the process lifecycle.
+  // Preserves driver SDAM auto-reconnection and prevents duplicate listeners.
+  if (backupConnection) {
+    return backupConnection;
+  }
+
   try {
     console.log('[BACKUP] Initializing connection to Backup Atlas Database...');
     backupConnection = mongoose.createConnection(config.backupMongoUri, {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 10000
+      serverSelectionTimeoutMS: 10000,
+      maxPoolSize: 15,
+      minPoolSize: 1,
+      maxIdleTimeMS: 60000
     });
 
     backupConnection.on('connected', () => {
@@ -617,6 +636,7 @@ const scheduleChangeStreamReconnect = () => {
  */
 export const shutdownBackupServices = async () => {
   try {
+    isBackupShuttingDown = true;
     changeStreamShutdown = true;
     if (changeStreamReconnectTimeout) {
       clearTimeout(changeStreamReconnectTimeout);
@@ -700,46 +720,53 @@ export const startBackupWorker = () => {
 
 export const processRetryQueue = async () => {
   if (!isBackupConnected || !backupConnection) return;
+  if (isBackupShuttingDown || isProcessingRetryQueue) return;
 
-  const now = new Date();
-  const tasks = await FailedBackupQueue.find({
-    status: 'FAILED',
-    nextRetryAt: { $lte: now }
-  }).limit(20);
+  isProcessingRetryQueue = true;
+  try {
+    const now = new Date();
+    const tasks = await FailedBackupQueue.find({
+      status: 'FAILED',
+      nextRetryAt: { $lte: now }
+    }).limit(20);
 
-  const maxRetries = parseInt(process.env.BACKUP_MAX_RETRIES || '10', 10);
+    const maxRetries = parseInt(process.env.BACKUP_MAX_RETRIES || '10', 10);
 
-  for (const task of tasks) {
-    try {
-      const record = await recordBackupEntry({
-        collectionName: task.collectionName,
-        documentId: task.documentId,
-        operation: task.operation,
-        previousData: task.previousData,
-        currentData: task.currentData,
-        changedFields: task.changedFields,
-        performedBy: task.performedBy,
-        source: 'MANUAL'
-      });
+    for (const task of tasks) {
+      if (isBackupShuttingDown) break;
+      try {
+        const record = await recordBackupEntry({
+          collectionName: task.collectionName,
+          documentId: task.documentId,
+          operation: task.operation,
+          previousData: task.previousData,
+          currentData: task.currentData,
+          changedFields: task.changedFields,
+          performedBy: task.performedBy,
+          source: 'MANUAL'
+        });
 
-      if (record) {
-        await FailedBackupQueue.deleteOne({ _id: task._id });
-      } else {
-        throw new Error('Retried backup recording returned null');
+        if (record) {
+          await FailedBackupQueue.deleteOne({ _id: task._id });
+        } else {
+          throw new Error('Retried backup recording returned null');
+        }
+      } catch (err) {
+        const nextCount = task.retryCount + 1;
+        const backoffSec = Math.min(300, 5 * Math.pow(2, nextCount));
+        task.retryCount = nextCount;
+        task.lastError = err.message;
+        task.nextRetryAt = new Date(Date.now() + backoffSec * 1000);
+
+        if (nextCount >= maxRetries) {
+          task.status = 'DEAD';
+          console.error(`[BACKUP WORKER] Task ${task._id} for ${task.collectionName} marked DEAD after ${maxRetries} retries.`);
+        }
+        await task.save();
       }
-    } catch (err) {
-      const nextCount = task.retryCount + 1;
-      const backoffSec = Math.min(300, 5 * Math.pow(2, nextCount));
-      task.retryCount = nextCount;
-      task.lastError = err.message;
-      task.nextRetryAt = new Date(Date.now() + backoffSec * 1000);
-
-      if (nextCount >= maxRetries) {
-        task.status = 'DEAD';
-        console.error(`[BACKUP WORKER] Task ${task._id} for ${task.collectionName} marked DEAD after ${maxRetries} retries.`);
-      }
-      await task.save();
     }
+  } finally {
+    isProcessingRetryQueue = false;
   }
 };
 
@@ -754,109 +781,138 @@ export const runForceSync = async () => {
   if (!isBackupConnected || !backupConnection) {
     throw new Error('Backup Database is not connected.');
   }
-
-  const startTime = Date.now();
-  const BackupRecord = getBackupRecordModel();
-  if (!BackupRecord) {
-    throw new Error('BackupRecord model unavailable on Backup DB.');
+  if (isBackupShuttingDown) {
+    const shutdownErr = new Error('Backup services are shutting down.');
+    shutdownErr.statusCode = 503;
+    throw shutdownErr;
+  }
+  if (isForceSyncInProgress) {
+    const conflictErr = new Error('A force synchronization is already in progress.');
+    conflictErr.statusCode = 409;
+    throw conflictErr;
   }
 
-  // Discover all collections in Production DB
-  const rawCollections = await mongoose.connection.db.listCollections().toArray();
-  const monitoredCollections = rawCollections
-    .map((c) => c.name)
-    .filter((name) => !EXCLUDED_COLLECTIONS.includes(name.toLowerCase()));
-
-  let totalScanned = 0;
-  let totalBackedUp = 0;
-  let totalMissing = 0;
-
-  const collectionResults = [];
-
-  // Bounded per-document check+insert — same coverage and dedup semantics as
-  // before, but operates on one fixed-size batch at a time.
-  const processBatch = async (colName, batch) => {
-    let missingInBatch = 0;
-    for (const doc of batch) {
-      totalScanned++;
-      const docIdStr = doc._id ? doc._id.toString() : null;
-      if (!docIdStr) continue;
-
-      // Check if backup entry exists
-      const hasBackup = await BackupRecord.exists({ collectionName: colName, documentId: docIdStr });
-
-      if (!hasBackup) {
-        missingInBatch++;
-        totalMissing++;
-        await recordBackupEntry({
-          collectionName: colName,
-          documentId: docIdStr,
-          operation: 'FORCE_SYNC',
-          previousData: null,
-          currentData: doc,
-          changedFields: Object.keys(doc).filter(k => !k.startsWith('_')),
-          performedBy: {
-            userId: 'Admin',
-            email: 'admin@viralcraftmedia.com',
-            name: 'Force Sync Engine',
-            role: 'SUPER_ADMIN'
-          },
-          source: 'FORCE_SYNC'
-        });
-        totalBackedUp++;
-      }
+  isForceSyncInProgress = true;
+  try {
+    const startTime = Date.now();
+    const BackupRecord = getBackupRecordModel();
+    if (!BackupRecord) {
+      throw new Error('BackupRecord model unavailable on Backup DB.');
     }
-    return missingInBatch;
-  };
 
-  for (const colName of monitoredCollections) {
-    let missingInCol = 0;
-    let scannedInCol = 0;
-    try {
-      const collection = mongoose.connection.db.collection(colName);
-      const cursor = collection.find({}).batchSize(FORCE_SYNC_BATCH_SIZE);
+    // Discover all collections in Production DB
+    const rawCollections = await mongoose.connection.db.listCollections().toArray();
+    const monitoredCollections = rawCollections
+      .map((c) => c.name)
+      .filter((name) => !EXCLUDED_COLLECTIONS.includes(name.toLowerCase()));
+
+    let totalScanned = 0;
+    let totalBackedUp = 0;
+    let totalMissing = 0;
+
+    const collectionResults = [];
+
+    // Bounded per-document check+insert — same coverage and dedup semantics as
+    // before, but operates on one fixed-size batch at a time.
+    const processBatch = async (colName, batch) => {
+      let missingInBatch = 0;
+      for (const doc of batch) {
+        totalScanned++;
+        const docIdStr = doc._id ? doc._id.toString() : null;
+        if (!docIdStr) continue;
+
+        // Check if backup entry exists
+        const hasBackup = await BackupRecord.exists({ collectionName: colName, documentId: docIdStr });
+
+        if (!hasBackup) {
+          missingInBatch++;
+          totalMissing++;
+          await recordBackupEntry({
+            collectionName: colName,
+            documentId: docIdStr,
+            operation: 'FORCE_SYNC',
+            previousData: null,
+            currentData: doc,
+            changedFields: Object.keys(doc).filter(k => !k.startsWith('_')),
+            performedBy: {
+              userId: 'Admin',
+              email: 'admin@viralcraftmedia.com',
+              name: 'Force Sync Engine',
+              role: 'SUPER_ADMIN'
+            },
+            source: 'FORCE_SYNC'
+          });
+          totalBackedUp++;
+        }
+      }
+      return missingInBatch;
+    };
+
+    for (const colName of monitoredCollections) {
+      if (isBackupShuttingDown) {
+        const shutdownErr = new Error('Force synchronization interrupted by server shutdown.');
+        shutdownErr.statusCode = 503;
+        throw shutdownErr;
+      }
+
+      let missingInCol = 0;
+      let scannedInCol = 0;
       try {
-        let batch = [];
-        while (await cursor.hasNext()) {
-          const doc = await cursor.next();
-          if (!doc) continue;
-          batch.push(doc);
-          if (batch.length >= FORCE_SYNC_BATCH_SIZE) {
+        const collection = mongoose.connection.db.collection(colName);
+        const cursor = collection.find({}).batchSize(FORCE_SYNC_BATCH_SIZE);
+        try {
+          let batch = [];
+          while (await cursor.hasNext()) {
+            if (isBackupShuttingDown) {
+              const shutdownErr = new Error('Force synchronization interrupted by server shutdown.');
+              shutdownErr.statusCode = 503;
+              throw shutdownErr;
+            }
+            const doc = await cursor.next();
+            if (!doc) continue;
+            batch.push(doc);
+            if (batch.length >= FORCE_SYNC_BATCH_SIZE) {
+              missingInCol += await processBatch(colName, batch);
+              scannedInCol += batch.length;
+              batch = [];
+            }
+          }
+          if (batch.length > 0) {
             missingInCol += await processBatch(colName, batch);
             scannedInCol += batch.length;
             batch = [];
           }
+        } finally {
+          try { await cursor.close(); } catch {}
         }
-        if (batch.length > 0) {
-          missingInCol += await processBatch(colName, batch);
-          scannedInCol += batch.length;
-          batch = [];
+
+        collectionResults.push({
+          collectionName: colName,
+          totalDocs: scannedInCol,
+          missingDocs: missingInCol
+        });
+      } catch (colErr) {
+        if (isBackupShuttingDown || colErr.statusCode === 503) {
+          throw colErr;
         }
-      } finally {
-        try { await cursor.close(); } catch {}
+        console.error(`[FORCE SYNC ERROR] Collection ${colName}:`, colErr.message);
       }
-
-      collectionResults.push({
-        collectionName: colName,
-        totalDocs: scannedInCol,
-        missingDocs: missingInCol
-      });
-    } catch (colErr) {
-      console.error(`[FORCE SYNC ERROR] Collection ${colName}:`, colErr.message);
     }
+
+    const durationMs = Date.now() - startTime;
+    lastSyncTimestamp = new Date();
+
+    return {
+      success: true,
+      durationMs,
+      totalCollectionsScanned: monitoredCollections.length,
+      totalDocumentsScanned: totalScanned,
+      missingDocumentsInserted: totalMissing,
+      collectionResults
+    };
+  } finally {
+    isForceSyncInProgress = false;
   }
-
-  const durationMs = Date.now() - startTime;
-  lastSyncTimestamp = new Date();
-
-  return {
-    success: true,
-    durationMs,
-    totalCollectionsScanned: monitoredCollections.length,
-    totalDocumentsScanned: totalScanned,
-    missingDocumentsInserted: totalMissing,
-    collectionResults
-  };
 };
 
 /**

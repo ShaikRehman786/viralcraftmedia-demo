@@ -162,10 +162,13 @@ export default function PartnerDashboardPage() {
   const handleLogout = async () => {
     try {
       await axios.post('/api/partners/logout');
-      window.location.href = PARTNER_LOGIN_PATH;
-    } catch (err) {
-      window.location.href = PARTNER_LOGIN_PATH;
-    }
+    } catch (err) {}
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem('partner_token');
+      localStorage.removeItem('activeTab');
+    } catch (_) {}
+    window.location.href = PARTNER_LOGIN_PATH;
   };
 
   // Save profile updates

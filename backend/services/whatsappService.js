@@ -36,6 +36,61 @@ let sessionRestored = false;
 let heartbeatInterval = null;
 let lastQrGeneratedAt = null;
 
+// Shutdown & cleanup lifecycle tracking
+let isShuttingDown = false;
+let isCleanupComplete = false;
+let hasLoggedShutdownComplete = false;
+let shutdownPromise = null;
+const pendingClients = new Set();
+const failedClients = new Set();
+const clientCleanupMap = new WeakMap();
+
+const updateCleanupState = () => {
+  if (
+    isShuttingDown &&
+    !isInitializing &&
+    !initializationPromise &&
+    pendingClients.size === 0 &&
+    failedClients.size === 0 &&
+    client === null
+  ) {
+    isCleanupComplete = true;
+    if (!hasLoggedShutdownComplete) {
+      hasLoggedShutdownComplete = true;
+      console.log('[WA-AUTOMATION] WhatsApp service shutdown complete.');
+    }
+  } else {
+    isCleanupComplete = false;
+  }
+};
+
+const destroyClient = (targetClient) => {
+  if (!targetClient) return Promise.resolve();
+  if (clientCleanupMap.has(targetClient)) {
+    return clientCleanupMap.get(targetClient);
+  }
+  const p = (async () => {
+    try {
+      try {
+        targetClient.removeAllListeners();
+      } catch (_) {}
+      await targetClient.destroy();
+      pendingClients.delete(targetClient);
+      failedClients.delete(targetClient);
+    } catch (err) {
+      console.warn('[WA-AUTOMATION] Client destroy warning:', err.message);
+      pendingClients.delete(targetClient);
+      failedClients.add(targetClient);
+      clientCleanupMap.delete(targetClient);
+      throw err;
+    } finally {
+      updateCleanupState();
+    }
+  })();
+  clientCleanupMap.set(targetClient, p);
+  return p;
+};
+
 const clearSessionDir = async (retries = 5, delay = 500) => {
   const sessionPath = path.join(process.cwd(), '.wwebjs_auth', 'session-vcm-crm-whatsapp');
   if (!fs.existsSync(sessionPath)) return;
@@ -953,6 +1008,10 @@ const whatsappService = {
   client: null,
 
   init: async (socketIo) => {
+    if (isShuttingDown) {
+      console.log('[WA-AUTOMATION] Shutdown in progress; ignoring init() request.');
+      return;
+    }
     if (isInitializing) {
       console.log('[WA-AUTOMATION] WhatsApp initialization already in progress. Waiting for existing initialization...');
       if (initializationPromise) {
@@ -963,28 +1022,38 @@ const whatsappService = {
     isInitializing = true;
     io = socketIo;
     initializationPromise = (async () => {
+      let thisClient = null;
       try {
         console.log('[WA-AUTOMATION] Initializing WhatsApp client...');
 
         await refreshCache();
+        if (isShuttingDown) {
+          console.log('[WA-AUTOMATION] Shutdown initiated during cache refresh; aborting init.');
+          return;
+        }
+
         if (!whatsappService.cacheInterval) {
           whatsappService.cacheInterval = setInterval(refreshCache, 5 * 60 * 1000);
         }
 
         if (client) {
           console.log('[WA-AUTOMATION] Cleaning up existing WhatsApp client instance to prevent duplicate handlers and memory leaks...');
-          try {
-            client.removeAllListeners();
-            await client.destroy().catch(() => {});
-          } catch (err) {
-            console.warn('[WA-AUTOMATION] Old client cleanup warning:', err.message);
-          }
+          const oldClient = client;
           client = null;
           whatsappService.client = null;
+          await destroyClient(oldClient).catch((err) => {
+            console.warn('[WA-AUTOMATION] Old client cleanup warning:', err.message);
+          });
+        }
+
+        if (isShuttingDown) {
+          console.log('[WA-AUTOMATION] Shutdown initiated before client instantiation; aborting init.');
+          return;
         }
 
         if (!heartbeatInterval) {
           heartbeatInterval = setInterval(async () => {
+            if (isShuttingDown) return;
             if (client && connectionStatus === 'CONNECTED') {
               try {
                 const state = await client.getState().catch(() => null);
@@ -1017,6 +1086,11 @@ const whatsappService = {
           await sessionRecord.save();
         }
 
+        if (isShuttingDown) {
+          console.log('[WA-AUTOMATION] Shutdown initiated before browser setup; aborting init.');
+          return;
+        }
+
         // Production-only browser path: local keeps Puppeteer's default
         // resolution (working setup untouched). Only in production do we pin
         // executablePath, and only to a binary verified to exist on disk.
@@ -1029,7 +1103,7 @@ const whatsappService = {
           console.info(`[WHATSAPP] Browser installation status: ${productionExecutablePath ? 'binary found' : 'no browser binary found'}`);
         }
 
-        client = new Client({
+        thisClient = new Client({
           authStrategy: new LocalAuth({
             clientId: 'vcm-crm-whatsapp'
           }),
@@ -1061,9 +1135,22 @@ const whatsappService = {
           }
         });
 
-        whatsappService.client = client;
+        pendingClients.add(thisClient);
+        client = thisClient;
+        whatsappService.client = thisClient;
 
-        client.on('qr', async (qr) => {
+        if (isShuttingDown) {
+          console.log('[WA-AUTOMATION] Shutdown initiated right after client creation; destroying client.');
+          if (client === thisClient) {
+            client = null;
+            whatsappService.client = null;
+          }
+          await destroyClient(thisClient).catch(() => {});
+          return;
+        }
+
+        thisClient.on('qr', async (qr) => {
+          if (isShuttingDown) return;
           connectionStatus = 'DISCONNECTED';
           console.info('[WHATSAPP] production client state=DISCONNECTED (QR code generated, waiting for scan)');
           lastQrGeneratedAt = Date.now();
@@ -1087,18 +1174,19 @@ const whatsappService = {
           }
         });
 
-        client.on('ready', async () => {
+        thisClient.on('ready', async () => {
+          if (isShuttingDown) return;
           connectionStatus = 'CONNECTED';
           qrCodeData = '';
           lastHeartbeat = new Date();
           sessionRestored = true;
-          console.info(`[WHATSAPP] production client state=READY (CONNECTED as ${client?.info?.wid?.user})`);
+          console.info(`[WHATSAPP] production client state=READY (CONNECTED as ${thisClient?.info?.wid?.user})`);
           
           try {
             sessionRecord.connected = true;
             sessionRecord.qrCode = '';
-            sessionRecord.phoneNumber = client.info.wid.user;
-            sessionRecord.pushName = client.info.pushname || '';
+            sessionRecord.phoneNumber = thisClient?.info?.wid?.user || '';
+            sessionRecord.pushName = thisClient?.info?.pushname || '';
             sessionRecord.lastConnectedAt = new Date();
             await sessionRecord.save();
 
@@ -1106,8 +1194,8 @@ const whatsappService = {
               io.emit('whatsapp_status', { 
                 connected: true, 
                 statusText: 'CONNECTED',
-                phoneNumber: client.info.wid.user,
-                pushName: client.info.pushname,
+                phoneNumber: thisClient?.info?.wid?.user || '',
+                pushName: thisClient?.info?.pushname || '',
                 lastConnectedAt: sessionRecord.lastConnectedAt
               });
             }
@@ -1117,13 +1205,14 @@ const whatsappService = {
           console.log('\n[CONNECTED]\nBusiness Account Connected');
         });
 
-        client.on('authenticated', async () => {
+        thisClient.on('authenticated', async () => {
+          if (isShuttingDown) return;
           console.log('WhatsApp authenticated successfully.');
           console.log('\n[SESSION]\nLocalAuth Restored');
           sessionRestored = true;
         });
 
-        client.on('auth_failure', async (msg) => {
+        thisClient.on('auth_failure', async (msg) => {
           connectionStatus = 'DISCONNECTED';
           console.info(`[WHATSAPP] production client state=DISCONNECTED (auth_failure: ${msg})`);
           sessionRestored = false;
@@ -1137,11 +1226,15 @@ const whatsappService = {
               io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED', error: msg });
             }
 
-            const currentClient = client;
-            if (currentClient) {
-              currentClient.removeAllListeners();
-              await currentClient.destroy().catch(() => {});
+            const currentClient = thisClient;
+            if (client === currentClient) {
+              client = null;
+              whatsappService.client = null;
             }
+            if (currentClient) {
+              await destroyClient(currentClient).catch(() => {});
+            }
+            if (isShuttingDown) return;
             await clearSessionDir();
             await whatsappService.init(io);
           } catch (err) {
@@ -1149,7 +1242,7 @@ const whatsappService = {
           }
         });
 
-        client.on('disconnected', async (reason) => {
+        thisClient.on('disconnected', async (reason) => {
           connectionStatus = 'DISCONNECTED';
           console.info(`[WHATSAPP] production client state=DISCONNECTED (reason: ${reason})`);
           sessionRestored = false;
@@ -1163,11 +1256,15 @@ const whatsappService = {
               io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED' });
             }
 
-            const currentClient = client;
-            if (currentClient) {
-              currentClient.removeAllListeners();
-              await currentClient.destroy().catch(() => {});
+            const currentClient = thisClient;
+            if (client === currentClient) {
+              client = null;
+              whatsappService.client = null;
             }
+            if (currentClient) {
+              await destroyClient(currentClient).catch(() => {});
+            }
+            if (isShuttingDown) return;
             await clearSessionDir();
             await whatsappService.init(io);
           } catch (err) {
@@ -1175,9 +1272,10 @@ const whatsappService = {
           }
         });
 
-        client.on('message_create', async (msg) => {
+        thisClient.on('message_create', async (msg) => {
           try {
-            if (!client || !client.info || !client.info.wid) return;
+            if (isShuttingDown) return;
+            if (!thisClient || !thisClient.info || !thisClient.info.wid) return;
 
             if (
               msg.from.endsWith('@g.us') || 
@@ -1192,7 +1290,7 @@ const whatsappService = {
               return;
             }
 
-            const clientPhone = client.info?.wid?.user ? formatCleanDigits(client.info.wid.user) : '';
+            const clientPhone = thisClient.info?.wid?.user ? formatCleanDigits(thisClient.info.wid.user) : '';
             const senderRaw = msg.from || '';
             const senderPhone = senderRaw.split('@')[0].split(':')[0];
             const recipientRaw = msg.to || '';
@@ -1304,8 +1402,17 @@ const whatsappService = {
         });
 
         try {
-          await client.initialize();
+          await thisClient.initialize();
           console.log('[WA-AUTOMATION] WhatsApp client initialized successfully.');
+          if (isShuttingDown) {
+            console.log('[WA-AUTOMATION] Shutdown requested while client was initializing; destroying client.');
+            if (client === thisClient) {
+              client = null;
+              whatsappService.client = null;
+            }
+            await destroyClient(thisClient).catch(() => {});
+            return;
+          }
         } catch (initErr) {
           console.error('[WA-AUTOMATION] WhatsApp Web client initialization crash:', initErr.message);
           console.error('[WHATSAPP] Browser launch failed');
@@ -1314,31 +1421,25 @@ const whatsappService = {
           console.error(`[WHATSAPP] Browser installation status: ${productionExecutablePath ? 'binary present but launch failed' : 'no browser binary found — ensure the Render build ran `npm run setup:chrome` with PUPPETEER_CACHE_DIR set inside the project directory'}`);
           connectionStatus = 'DISCONNECTED';
           qrCodeData = '';
-          // Lifecycle fix: destroy the partially-initialized client so its
-          // browser process and listeners cannot leak; clear references so a
-          // future retry starts clean. Status/error reporting below is unchanged.
-          try {
-            if (client) {
-              client.removeAllListeners();
-              await client.destroy().catch(() => {});
-            }
-          } catch (cleanupErr) {
-            console.warn('[WA-AUTOMATION] Failed-client cleanup warning:', cleanupErr.message);
-          } finally {
+          if (client === thisClient) {
             client = null;
             whatsappService.client = null;
           }
+          await destroyClient(thisClient).catch(() => {});
           if (io) {
             io.emit('whatsapp_status', { connected: false, statusText: 'DISCONNECTED', error: initErr.message });
           }
           throw initErr;
         }
       } catch (err) {
-        console.error('WhatsApp Service init failed:', err.message);
+        if (!isShuttingDown) {
+          console.error('WhatsApp Service init failed:', err.message);
+        }
         throw err;
       } finally {
         isInitializing = false;
         initializationPromise = null;
+        updateCleanupState();
       }
     })();
 
@@ -1354,7 +1455,9 @@ const whatsappService = {
       lastHeartbeat: lastHeartbeat,
       reconnectCount: reconnectCount,
       qrGeneratedCount: qrGeneratedCount,
-      sessionRestored: sessionRestored
+      sessionRestored: sessionRestored,
+      isShuttingDown: isShuttingDown,
+      isCleanupComplete: isCleanupComplete
     };
   },
 
@@ -1385,6 +1488,10 @@ const whatsappService = {
   },
 
   logout: async () => {
+    if (isShuttingDown) {
+      console.log('[WA-AUTOMATION] Shutdown in progress; ignoring logout() request.');
+      return;
+    }
     // Lifecycle guard: serialize with any in-flight initialization using the
     // existing isInitializing/initializationPromise mechanism (join, don't
     // create a second client). init() always settles via try/finally.
@@ -1413,8 +1520,8 @@ const whatsappService = {
       const oldClient = client;
       client = null;
       whatsappService.client = null;
-      oldClient.removeAllListeners();
-      await oldClient.destroy().catch(() => {});
+      await destroyClient(oldClient).catch(() => {});
+      if (isShuttingDown) return;
       await clearSessionDir();
       await whatsappService.init(io);
       console.log('[WA-AUTOMATION] Client destroyed and session wiped.');
@@ -1424,6 +1531,10 @@ const whatsappService = {
   },
 
   reconnect: async () => {
+    if (isShuttingDown) {
+      console.log('[WA-AUTOMATION] Shutdown in progress; ignoring reconnect() request.');
+      return;
+    }
     // Lifecycle guard: join any in-flight initialization instead of racing it.
     if (isInitializing && initializationPromise) {
       console.log('[WA-AUTOMATION] Initialization in progress; waiting before reconnect...');
@@ -1435,17 +1546,15 @@ const whatsappService = {
         const oldClient = client;
         client = null;
         whatsappService.client = null;
-        try {
-          oldClient.removeAllListeners();
-          await oldClient.destroy().catch(() => {});
-        } catch (e) {
+        await destroyClient(oldClient).catch((e) => {
           console.warn('[WA-AUTOMATION] Client destroy during reconnect failed:', e.message);
-        }
+        });
       }
       if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
       }
+      if (isShuttingDown) return;
       await whatsappService.init(io);
     } catch (err) {
       console.error('WhatsApp client reconnect fail:', err.message);
@@ -1453,6 +1562,10 @@ const whatsappService = {
   },
 
   generateQR: async () => {
+    if (isShuttingDown) {
+      console.log('[WA-AUTOMATION] Shutdown in progress; ignoring generateQR() request.');
+      return { success: false, error: 'Shutdown in progress' };
+    }
     // Lifecycle guard: join any in-flight initialization instead of racing it.
     if (isInitializing && initializationPromise) {
       console.log('[WA-AUTOMATION] Initialization in progress; waiting before QR generation...');
@@ -1463,12 +1576,9 @@ const whatsappService = {
         const oldClient = client;
         client = null;
         whatsappService.client = null;
-        try {
-          oldClient.removeAllListeners();
-          await oldClient.destroy().catch(() => {});
-        } catch (e) {
+        await destroyClient(oldClient).catch((e) => {
           console.warn('[WA-AUTOMATION] Client destroy during generateQR failed:', e.message);
-        }
+        });
       }
       lastQrGeneratedAt = null;
       connectionStatus = 'DISCONNECTED';
@@ -1477,6 +1587,7 @@ const whatsappService = {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
       }
+      if (isShuttingDown) return { success: false, error: 'Shutdown in progress' };
       await clearSessionDir();
       await whatsappService.init(io);
       return { success: true, message: 'QR generation triggered' };
@@ -1488,33 +1599,57 @@ const whatsappService = {
 
   shutdown: async () => {
     // Graceful-shutdown helper: idempotent, safe when never initialized.
-    // Stops background work and destroys the client so Chrome cannot leak
-    // across process restarts. Never throws.
-    try {
-      if (heartbeatInterval) {
-        clearInterval(heartbeatInterval);
-        heartbeatInterval = null;
-      }
-      if (whatsappService.cacheInterval) {
-        clearInterval(whatsappService.cacheInterval);
-        whatsappService.cacheInterval = null;
-      }
-      if (client) {
-        const oldClient = client;
-        client = null;
-        whatsappService.client = null;
-        try {
-          oldClient.removeAllListeners();
-          await oldClient.destroy().catch(() => {});
-        } catch (e) {
-          console.warn('[WA-AUTOMATION] Shutdown client destroy warning:', e.message);
-        }
-      }
-      connectionStatus = 'DISCONNECTED';
-      console.log('[WA-AUTOMATION] WhatsApp service shutdown complete.');
-    } catch (err) {
-      console.warn('[WA-AUTOMATION] WhatsApp shutdown warning:', err.message);
+    // Stops background work, waits bounded time for initialization, and destroys all tracked clients.
+    // Never throws.
+    isShuttingDown = true;
+    if (shutdownPromise) {
+      return shutdownPromise;
     }
+    shutdownPromise = (async () => {
+      try {
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
+        if (whatsappService.cacheInterval) {
+          clearInterval(whatsappService.cacheInterval);
+          whatsappService.cacheInterval = null;
+        }
+
+        if (initializationPromise) {
+          console.log('[WA-AUTOMATION] Initialization in progress during shutdown; waiting up to 10s...');
+          await Promise.race([
+            initializationPromise.catch(() => {}),
+            new Promise(resolve => setTimeout(resolve, 10000))
+          ]);
+        }
+
+        if (client) {
+          const oldClient = client;
+          client = null;
+          whatsappService.client = null;
+          await destroyClient(oldClient).catch((e) => {
+            console.warn('[WA-AUTOMATION] Shutdown client destroy warning:', e.message);
+          });
+        }
+
+        for (const pending of Array.from(pendingClients)) {
+          destroyClient(pending).catch((e) => {
+            console.warn('[WA-AUTOMATION] Pending client cleanup warning:', e.message);
+          });
+        }
+
+        connectionStatus = 'DISCONNECTED';
+        updateCleanupState();
+
+        if (!isCleanupComplete) {
+          console.warn(`[WA-AUTOMATION] WhatsApp shutdown finished with pending or failed cleanup. pendingClients=${pendingClients.size}, failedClients=${failedClients.size}, isInitializing=${isInitializing}`);
+        }
+      } catch (err) {
+        console.warn('[WA-AUTOMATION] WhatsApp shutdown warning:', err.message);
+      }
+    })();
+    return shutdownPromise;
   },
 
   sendAdminNotification: async (message) => {

@@ -12,6 +12,9 @@ export default async function connectDB() {
   try {
     const opts = {
       bufferCommands: false,
+      maxPoolSize: 20,
+      minPoolSize: 2,
+      maxIdleTimeMS: 60000,
     };
 
     console.log('Connecting to MongoDB Atlas...');

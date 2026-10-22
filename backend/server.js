@@ -6,7 +6,7 @@ import connectDB from './config/db.js';
 import { config } from './config/env.js';
 import { seedSuperAdmin, seedBackupAdmin } from './config/seed.js';
 import whatsappService from './services/whatsappService.js';
-import { startReferralCampaignMonitor } from './services/referralCron.js';
+import { startReferralCampaignMonitor, stopReferralCampaignMonitor } from './services/referralCron.js';
 import { getAllowedOrigins } from './middleware/corsConfig.js';
 import { closeRedis } from './config/redis.js';
 import { shutdownBackupServices } from './services/backupService.js';
@@ -36,6 +36,7 @@ const shutdown = async (signal) => {
   try {
     try { await whatsappService.shutdown(); } catch (e) { console.warn('[SHUTDOWN] WhatsApp cleanup warning:', e.message); }
     try { await shutdownBackupServices(); } catch (e) { console.warn('[SHUTDOWN] Backup cleanup warning:', e.message); }
+    try { stopReferralCampaignMonitor(); } catch (e) { console.warn('[SHUTDOWN] Referral monitor cleanup warning:', e.message); }
     try { await closeRedis(); } catch (e) { console.warn('[SHUTDOWN] Redis cleanup warning:', e.message); }
     if (httpServer) {
       await new Promise((resolve) => {

@@ -6,6 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:clip": "vite build --config vite.clip.config.js",
+    "build:podcast": "vite build --config vite.podcast.config.js",
+    "build:marketing": "vite build --config vite.marketing.config.js",
+    "build:web-dev": "vite build --config vite.webdev.config.js",
+    "build:crm": "vite build --config vite.crm.config.js",
+    "build:all": "npm run build:clip && npm run build:podcast && npm run build:marketing && npm run build:web-dev && npm run build:crm",
     "lint": "oxlint",
     "preview": "vite preview",
     "start": "node backend/server.js"

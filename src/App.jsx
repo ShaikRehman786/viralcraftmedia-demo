@@ -21,57 +21,8 @@ const PodcastEditingPage = lazy(() => import('./components/PodcastEditingPage.js
 const MarketingPage = lazy(() => import('./components/MarketingPage.jsx'));
 const WebDevelopmentPage = lazy(() => import('./components/WebDevelopmentPage.jsx'));
 
-export const AuthContext = createContext(null);
-
-export function useAuth() {
-  return useContext(AuthContext);
-}
-
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Public pages must render immediately — never block on auth
-    const p = window.location.pathname;
-    const isPublic = p === '/' || 
-      p.startsWith('/services/') || 
-      p === '/login' || 
-      p.startsWith('/register') || 
-      p.startsWith('/r/') || 
-      p.startsWith(PARTNER_LOGIN_PATH) || 
-      p.startsWith('/reset-password') || 
-      p.startsWith('/invite') || 
-      p.startsWith('/employee/invite') ||
-      p.startsWith('/accept-invitation');
-    if (isPublic) {
-      setLoading(false);
-      // Defer background auth check until browser is idle and after first paint
-      const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
-      const idleId = idle(() => {
-        axios.get('/api/auth/me', { silent: true }).then(res => setUser(res.data.user)).catch(() => {});
-      }, { timeout: 3000 });
-      return () => {
-        if (window.cancelIdleCallback) window.cancelIdleCallback(idleId);
-        else clearTimeout(idleId);
-      };
-    }
-    axios.get('/api/auth/me')
-      .then(res => {
-        setUser(res.data.user);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, []);
-
-  return (
-    <AuthContext.Provider value={{ user, setUser, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+import { AuthContext, useAuth, AuthProvider } from './context/AuthContext.jsx';
+export { AuthContext, useAuth, AuthProvider };
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading } = useAuth();

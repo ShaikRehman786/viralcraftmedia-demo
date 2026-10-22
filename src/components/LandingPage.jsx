@@ -937,139 +937,108 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
         </section>
 
         {/* SERVICES */}
+        {/* SERVICES */}
         <section className="section" id="services">
           <div className="container">
             <div className="sec-hdr center">
-              <span className="sec-label">Services & Solutions</span>
-              <h2 className="sec-title">Custom Creative Operations Built For Business Results</h2>
-              <p className="sec-desc">We build digital assets, platforms, and media funnels that convert attention into business assets. Every project is handcrafted, completely custom, and aligned with your conversion KPIs.</p>
+              <span className="sec-label">Clipping Capabilities</span>
+              <h2 className="sec-title">Custom Creative Operations Built For Video Retention</h2>
+              <p className="sec-desc">We convert your long-form recordings into high-retention short vertical clips engineered to maximize watch time, audience engagement, and conversion.</p>
             </div>
 
-            {/* Redesigned Services Grid */}
-            <div className="redesigned-services-grid">
+            {/* Clip-Editing-Only Showcase Grid */}
+            <div className="redesigned-services-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
               
-              {/* Card 1: Clip Editing */}
+              {/* Feature 1: Viral Hook Extraction */}
               <div className="premium-service-card card-clip-editing">
                 <div>
-                  <div className="premium-card-badge">SHORT-FORM</div>
+                  <div className="premium-card-badge">RETENTION HOOKS</div>
                   <div className="premium-card-header">
-                    <h3 className="premium-service-title">Viral Clip Engine</h3>
-                    <span className="premium-service-subtitle">Perfect For: Creators & Brands</span>
+                    <h3 className="premium-service-title">Viral Hook Extraction</h3>
+                    <span className="premium-service-subtitle">For: Webinars & Streams</span>
                   </div>
                   
                   <div className="premium-card-divider"></div>
                   
-                  <p className="premium-one-liner-val">Transform long-form content into viral short-form videos.</p>
+                  <p className="premium-one-liner-val">Identify and extract the top 1% drop-off-resistant moments from long videos.</p>
                   
                   <div className="premium-card-divider"></div>
                   
                   <div className="card-section-block">
                     <ul className="deliverables-list">
-                      <li>✓ Higher Retention</li>
-                      <li>✓ 48-Hour Delivery SLA</li>
-                      <li>✓ Human Editor Quality Check</li>
+                      <li>✓ First 3-Second Retention Focus</li>
+                      <li>✓ Kinetic Punch-In Framing</li>
+                      <li>✓ Dynamic Word Captions</li>
                     </ul>
                   </div>
                 </div>
 
                 <div className="premium-pricing-cta">
-                  <Link to="/#pricing" className="btn-premium-cta">
-                    Customize Service &rarr;
-                  </Link>
+                  <a href="#pricing" className="btn-premium-cta" onClick={(e) => { e.preventDefault(); scrollTo('#pricing'); }}>
+                    Calculate Price &rarr;
+                  </a>
                 </div>
               </div>
 
-              {/* Card 2: Podcast Editing */}
-              <div className="premium-service-card card-podcast-editing">
+              {/* Feature 2: High-Retention Motion */}
+              <div className="premium-service-card card-clip-editing">
                 <div>
-                  <div className="premium-card-badge">SHOW PRODUCTION</div>
+                  <div className="premium-card-badge">SOUND & MOTION</div>
                   <div className="premium-card-header">
-                    <h3 className="premium-service-title">Podcast Masterclass</h3>
-                    <span className="premium-service-subtitle">Perfect For: Hosts & Brands</span>
+                    <h3 className="premium-service-title">Motion & Sound Design</h3>
+                    <span className="premium-service-subtitle">For: Instagram Reels & Shorts</span>
                   </div>
                   
                   <div className="premium-card-divider"></div>
                   
-                  <p className="premium-one-liner-val">Full-service multi-camera show editing and professional audio mastering.</p>
+                  <p className="premium-one-liner-val">Curated sound effects, motion graphics, and B-roll inserts to maintain visual rhythm.</p>
                   
                   <div className="premium-card-divider"></div>
                   
                   <div className="card-section-block">
                     <ul className="deliverables-list">
-                      <li>✓ Multi-Camera Switches</li>
-                      <li>✓ Background Noise Removal</li>
-                      <li>✓ Broadcast Audio EQ Standards</li>
+                      <li>✓ SFX & Whooshes Pacing</li>
+                      <li>✓ Contextual B-Roll Overlays</li>
+                      <li>✓ Platform-Safe Zone Compliance</li>
                     </ul>
                   </div>
                 </div>
 
                 <div className="premium-pricing-cta">
-                  <Link to="/services/podcast-editing" className="btn-premium-cta">
-                    Customize Service &rarr;
-                  </Link>
+                  <a href="#pricing" className="btn-premium-cta" onClick={(e) => { e.preventDefault(); scrollTo('#pricing'); }}>
+                    Order Clips &rarr;
+                  </a>
                 </div>
               </div>
 
-              {/* Card 3: Social Media Marketing */}
-              <div className="premium-service-card card-social-marketing">
+              {/* Feature 3: Rapid Turnaround Engine */}
+              <div className="premium-service-card card-clip-editing">
                 <div>
-                  <div className="premium-card-badge">CONTENT STRATEGY</div>
+                  <div className="premium-card-badge">DELIVERY SLA</div>
                   <div className="premium-card-header">
-                    <h3 className="premium-service-title">Organic Growth Suite</h3>
-                    <span className="premium-service-subtitle">Perfect For: SaaS & Startups</span>
+                    <h3 className="premium-service-title">48-Hour Studio Pipeline</h3>
+                    <span className="premium-service-subtitle">For: Active Creators & Agencies</span>
                   </div>
                   
                   <div className="premium-card-divider"></div>
                   
-                  <p className="premium-one-liner-val">Data-driven distribution frameworks engineered to scale web traffic.</p>
+                  <p className="premium-one-liner-val">Submit footage links directly and receive edited MP4 clips organized in private cloud folders.</p>
                   
                   <div className="premium-card-divider"></div>
                   
                   <div className="card-section-block">
                     <ul className="deliverables-list">
-                      <li>✓ Niche Competitor Audits</li>
-                      <li>✓ Custom Hook Script Blueprints</li>
-                      <li>✓ Direct Inbound Conversion Funnels</li>
+                      <li>✓ Dedicated Quality Assurance</li>
+                      <li>✓ Direct Google Drive Delivery</li>
+                      <li>✓ Ready-to-Post 1080x1920 MP4</li>
                     </ul>
                   </div>
                 </div>
 
                 <div className="premium-pricing-cta">
-                  <Link to="/services/social-media-marketing" className="btn-premium-cta">
-                    Customize Service &rarr;
-                  </Link>
-                </div>
-              </div>
-
-              {/* Card 4: Web Development */}
-              <div className="premium-service-card card-web-development">
-                <div>
-                  <div className="premium-card-badge">WEB DEVELOPMENT</div>
-                  <div className="premium-card-header">
-                    <h3 className="premium-service-title">Custom Web Solutions</h3>
-                    <span className="premium-service-subtitle">Perfect For: Businesses, Startups & Growing Brands</span>
-                  </div>
-                  
-                  <div className="premium-card-divider"></div>
-                  
-                  <p className="premium-one-liner-val">We design and develop high-performance websites tailored to your business goals, combining modern design, fast performance, and scalable technology.</p>
-                  
-                  <div className="premium-card-divider"></div>
-                  
-                  <div className="card-section-block">
-                    <ul className="deliverables-list">
-                      <li>✓ Business Websites</li>
-                      <li>✓ Landing Pages</li>
-                      <li>✓ Custom Websites</li>
-                      <li>✓ CRM Development</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="premium-pricing-cta">
-                  <Link to="/services/web-design-development" className="btn-premium-cta">
-                    Customize Service &rarr;
-                  </Link>
+                  <a href="#pricing" className="btn-premium-cta" onClick={(e) => { e.preventDefault(); scrollTo('#pricing'); }}>
+                    Get Started &rarr;
+                  </a>
                 </div>
               </div>
 
@@ -1265,11 +1234,8 @@ Upload or paste your raw video link above—we'll review your footage, edit it p
                       onChange={e => setEnquiryService(e.target.value)}
                     >
                       <option value="">Select Service Type *</option>
-                      <option value="Clip Editing">Short Form Clipping & Editing</option>
-                      <option value="Podcast Editing">Podcast Editing & Production</option>
-                      <option value="Social Media Marketing">Social Media Marketing</option>
-                      <option value="Website Design & Development">Website Design & Development</option>
-                      <option value="Clip Editing">Branding & Creative Design</option>
+                      <option value="Clip Editing">Short Form Video Clipping & Editing</option>
+                      <option value="Clip Editing">Creator Bulk Reels & Shorts Retainer</option>
                       <option value="Clip Editing">Video Production Consultation</option>
                     </select>
                   </div>

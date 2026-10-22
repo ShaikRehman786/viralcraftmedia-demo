@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getReferralAttribution, clearReferralAttribution } from '../services/referralAttribution.js';
-import { Scissors, Activity, TrendingUp, Monitor, Play, Heart, MessageCircle, Bookmark, Zap, Target, Layers, UserCheck, Clock, Shield, UploadCloud, DownloadCloud } from 'lucide-react';
+import { Scissors, Play, Heart, MessageCircle, Bookmark, Zap, Target, Layers, UserCheck, Clock, Shield, UploadCloud, DownloadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from './Navbar.jsx';
 import Footer from './Footer.jsx';
@@ -539,74 +539,6 @@ export default function ClipEditingPage() {
           </div>
         </section>
 
-        {/* OTHER SERVICES */}
-        <section className="section" id="services" style={{ padding: '80px 24px' }}>
-          <div className="container">
-            <div className="sec-hdr center">
-              <span className="sec-label">Our Service Suite</span>
-              <h2 className="sec-title">Explore Other Premium Formats</h2>
-            </div>
-            <div className="svc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '32px' }}>
-              
-              {/* Service 1: Clip Editing (Active) */}
-              <div className="svc-card" style={{ border: '2px solid var(--accent)', background: 'rgba(255, 106, 0, 0.02)', minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
-                <div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={Scissors} size={36} color="var(--gray-600)" className="svc-icon" />
-                    <div className="svc-hdr-group">
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Clip Editing (Active)</h3>
-                    </div>
-                  </div>
-                  <p style={{ color: '#575F6E', fontSize: '0.9rem', lineHeight: '1.6' }}>Turn long-form content into highly engaging short-form videos engineered for maximum retention.</p>
-                </div>
-                <Link to="/services/clip-editing" className="btn btn-primary" style={{ width: '100%', marginTop: '24px', textAlign: 'center', display: 'block' }}>Start Project</Link>
-              </div>
-
-              {/* Service 2: Podcast Editing */}
-              <div className="svc-card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
-                <div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={Activity} size={36} color="var(--gray-600)" className="svc-icon" />
-                    <div className="svc-hdr-group">
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Podcast Editing</h3>
-                    </div>
-                  </div>
-                  <p style={{ color: '#575F6E', fontSize: '0.9rem', lineHeight: '1.6' }}>Transform raw podcast recordings into polished, professional episodes that keep listeners engaged.</p>
-                </div>
-                <Link to="/services/podcast-editing" className="btn btn-ghost" style={{ width: '100%', marginTop: '24px', textAlign: 'center', display: 'block' }}>Start Project</Link>
-              </div>
-
-              {/* Service 3: Social Media Marketing */}
-              <div className="svc-card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
-                <div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={TrendingUp} size={36} color="var(--gray-600)" className="svc-icon" />
-                    <div className="svc-hdr-group">
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Social Marketing</h3>
-                    </div>
-                  </div>
-                  <p style={{ color: '#575F6E', fontSize: '0.9rem', lineHeight: '1.6' }}>Help businesses grow organically with strategic content planning, script hook writing, and calendar pacing.</p>
-                </div>
-                <Link to="/services/social-media-marketing" className="btn btn-ghost" style={{ width: '100%', marginTop: '24px', textAlign: 'center', display: 'block' }}>Start Project</Link>
-              </div>
-
-              {/* Service 4: Website Design & Development */}
-              <div className="svc-card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px', borderRadius: '22px' }}>
-                <div>
-                  <div className="svc-card-hdr" style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                    <IconWrapper icon={Monitor} size={36} color="var(--gray-600)" className="svc-icon" />
-                    <div className="svc-hdr-group">
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Website Development</h3>
-                    </div>
-                  </div>
-                  <p style={{ color: '#575F6E', fontSize: '0.9rem', lineHeight: '1.6' }}>Build high-performance websites designed to increase trust, improve conversions, and represent your brand.</p>
-                </div>
-                <Link to="/services/web-design-development" className="btn btn-ghost" style={{ width: '100%', marginTop: '24px', textAlign: 'center', display: 'block' }}>Start Project</Link>
-              </div>
-
-
-            </div>
-          </div>
         </section>
       </main>
 

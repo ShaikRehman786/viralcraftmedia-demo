@@ -56,17 +56,25 @@ function canAccess(pageId, role) {
   return allowed.includes(role);
 }
 
-export default function TopBar({ user, unreadCount, notifications, sidebarOpen, setSidebarOpen, activeTab, onNavigate, onMarkRead, onMarkAllRead, onOpenNotification }) {
+export default function TopBar({ user, unreadCount, notifications, sidebarOpen, setSidebarOpen, activeTab, onNavigate, onMarkRead, onMarkAllRead, onOpenNotification, onLogout }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
 
   const handleLogout = async () => {
+    if (onLogout) {
+      await onLogout();
+      return;
+    }
     try {
       await axios.post('/api/auth/logout');
-      window.location.href = '/';
-    } catch (err) {
-      window.location.href = '/';
-    }
+    } catch (err) {}
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem('partner_token');
+      localStorage.removeItem('activeTab');
+      localStorage.removeItem('crm_filter_cache');
+    } catch (_) {}
+    window.location.href = '/login';
   };
 
   useEffect(() => {
@@ -214,10 +222,11 @@ export default function TopBar({ user, unreadCount, notifications, sidebarOpen, 
             <Search size={15} />
             <input
               type="text"
-              placeholder="Search…"
+              placeholder="Search pages & commands…"
               readOnly
               onFocus={open}
             />
+            <kbd className="header-search-kbd">Ctrl K</kbd>
           </div>
 
           <NotificationBell

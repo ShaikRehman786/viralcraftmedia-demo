@@ -112,7 +112,7 @@ export function countWindowedAttempt(record, now = Date.now()) {
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
     // Normalize email consistently with account creation (trim + lowercase).

@@ -100,18 +100,22 @@ export async function safeGet(key) {
   }
 }
 
-export async function safeSet(key, value, ttlSeconds) {
+export async function safeSet(key, value, ttlSeconds, mode) {
   try {
     const client = await getRedisClient();
-    if (!client) return false;
-    if (ttlSeconds) {
-      await client.set(key, value, 'EX', ttlSeconds);
-    } else {
-      await client.set(key, value);
+    if (!client) return null;
+    if (ttlSeconds && mode) {
+      return await client.set(key, value, 'EX', ttlSeconds, mode);
     }
-    return true;
+    if (ttlSeconds) {
+      return await client.set(key, value, 'EX', ttlSeconds);
+    }
+    if (mode) {
+      return await client.set(key, value, mode);
+    }
+    return await client.set(key, value);
   } catch {
-    return false;
+    return null;
   }
 }
 

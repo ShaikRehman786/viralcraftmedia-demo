@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
+import crypto from 'crypto';
 import { config } from './config/env.js';
 import routes from './routes/index.js';
 import { preventMongoInjection, sanitizeObject, validateCsrfToken } from './middleware/validate.js';
@@ -10,9 +11,58 @@ import errorHandler from './middleware/error.js';
 import { corsOptions } from './middleware/corsConfig.js';
 
 const app = express();
-// Trust Render proxy (fixes ERR_ERL_UNEXPECTED_X_FORWARDED_FOR while preserving IP correctness)
-// Render terminates TLS and forwards via X-Forwarded-For; trust only 1 hop prevents spoofing
-app.set('trust proxy', 1);
+
+function parseTrustProxySetting(raw) {
+  if (raw == null || raw === '') return undefined;
+  const v = String(raw).trim();
+  if (v.toLowerCase() === 'true') return true;
+  if (v.toLowerCase() === 'false') return false;
+  if (/^-?\d+$/.test(v)) return parseInt(v, 10);
+  if (v.includes(',')) return v.split(',').map((s) => s.trim()).filter(Boolean);
+  return v;
+}
+
+// Reverse-proxy trust must be explicitly configured for the verified infrastructure.
+// Supported env vars:
+// - TRUST_PROXY: Express trust proxy value (true|false|number|subnet/name|comma-separated list)
+// - TRUST_PROXY_HOPS (legacy): numeric hop count
+// - TRUSTED_INGRESS_SECRET: optional shared secret expected from trusted ingress
+// - REQUIRE_TRUSTED_INGRESS: when "true" and secret is set, reject direct/bypassing requests
+// Safe default: if no explicit trust proxy config is provided, do not trust forwarded headers
+// (prevents client IP spoofing on direct access). Configure TRUST_PROXY for verified proxies
+// so req.ip/rate limiting/incident logging resolve the real client IP.
+const explicitTrustProxy = parseTrustProxySetting(process.env.TRUST_PROXY);
+const legacyTrustHops = process.env.TRUST_PROXY_HOPS != null && process.env.TRUST_PROXY_HOPS !== ''
+  ? parseInt(process.env.TRUST_PROXY_HOPS, 10)
+  : undefined;
+let trustProxySetting;
+if (explicitTrustProxy !== undefined) {
+  trustProxySetting = explicitTrustProxy;
+} else if (Number.isFinite(legacyTrustHops)) {
+  trustProxySetting = legacyTrustHops;
+} else {
+  trustProxySetting = false;
+}
+app.set('trust proxy', trustProxySetting);
+
+const trustedIngressSecret = process.env.TRUSTED_INGRESS_SECRET || '';
+const requireTrustedIngress = String(process.env.REQUIRE_TRUSTED_INGRESS || '').toLowerCase() === 'true';
+if (trustedIngressSecret && requireTrustedIngress) {
+  app.use((req, res, next) => {
+    if (req.path === '/health' || req.path === '/api/health') return next();
+    const provided = req.headers['x-trusted-ingress-secret'];
+    const providedBuf = Buffer.from(typeof provided === 'string' ? provided : '', 'utf8');
+    const expectedBuf = Buffer.from(trustedIngressSecret, 'utf8');
+    const ok = providedBuf.length === expectedBuf.length && providedBuf.length > 0 && crypto.timingSafeEqual(providedBuf, expectedBuf);
+    if (!ok) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'UNTRUSTED_INGRESS', message: 'Request did not arrive through trusted ingress.', statusCode: 403 }
+      });
+    }
+    return next();
+  });
+}
 app.use(compression());
 
 // Security Headers via Helmet - enterprise hardening (CSP must allow Razorpay checkout)
@@ -76,6 +126,22 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Health check probe endpoint (accessible to Render/uptime probes without CSRF/auth)
+const healthHandler = (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'main-api',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    memory: {
+      rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+      heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+    }
+  });
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // CSRF protection via Origin/Referer header validation
 app.use('/api', validateCsrfToken);

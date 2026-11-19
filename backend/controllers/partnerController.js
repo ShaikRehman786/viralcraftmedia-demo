@@ -485,7 +485,7 @@ export const trackCampaignClick = async (req, res, next) => {
     }
 
     // GDPR compliant IP Hash
-    const ip = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    const ip = req.ip || req.socket?.remoteAddress || '127.0.0.1';
     const ipHash = crypto.createHash('sha256').update(ip).digest('hex');
 
     // Create visit record

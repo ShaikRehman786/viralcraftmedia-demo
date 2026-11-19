@@ -689,6 +689,7 @@ export const createBookingCommission = async (req, res, next) => {
       await booking.save();
 
       // Sync linked enquiry referral status
+      
       if (booking.enquiry) {
         try {
           const linkedEnquiry = await Enquiry.findById(booking.enquiry);

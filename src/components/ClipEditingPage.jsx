@@ -538,8 +538,6 @@ export default function ClipEditingPage() {
             </div>
           </div>
         </section>
-
-        </section>
       </main>
 
       <Footer />

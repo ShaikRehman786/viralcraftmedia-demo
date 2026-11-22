@@ -6,9 +6,14 @@ import compression from 'compression';
 import crypto from 'crypto';
 import { config } from './config/env.js';
 import routes from './routes/index.js';
+import internalWhatsappEventsRoutes from './routes/internalWhatsappEvents.js';
+import internalWhatsappCommandsRoutes from './routes/internalWhatsappCommands.js';
 import { preventMongoInjection, sanitizeObject, validateCsrfToken } from './middleware/validate.js';
 import errorHandler from './middleware/error.js';
 import { corsOptions } from './middleware/corsConfig.js';
+import { createHealthHandler } from './shared/utils/healthCheck.js';
+import mongoose from 'mongoose';
+import { isRedisAvailable } from './config/redis.js';
 
 const app = express();
 
@@ -106,7 +111,8 @@ app.use(cors(corsOptions));
 app.use(express.json({ 
   limit: '10mb',
   verify: (req, res, buf) => {
-    if (req.originalUrl && req.originalUrl.includes('razorpay-webhook')) {
+    const requestUrl = req.originalUrl || req.url || '';
+    if (requestUrl.includes('razorpay-webhook') || requestUrl.includes('/internal/')) {
       req.rawBody = buf.toString('utf8');
     }
   }
@@ -128,18 +134,13 @@ app.use((req, res, next) => {
 });
 
 // Health check probe endpoint (accessible to Render/uptime probes without CSRF/auth)
-const healthHandler = (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    service: 'main-api',
-    uptime: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString(),
-    memory: {
-      rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
-      heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
-    }
-  });
-};
+const healthHandler = createHealthHandler({
+  serviceName: 'main-api',
+  dependencies: () => ({
+    redis: isRedisAvailable(),
+    mongo: mongoose.connection.readyState === 1,
+  }),
+});
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
@@ -157,6 +158,9 @@ if (!isProduction) {
   app.use(validateCsrfToken);
   app.use(routes);
 }
+
+app.use('/internal/whatsapp/events', internalWhatsappEventsRoutes);
+app.use('/internal/whatsapp', internalWhatsappCommandsRoutes);
 
 // Centralized error responder
 app.use(errorHandler);

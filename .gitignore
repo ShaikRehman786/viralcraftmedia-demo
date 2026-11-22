@@ -37,3 +37,7 @@ backend/.wwebjs_cache/
 
 # Node
 node_modules/
+
+# Desktop app build outputs
+desktop/app/
+desktop/release/

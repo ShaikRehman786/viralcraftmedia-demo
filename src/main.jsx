@@ -33,9 +33,13 @@ if (import.meta.env.PROD) {
   console.debug = () => {};
 }
 
-// Defer SW registration until idle so it never blocks first interaction on mobile
-const idleRegister = window.requestIdleCallback || ((cb) => setTimeout(cb, 2500));
-idleRegister(() => registerServiceWorker().catch(() => {}), { timeout: 4000 });
+// Defer SW registration until idle so it never blocks first interaction on mobile.
+// The service worker is only needed for the production PWA; skip it in dev to
+// avoid intercepting Vite dev-server requests.
+if (import.meta.env.PROD) {
+  const idleRegister = window.requestIdleCallback || ((cb) => setTimeout(cb, 2500));
+  idleRegister(() => registerServiceWorker().catch(() => {}), { timeout: 4000 });
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

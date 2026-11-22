@@ -1,0 +1,4 @@
+2026/11/19-20:48:14.299 2674 Reusing MANIFEST D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_auth_step4_test\session-vcm-crm-whatsapp-step4-test\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/11/19-20:48:14.299 2674 Recovering log #3
+2026/11/19-20:48:14.299 2674 Reusing old log D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_auth_step4_test\session-vcm-crm-whatsapp-step4-test\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000003.log 
+2026/11/19-20:48:14.313 6614 Manual compaction at level-0 from '\x00\x02\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x03\x00\x00\x00' @ 0 : 0; will stop at (end)

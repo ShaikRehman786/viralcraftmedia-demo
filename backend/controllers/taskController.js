@@ -9,6 +9,7 @@ import ReferralBooking from '../models/ReferralBooking.js';
 import Enquiry from '../models/Enquiry.js';
 import { logEvent } from '../services/loggingService.js';
 import whatsappService, { sendOrderCompletedWhatsApp, sendTaskNotification } from '../services/whatsappService.js';
+import { whatsappAdapter, isWhatsAppAdapterEnabled } from '../services/whatsappAdapter.js';
 import { sendDeliveryEmail, sendEmployeeTaskAlertEmail, sendEmail } from '../services/emailService.js';
 import { uploadFileToFolder } from '../services/driveService.js';
 import { config } from '../config/env.js';
@@ -363,7 +364,10 @@ export const assignTask = async (req, res, next) => {
         const deadlineStr = task.deadline ? new Date(task.deadline).toLocaleDateString([], { day: 'numeric', month: 'long' }) : 'N/A';
         const wsMsgText = `New Task Assigned\n\nTask:\n${task.name}\n\nPriority:\n${priorityStr}\n\nDeadline:\n${deadlineStr}\n\nPlease login to ViralCraft Media.\n\nReply with:\n\nACCEPT\n\nor\n\nDECLINE`;
         
-        whatsappService.sendMessage(employee.phone, wsMsgText).catch(err => {
+        (isWhatsAppAdapterEnabled()
+          ? whatsappAdapter.sendMessage({ phoneNumber: employee.phone, text: wsMsgText, purpose: 'task_assignment', metadata: { source: 'taskController' } })
+          : whatsappService.sendMessage(employee.phone, wsMsgText)
+        ).catch(err => {
           console.error('Failed to send task assignment alert via WhatsApp:', err.message);
         });
       }
@@ -1525,7 +1529,10 @@ export const createTask = async (req, res, next) => {
           const priorityStr = (task.priority || 'medium').charAt(0).toUpperCase() + (task.priority || 'medium').slice(1);
           const deadlineStr = task.deadline ? new Date(task.deadline).toLocaleDateString([], { day: 'numeric', month: 'long' }) : 'N/A';
           const wsMsgText = `New Task Assigned\n\nTask:\n${task.name}\n\nPriority:\n${priorityStr}\n\nDeadline:\n${deadlineStr}\n\nPlease login to ViralCraft Media.`;
-          whatsappService.sendMessage(employee.phone, wsMsgText).catch(err => {
+          (isWhatsAppAdapterEnabled()
+            ? whatsappAdapter.sendMessage({ phoneNumber: employee.phone, text: wsMsgText, purpose: 'task_assignment', metadata: { source: 'taskController' } })
+            : whatsappService.sendMessage(employee.phone, wsMsgText)
+          ).catch(err => {
             console.error('Failed to send task assignment alert via WhatsApp:', err.message);
           });
         }

@@ -57,9 +57,10 @@
    CRM Layout & Shell Modernization
    ===================================================================== */
 .app-container {
-  background-color: var(--crm-bg-base) !important;
-  color: var(--crm-text-primary) !important;
-  min-height: 100vh;
+    background-color: var(--bg, #FFFFFF) !important;
+    color: var(--charcoal, #101828) !important;
+    color-scheme: light;
+    min-height: 100vh;
 }
 
 .app-sidebar {
@@ -150,15 +151,23 @@
    ===================================================================== */
 .app-header,
 .app-topbar {
-  background: rgba(14, 15, 21, 0.88) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
-  border-bottom: 1px solid var(--crm-border-subtle) !important;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.08) !important;
+  color: #101828 !important;
   height: 60px !important;
   padding: 0 24px !important;
   position: sticky !important;
   top: 0 !important;
   z-index: 40 !important;
+}
+
+[data-crm-theme="dark"] .app-header,
+[data-crm-theme="dark"] .app-topbar {
+  background: rgba(14, 15, 21, 0.88) !important;
+  border-bottom: 1px solid var(--crm-border-subtle) !important;
+  color: var(--crm-text-primary) !important;
 }
 
 .header-search {
@@ -182,10 +191,33 @@
   background: transparent !important;
   border: none !important;
   outline: none !important;
-  color: var(--crm-text-primary) !important;
+  color: #101828 !important;
   font-size: 0.8125rem !important;
   width: 170px !important;
   cursor: pointer !important;
+}
+
+[data-crm-theme="dark"] .header-search input {
+  color: var(--crm-text-primary) !important;
+}
+
+[data-crm-theme="dark"] .header-account-name,
+[data-crm-theme="dark"] .header-account-menu-name {
+  color: var(--crm-text-primary) !important;
+}
+
+[data-crm-theme="dark"] .header-account-menu {
+  background: var(--crm-bg-elevated) !important;
+  border-color: var(--crm-border-subtle) !important;
+}
+
+[data-crm-theme="dark"] .header-account-menu-divider {
+  background: var(--crm-border-subtle) !important;
+}
+
+[data-crm-theme="dark"] .header-account-role,
+[data-crm-theme="dark"] .header-account-menu-email {
+  color: var(--crm-text-secondary) !important;
 }
 
 .header-search-kbd {
@@ -617,4 +649,33 @@
     padding: 10px 12px !important;
     font-size: 0.8125rem !important;
   }
+}
+
+/* Theme-aware CRM root */
+[data-crm-theme="dark"] .app-container { background-color: var(--crm-bg-base) !important; color: var(--crm-text-primary) !important; color-scheme: dark; }
+[data-crm-theme="light"] .app-container { color-scheme: light; }
+
+/* Dark theme surface overrides for common CRM components */
+[data-crm-theme="dark"] .card,
+[data-crm-theme="dark"] .reg-card,
+[data-crm-theme="dark"] .reg-invite-meta,
+[data-crm-theme="dark"] .reg-input-wrap {
+  background: var(--crm-bg-elevated) !important;
+  color: var(--crm-text-primary) !important;
+  border-color: var(--crm-border-subtle) !important;
+}
+
+[data-crm-theme="dark"] input,
+[data-crm-theme="dark"] textarea,
+[data-crm-theme="dark"] select {
+  background: var(--crm-bg-surface) !important;
+  color: var(--crm-text-primary) !important;
+  border-color: var(--crm-border-medium) !important;
+}
+
+[data-crm-theme="dark"] .app-sidebar,
+[data-crm-theme="dark"] .app-topbar {
+  background: var(--crm-bg-surface) !important;
+  color: var(--crm-text-primary) !important;
+  border-color: var(--crm-border-subtle) !important;
 }

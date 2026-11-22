@@ -26,7 +26,9 @@ const BackupPortalPage = lazy(() => import('./BackupPortalPage.jsx'));
 
 axios.defaults.withCredentials = true;
 
-const SOCKET_URL = import.meta.env.VITE_API_URL;
+const SOCKET_URL = (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop)
+  ? window.location.origin
+  : import.meta.env.VITE_API_URL;
 const getSocketUrl = () => SOCKET_URL;
 
 const ROLE_ACCESS = {
@@ -132,6 +134,10 @@ export default function DashboardPage() {
   const [notifBanner, setNotifBanner] = useState(null);
 
   const handleEnableNotifications = async () => {
+    if (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop) {
+      setNotifBanner(null);
+      return;
+    }
     setNotifBanner('prompt');
     const perm = await requestNotificationPermission();
     if (perm === 'granted') {
@@ -309,7 +315,7 @@ export default function DashboardPage() {
     socket.on('new_notification', (notification) => {
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
-      if (user?.role === 'SUPER_ADMIN') {
+    if (user?.role === 'SUPER_ADMIN' && !(typeof window !== 'undefined' && window.vcmDesktop?.isDesktop)) {
         showBrowserNotification(
           notification.title || 'New Notification',
           notification.message || '',

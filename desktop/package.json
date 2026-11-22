@@ -1,0 +1,69 @@
+{
+  "name": "viralcraft-crm-desktop",
+  "productName": "ViralCraft CRM",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ViralCraft Media CRM - standalone desktop application",
+  "type": "module",
+  "main": "main.js",
+  "author": "ViralCraft Media",
+  "license": "UNLICENSED",
+  "scripts": {
+    "prepare:app": "node scripts/prepare.mjs",
+    "start": "npm run prepare:app && electron .",
+    "build:win": "npm run prepare:app && electron-builder --win",
+    "build:mac": "npm run prepare:app && electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.viralcraftmedia.crm",
+    "productName": "ViralCraft CRM",
+    "artifactName": "${productName}-${version}-${os}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "app/**/*",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ViralCraft CRM"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business",
+      "icon": "build/icon.png",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "ViralCraft CRM"
+    },
+    "linux": {
+      "target": []
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  }
+}
+

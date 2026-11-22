@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const clearSessionStorage = useCallback(() => {
     try {
       if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('vcm_crm_session_active');
         window.sessionStorage.clear();
         window.localStorage.removeItem('partner_token');
         window.localStorage.removeItem('activeTab');
@@ -27,7 +28,24 @@ export function AuthProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const markSessionActive = useCallback(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('vcm_crm_session_active', '1');
+      }
+    } catch (_) {}
+  }, []);
+
   useEffect(() => {
+    // Login-first: a fresh application opening never restores a prior session.
+    const isFreshLaunch = typeof window !== 'undefined' && window.sessionStorage.getItem('vcm_crm_session_active') !== '1';
+    if (isFreshLaunch) {
+      clearSessionStorage();
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     const p = typeof window !== 'undefined' ? window.location.pathname : '';
     const isPublic = p === '/' ||
       p.startsWith('/services/') ||
@@ -75,10 +93,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback((userData) => {
+    markSessionActive();
     // Increment epoch to guarantee React components unmount & re-mount afresh
     setSessionEpoch(prev => prev + 1);
     setUser(userData);
-  }, []);
+  }, [markSessionActive]);
 
   const logout = useCallback(async () => {
     try {

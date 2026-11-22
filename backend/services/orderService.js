@@ -11,19 +11,12 @@ import crypto from 'crypto';
 import { sendOrderSuccessEmail, sendEmail } from './emailService.js';
 import { getSuggestedEmployee, assignProjectStaffAndNotify } from './routingService.js';
 import { config, getFrontendBaseUrl } from '../config/env.js';
+import financeService from './financeService.js';
 
 /**
  * Calculates correct price for given number of clips
  */
-export const calculatePricing = (clipCount) => {
-  const count = parseInt(clipCount, 10);
-  if (isNaN(count) || count <= 0) return 0;
-
-  if (count === 1) return 1099;
-  if (count >= 2 && count <= 4) return count * 899;
-  if (count === 5) return 3995; // ₹799 per video
-  return count * 699; // 6+ clips
-};
+export const calculatePricing = (clipCount) => financeService.calculatePricing(clipCount);
 
 /**
  * Validates frontend payment request amount

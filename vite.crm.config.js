@@ -1,9 +1,23 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import fs from "fs";
 
 export default defineConfig({
-  plugins: [react()],
+  base: '/app/',
+  plugins: [react(), {
+    name: 'crm-index-html',
+    closeBundle() {
+      try {
+        const dir = path.resolve(__dirname, 'dist', 'crm');
+        const src = path.join(dir, 'index-crm.html');
+        const dst = path.join(dir, 'index.html');
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, dst);
+        }
+      } catch (e) {}
+    }
+  }],
   server: {
     port: 5173,
     host: true,

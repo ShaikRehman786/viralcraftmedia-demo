@@ -1,6 +1,6 @@
 {
-  "name": "ViralCraft Media CRM",
-  "short_name": "VCM CRM",
+  "name": "ViralCraft CRM",
+  "short_name": "ViralCraft CRM",
   "description": "ViralCraft Media - Enterprise CRM for Video Production & Creative Services",
   "start_url": "/",
   "scope": "/",
@@ -13,13 +13,13 @@
   "dir": "ltr",
   "icons": [
     {
-      "src": "/logoooooooooo.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/logoooooooooo.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

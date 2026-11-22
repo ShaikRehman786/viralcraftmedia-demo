@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL;
+const SOCKET_URL = (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop)
+  ? window.location.origin
+  : import.meta.env.VITE_API_URL;
 const getSocketUrl = () => SOCKET_URL;
 import {
   Bell, CheckCheck, Trash2, X, Search, Filter, ChevronDown,

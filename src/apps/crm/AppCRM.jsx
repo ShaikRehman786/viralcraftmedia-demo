@@ -15,8 +15,10 @@ const PartnerLoginPage = lazy(() => import('../../components/PartnerLoginPage.js
 const PartnerDashboardPage = lazy(() => import('../../components/PartnerDashboardPage.jsx'));
 const BackupPortalPage = lazy(() => import('../../components/BackupPortalPage.jsx'));
 const CRMLandingPortal = lazy(() => import('./CRMLandingPortal.jsx'));
+const CRMAppEntry = lazy(() => import('./CRMAppEntry.jsx'));
 
 import { AuthContext, AuthProvider, useAuth } from '../../context/AuthContext.jsx';
+import { CRMThemeProvider } from '../../context/CRMThemeContext.jsx';
 export { AuthContext, AuthProvider, useAuth };
 
 function ProtectedRoute({ children, allowedRoles }) {
@@ -53,17 +55,25 @@ function ProtectedRoute({ children, allowedRoles }) {
   );
 }
 
+const crmBasename = (typeof window !== 'undefined' && (window.location.pathname === '/app' || window.location.pathname.startsWith('/app/')))
+  ? '/app'
+  : '/';
+
 export default function AppCRM() {
   return (
     <ErrorBoundary>
+      <CRMThemeProvider>
       <AuthProvider>
         <LoadingProvider>
           <ToastProvider>
-            <Router>
+            <Router basename={crmBasename}>
               <Suspense fallback={<CRMGlobalLoader fullScreen message="Loading CRM Module..." />}>
                 <Routes>
-                  {/* Root: Enterprise CRM Application Landing & Portal Gateway */}
-                  <Route path="/" element={<CRMLandingPortal />} />
+                  {/* CRM application entry (login-first) */}
+                  <Route path="/" element={<CRMAppEntry />} />
+
+                  {/* Enterprise CRM Application Landing & Portal Gateway (preserved) */}
+                  <Route path="/portal" element={<CRMLandingPortal />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<LoginPage />} />
                   <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
@@ -142,6 +152,7 @@ export default function AppCRM() {
           </ToastProvider>
         </LoadingProvider>
       </AuthProvider>
+      </CRMThemeProvider>
     </ErrorBoundary>
   );
 }

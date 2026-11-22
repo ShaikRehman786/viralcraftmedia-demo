@@ -8,10 +8,13 @@ import axios from 'axios';
 
 const isLocalhost = typeof window !== 'undefined' && 
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const isDesktop = typeof window !== 'undefined' && !!window.vcmDesktop?.isDesktop;
 const configuredUrl = import.meta.env.VITE_API_URL;
 const productionBackend = 'https://viralcraftmedia-demo.onrender.com';
 
-if (isLocalhost) {
+if (isDesktop) {
+  axios.defaults.baseURL = '';
+} else if (isLocalhost) {
   axios.defaults.baseURL = configuredUrl || 'http://localhost:5000';
 } else {
   axios.defaults.baseURL = (!configuredUrl || configuredUrl.includes('localhost') || configuredUrl.includes('127.0.0.1'))
@@ -27,8 +30,10 @@ if (import.meta.env.PROD) {
   console.debug = () => {};
 }
 
-const idleRegister = window.requestIdleCallback || ((cb) => setTimeout(cb, 2500));
-idleRegister(() => registerServiceWorker().catch(() => {}), { timeout: 4000 });
+if (!isDesktop && import.meta.env.PROD) {
+  const idleRegister = window.requestIdleCallback || ((cb) => setTimeout(cb, 2500));
+  idleRegister(() => registerServiceWorker('/app/').catch(() => {}), { timeout: 4000 });
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

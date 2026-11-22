@@ -6,6 +6,9 @@ import { Lock, Loader2, CheckCircle, AlertTriangle, Clock, UserCheck, UserX, Use
 axios.defaults.withCredentials = true;
 
 const getBackendApiBase = () => {
+  if (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop) {
+    return '';
+  }
   const isLocal = typeof window !== 'undefined' && 
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   if (isLocal) {

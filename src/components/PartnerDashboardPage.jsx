@@ -263,7 +263,9 @@ export default function PartnerDashboardPage() {
   useEffect(() => {
     if (!partner?._id) return;
 
-    const socketUrl = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+    const socketUrl = (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop)
+      ? window.location.origin
+      : (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin));
     const socket = io(socketUrl, {
       withCredentials: true
     });

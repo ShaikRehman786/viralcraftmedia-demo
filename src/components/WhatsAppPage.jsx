@@ -23,7 +23,9 @@ import {
 
 axios.defaults.withCredentials = true;
 
-const SOCKET_URL = import.meta.env.VITE_API_URL;
+const SOCKET_URL = (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop)
+  ? window.location.origin
+  : import.meta.env.VITE_API_URL;
 const getSocketUrl = () => SOCKET_URL;
 
 function formatTS(date) {

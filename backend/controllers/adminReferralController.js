@@ -10,6 +10,7 @@ import PartnerPayment from '../models/PartnerPayment.js';
 import Notification from '../models/Notification.js';
 import { sendEmail } from '../services/emailService.js';
 import { logEvent } from '../services/loggingService.js';
+import referralService from '../services/referralService.js';
 
 // Helper to generate a collision-safe, cryptographically secure referral code
 const generateReferralCode = async () => {
@@ -242,17 +243,10 @@ export const resetPartnerPassword = async (req, res, next) => {
 // Delete Partner
 export const deletePartner = async (req, res, next) => {
   try {
-    const partner = await Partner.findByIdAndDelete(req.params.id);
+    const partner = await referralService.deletePartnerCascade(req.params.id);
     if (!partner) {
       return res.status(404).json({ error: 'Partner not found' });
     }
-
-    // Cascade delete associated records
-    await ReferralCampaign.deleteMany({ partner: req.params.id });
-    await ReferralVisit.deleteMany({ partner: req.params.id });
-    await ReferralBooking.deleteMany({ partner: req.params.id });
-    await PartnerCommission.deleteMany({ partner: req.params.id });
-    await PartnerPayment.deleteMany({ partner: req.params.id });
 
     await logEvent({
       userId: req.user._id,
@@ -515,14 +509,10 @@ export const updateCampaign = async (req, res, next) => {
 // Delete Campaign
 export const deleteCampaign = async (req, res, next) => {
   try {
-    const campaign = await ReferralCampaign.findByIdAndDelete(req.params.id);
+    const campaign = await referralService.deleteCampaignCascade(req.params.id);
     if (!campaign) {
       return res.status(404).json({ error: 'Campaign not found' });
     }
-
-    // Cascade cleans
-    await ReferralVisit.deleteMany({ campaign: req.params.id });
-    await ReferralBooking.deleteMany({ campaign: req.params.id });
 
     res.status(200).json({ success: true, message: 'Campaign and associated logs deleted' });
   } catch (err) {
@@ -670,194 +660,24 @@ export const createBookingCommission = async (req, res, next) => {
   } = req.body;
 
   try {
-    const booking = await ReferralBooking.findById(req.params.id).populate('campaign').populate('partner');
-    if (!booking) {
-      return res.status(404).json({ error: 'Attributed booking not found' });
-    }
-
-    // 1. If status is 'Commission Not Generated', reset the commission
-    if (status === 'Commission Not Generated') {
-      const commission = await PartnerCommission.findOne({ booking: booking._id });
-      if (commission) {
-        await PartnerPayment.deleteMany({ commission: commission._id });
-        await PartnerCommission.deleteOne({ _id: commission._id });
-      }
-      booking.bookingValue = 0;
-      booking.commissionPercentage = 0;
-      booking.commissionAmount = 0;
-      booking.status = 'Pending';
-      await booking.save();
-
-      // Sync linked enquiry referral status
-      
-      if (booking.enquiry) {
-        try {
-          const linkedEnquiry = await Enquiry.findById(booking.enquiry);
-          if (linkedEnquiry && linkedEnquiry.referral) {
-            linkedEnquiry.referral.referralStatus = 'Pending';
-            await linkedEnquiry.save();
-          }
-        } catch (err) {}
-      }
-
-      // Realtime update socket emit
-      const dispatch = req.app.get('socketio_dispatch');
-      if (dispatch && booking.partner) {
-        dispatch(booking.partner._id.toString(), 'commission-updated', { partnerId: booking.partner._id });
-      }
-
-      return res.status(200).json({ success: true, message: 'Commission reset successfully' });
-    }
-
-    // Use the admin-configured values from the request when provided;
-    // otherwise fall back to the values already stored on the booking.
-    let val = booking.bookingValue;
-    let pct = booking.commissionPercentage;
-    if (bookingValue !== undefined && bookingValue !== null && bookingValue !== '') {
-      val = Number(bookingValue);
-    }
-    if (commissionPercentage !== undefined && commissionPercentage !== null && commissionPercentage !== '') {
-      pct = Number(commissionPercentage);
-    }
-
-    // Validate explicitly instead of silently persisting a zero commission.
-    if (!Number.isFinite(val) || val < 0) {
-      return res.status(400).json({ error: 'A valid non-negative project value (bookingValue) is required' });
-    }
-    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
-      return res.status(400).json({ error: 'A valid commission percentage between 0 and 100 is required' });
-    }
-    if (val === 0) {
-      return res.status(400).json({ error: 'Project value must be greater than zero to generate a commission' });
-    }
-    const commissionAmount = val * (pct / 100);
-
-    // 2. Otherwise update booking commission details
-    booking.bookingValue = val;
-    booking.commissionPercentage = pct;
-    booking.commissionAmount = commissionAmount;
-    booking.status = 'Completed';
-    await booking.save();
-
-    // Sync linked enquiry referral status to Completed
-    if (booking.enquiry) {
-      try {
-        const linkedEnquiry = await Enquiry.findById(booking.enquiry);
-        if (linkedEnquiry && linkedEnquiry.referral) {
-          linkedEnquiry.referral.referralStatus = 'Completed';
-          await linkedEnquiry.save();
-        }
-      } catch (err) {}
-    }
-
-    // 3. Find or create PartnerCommission record
-    let commission = await PartnerCommission.findOne({ booking: booking._id });
-    const partnerId = booking.partner?._id || booking.partner;
-    if (!commission) {
-      commission = new PartnerCommission({
-        booking: booking._id,
-        partner: partnerId,
-        commissionPercentage: pct,
-        commissionAmount: commissionAmount
-      });
-    } else {
-      commission.partner = partnerId;
-      commission.commissionPercentage = pct;
-      commission.commissionAmount = commissionAmount;
-    }
-
-    // Map status
-    let mappedStatus = 'Pending';
-    if (status === 'Approved') mappedStatus = 'Approved';
-    else if (status === 'Payment Pending') mappedStatus = 'Payment Pending';
-    else if (status === 'Paid') mappedStatus = 'Paid';
-    else if (status === 'Rejected') mappedStatus = 'Rejected';
-    else if (status === 'Cancelled') mappedStatus = 'Cancelled';
-    else if (status === 'Pending Approval') mappedStatus = 'Pending';
-    else if (status) mappedStatus = status; // support raw string matching
-
-    commission.status = mappedStatus;
-
-    // Handle payout parameters for 'Paid' status
-    if (mappedStatus === 'Paid') {
-      commission.paymentDate = paymentDate ? new Date(paymentDate) : new Date();
-      commission.transactionReference = transactionReference || 'N/A';
-      commission.internalNotes = internalNotes || '';
-
-      // Manage PartnerPayment record
-      let payment = await PartnerPayment.findOne({ commission: commission._id });
-      if (!payment) {
-        payment = new PartnerPayment({
-          partner: partnerId,
-          commission: commission._id
-        });
-      }
-      payment.amount = commissionAmount;
-      payment.paymentDate = commission.paymentDate;
-      payment.referenceNumber = commission.transactionReference;
-      payment.status = 'Paid';
-      payment.internalNotes = commission.internalNotes;
-      await payment.save();
-    } else {
-      // Remove any leftover payments if changing from Paid to a different status
-      await PartnerPayment.deleteMany({ commission: commission._id });
-      commission.paymentDate = null;
-      commission.transactionReference = '';
-      if (internalNotes !== undefined) {
-        commission.internalNotes = internalNotes;
-      }
-    }
-
-    await commission.save();
-
-    // Log the event and send alerts
-    await logEvent({
-      userId: req.user._id,
-      userName: req.user.name,
-      action: `COMMISSION_${mappedStatus.toUpperCase()}`,
-      details: { message: `Commission of ₹${commissionAmount} status set to ${mappedStatus} for booking ${booking._id}` },
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent']
+    const result = await referralService.generateBookingCommission(req.params.id, {
+      bookingValue,
+      commissionPercentage,
+      status,
+      paymentDate,
+      transactionReference,
+      internalNotes
+    }, {
+      adminUser: { ...req.user?.toObject?.() ? req.user.toObject() : req.user, ipAddress: req.ip, userAgent: req.headers['user-agent'] },
+      dispatcher: req.app.get('socketio_dispatch')
     });
 
-    // Notify Partner
-    await createPartnerNotification(
-      booking.partner._id,
-      `Commission ${mappedStatus}`,
-      `Your commission of ₹${commissionAmount.toFixed(2)} is now ${mappedStatus}.`,
-      '/partner/commissions',
-      commission._id.toString(),
-      'PartnerCommission'
-    );
-
-    // Email alert
-    try {
-      await sendEmail({
-        to: booking.partner.email,
-        subject: `Commission Status Update: ${mappedStatus} — ViralCraft Media Partner Portal`,
-        html: `
-          <h3>Commission Status Updated</h3>
-          <p>Hello ${booking.partner.ownerName},</p>
-          <p>Your referral commission has been updated to <strong>${mappedStatus}</strong>.</p>
-          <ul>
-            <li><strong>Service:</strong> ${booking.service}</li>
-            <li><strong>Project Value:</strong> ₹${val}</li>
-            <li><strong>Commission Amount:</strong> ₹${commissionAmount} (${pct}%)</li>
-            ${mappedStatus === 'Paid' ? `<li><strong>Txn Reference:</strong> ${transactionReference}</li>` : ''}
-          </ul>
-          <p>Check details on your partner workspace portal dashboard.</p>
-        `
-      });
-    } catch (e) {}
-
-    // Real-time synchronization socket dispatch
-    const dispatch = req.app.get('socketio_dispatch');
-    if (dispatch && booking.partner) {
-      dispatch(booking.partner._id.toString(), 'commission-updated', { partnerId: booking.partner._id });
+    if (result.reset) {
+      return res.status(200).json({ success: true, message: 'Commission reset successfully' });
     }
-
-    res.status(200).json({ success: true, data: commission });
+    return res.status(200).json({ success: true, data: result.commission });
   } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     next(err);
   }
 };
@@ -886,56 +706,13 @@ export const getAdminCommissions = async (req, res, next) => {
 // Approve/Reject Commission
 export const updateCommissionStatus = async (req, res, next) => {
   const { status } = req.body;
-
-  if (!status || !['Approved', 'Cancelled', 'Pending'].includes(status)) {
-    return res.status(400).json({ error: 'A valid status is required (Approved, Cancelled)' });
-  }
-
   try {
-    const commission = await PartnerCommission.findById(req.params.id).populate('partner').populate('booking');
-    if (!commission) {
-      return res.status(404).json({ error: 'Commission record not found' });
-    }
-
-    commission.status = status;
-    await commission.save();
-
-    if (status === 'Approved') {
-      await createPartnerNotification(
-        commission.partner._id,
-        'Commission Approved',
-        `Your commission of ₹${commission.commissionAmount.toFixed(2)} was approved.`,
-        '/partner/commissions',
-        commission._id.toString(),
-        'PartnerCommission'
-      );
-
-      // Send email alert to partner
-      try {
-        await sendEmail({
-          to: commission.partner.email,
-          subject: 'Commission Approved — ViralCraft Media Partner Portal',
-          html: `
-            <h3>Commission Approved</h3>
-            <p>Hello ${commission.partner.ownerName},</p>
-            <p>Your referral commission of <strong>₹${commission.commissionAmount}</strong> has been approved for <strong>${commission.booking?.service || 'Service Booking'}</strong>.</p>
-            <p>We will initiate the transfer shortly. You can track this in your dashboard.</p>
-          `
-        });
-      } catch (e) {}
-
-      await logEvent({
-        userId: req.user._id,
-        userName: req.user.name,
-        action: 'COMMISSION_APPROVED',
-        details: { message: `Commission of ₹${commission.commissionAmount} approved for ${commission.partner.agencyName}` },
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent']
-      });
-    }
-
+    const commission = await referralService.updateCommissionStatus(req.params.id, status, {
+      adminUser: { ...req.user?.toObject?.() ? req.user.toObject() : req.user, ipAddress: req.ip, userAgent: req.headers['user-agent'] }
+    });
     res.status(200).json({ success: true, data: commission });
   } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     next(err);
   }
 };
@@ -943,79 +720,13 @@ export const updateCommissionStatus = async (req, res, next) => {
 // Payout Commission
 export const payCommission = async (req, res, next) => {
   const { paymentDate, transactionReference, internalNotes } = req.body;
-
-  if (!paymentDate || !transactionReference) {
-    return res.status(400).json({ error: 'Payment date and transaction reference code are required' });
-  }
-
   try {
-    const commission = await PartnerCommission.findById(req.params.id).populate('partner').populate('booking');
-    if (!commission) {
-      return res.status(404).json({ error: 'Commission record not found' });
-    }
-
-    commission.status = 'Paid';
-    commission.paymentDate = new Date(paymentDate);
-    commission.transactionReference = transactionReference;
-    commission.internalNotes = internalNotes || '';
-    await commission.save();
-
-    // Create or update PartnerPayment transaction audit record
-    const partnerId = commission.partner?._id || commission.partner;
-    let payment = await PartnerPayment.findOne({ commission: commission._id });
-    if (!payment) {
-      payment = new PartnerPayment({
-        partner: partnerId,
-        commission: commission._id
-      });
-    }
-    payment.amount = commission.commissionAmount;
-    payment.paymentDate = commission.paymentDate;
-    payment.referenceNumber = transactionReference;
-    payment.status = 'Paid';
-    payment.internalNotes = internalNotes || '';
-    await payment.save();
-
-    // Notify Partner
-    await createPartnerNotification(
-      commission.partner._id,
-      'Commission Paid Out',
-      `Payout of ₹${commission.commissionAmount.toFixed(2)} completed. Txn ID: ${transactionReference}`,
-      '/partner/commissions',
-      payment._id.toString(),
-      'PartnerPayment'
-    );
-
-    // Send email alert to partner
-    try {
-      await sendEmail({
-        to: commission.partner.email,
-        subject: 'Commission Paid Out — ViralCraft Media Partner Portal',
-        html: `
-          <h3>Commission Payout Settled</h3>
-          <p>Hello ${commission.partner.ownerName},</p>
-          <p>We are pleased to inform you that we have paid your commission of <strong>₹${commission.commissionAmount}</strong>.</p>
-          <p><strong>Transaction Details:</strong></p>
-          <ul>
-            <li><strong>Service category:</strong> ${commission.booking?.service || 'N/A'}</li>
-            <li><strong>Payment Date:</strong> ${new Date(paymentDate).toLocaleDateString()}</li>
-            <li><strong>Txn Reference Code:</strong> ${transactionReference}</li>
-          </ul>
-        `
-      });
-    } catch (e) {}
-
-    await logEvent({
-      userId: req.user._id,
-      userName: req.user.name,
-      action: 'COMMISSION_PAID',
-      details: { message: `Commission of ₹${commission.commissionAmount} marked as Paid for ${commission.partner.agencyName}` },
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent']
+    const commission = await referralService.payCommission(req.params.id, { paymentDate, transactionReference, internalNotes }, {
+      adminUser: { ...req.user?.toObject?.() ? req.user.toObject() : req.user, ipAddress: req.ip, userAgent: req.headers['user-agent'] }
     });
-
     res.status(200).json({ success: true, data: commission });
   } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     next(err);
   }
 };

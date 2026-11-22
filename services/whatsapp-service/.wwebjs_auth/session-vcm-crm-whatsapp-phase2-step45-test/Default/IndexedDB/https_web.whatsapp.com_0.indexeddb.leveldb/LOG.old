@@ -1,0 +1,27 @@
+2026/11/20-19:25:52.319 6154 Reusing MANIFEST D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_auth\session-vcm-crm-whatsapp-phase2-step45-test\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/11/20-19:25:52.320 6154 Recovering log #4810
+2026/11/20-19:25:52.327 6154 Reusing old log D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_auth\session-vcm-crm-whatsapp-phase2-step45-test\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/004810.log 
+2026/11/20-19:25:53.106 6080 Compacting 1@1 + 10@2 files
+2026/11/20-19:25:53.150 6080 Generated table #4817@1: 84638 keys, 2235515 bytes
+2026/11/20-19:25:53.184 6080 Generated table #4818@1: 53284 keys, 2274909 bytes
+2026/11/20-19:25:53.214 6080 Generated table #4819@1: 23488 keys, 2174590 bytes
+2026/11/20-19:25:53.252 6080 Generated table #4820@1: 47162 keys, 2205940 bytes
+2026/11/20-19:25:53.299 6080 Generated table #4821@1: 77564 keys, 2243011 bytes
+2026/11/20-19:25:53.346 6080 Generated table #4822@1: 66673 keys, 2234628 bytes
+2026/11/20-19:25:53.385 6080 Generated table #4823@1: 52609 keys, 2219497 bytes
+2026/11/20-19:25:53.430 6080 Generated table #4824@1: 45563 keys, 2212996 bytes
+2026/11/20-19:25:53.464 6080 Generated table #4825@1: 37604 keys, 2194302 bytes
+2026/11/20-19:25:53.468 6080 Generated table #4826@1: 5184 keys, 144449 bytes
+2026/11/20-19:25:53.468 6080 Compacted 1@1 + 10@2 files => 20139837 bytes
+2026/11/20-19:25:53.469 6080 compacted to: files[ 0 3 58 0 0 0 0 ]
+2026/11/20-19:25:53.469 6080 Delete type=2 #4766
+2026/11/20-19:25:53.469 6080 Delete type=2 #4776
+2026/11/20-19:25:53.470 6080 Delete type=2 #4777
+2026/11/20-19:25:53.470 6080 Delete type=2 #4778
+2026/11/20-19:25:53.470 6080 Delete type=2 #4779
+2026/11/20-19:25:53.470 6080 Delete type=2 #4780
+2026/11/20-19:25:53.470 6080 Delete type=2 #4781
+2026/11/20-19:25:53.470 6080 Delete type=2 #4782
+2026/11/20-19:25:53.470 6080 Delete type=2 #4783
+2026/11/20-19:25:53.470 6080 Delete type=2 #4786
+2026/11/20-19:25:53.470 6080 Delete type=2 #4814

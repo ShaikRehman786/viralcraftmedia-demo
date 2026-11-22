@@ -6,18 +6,20 @@ axios.defaults.withCredentials = true;
 
 const redirectByRole = (role) => {
   const normalized = role ? role.toUpperCase() : '';
+  const inCrm = typeof window !== 'undefined' && (window.location.pathname === '/app' || window.location.pathname.startsWith('/app/'));
+  const base = inCrm ? '/app' : '';
   if (normalized === 'BACKUP_ADMIN') {
-    window.location.href = '/backup';
+    window.location.href = base + '/backup';
   } else if (normalized === 'SUPER_ADMIN') {
-    window.location.href = '/admin';
+    window.location.href = base + '/admin';
   } else if (normalized === 'MANAGER') {
-    window.location.href = '/manager';
+    window.location.href = base + '/manager';
   } else if (normalized === 'EMPLOYEE') {
-    window.location.href = '/employee';
+    window.location.href = base + '/employee';
   } else if (normalized === 'CLIENT') {
-    window.location.href = '/client';
+    window.location.href = base + '/client';
   } else {
-    window.location.href = '/dashboard';
+    window.location.href = base + '/dashboard';
   }
 };
 
@@ -72,6 +74,7 @@ export default function LoginPage() {
           setLoading(false);
           return;
         }
+        try { window.sessionStorage.setItem('vcm_crm_session_active', '1'); } catch {}
         redirectByRole(res.data.role);
       }
     } catch (err) {
@@ -115,15 +118,16 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await axios.post('/api/auth/change-password', { password: newPassword });
-      if (res.data.success) {
-        setMessage('Password updated successfully. Redirecting...');
-        setTimeout(() => {
-          axios.get('/api/auth/me').then(meRes => {
-            redirectByRole(meRes.data.user.role);
-          }).catch(() => {
-            window.location.href = '/login';
-          });
-        }, 1500);
+        if (res.data.success) {
+          setMessage('Password updated successfully. Redirecting...');
+          try { window.sessionStorage.setItem('vcm_crm_session_active', '1'); } catch {}
+          setTimeout(() => {
+            axios.get('/api/auth/me').then(meRes => {
+              redirectByRole(meRes.data.user.role);
+            }).catch(() => {
+              window.location.href = '/login';
+            });
+          }, 1500);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to change temporary password.');

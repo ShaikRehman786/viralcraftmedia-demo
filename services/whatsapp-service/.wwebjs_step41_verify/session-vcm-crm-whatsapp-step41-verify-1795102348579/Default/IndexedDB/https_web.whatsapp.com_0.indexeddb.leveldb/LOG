@@ -1,0 +1,6 @@
+2026/11/19-21:02:33.351 5d28 Creating DB D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_step41_verify\session-vcm-crm-whatsapp-step41-verify-1795102348579\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb since it was missing.
+2026/11/19-21:02:33.355 5d28 Reusing MANIFEST D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_step41_verify\session-vcm-crm-whatsapp-step41-verify-1795102348579\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/11/19-21:02:34.667 64a8 Level-0 table #5: started
+2026/11/19-21:02:34.671 64a8 Level-0 table #5: 65019 bytes OK
+2026/11/19-21:02:34.673 64a8 Delete type=0 #3
+2026/11/19-21:02:34.674 a80 Manual compaction at level-0 from '\x00\x06\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x07\x00\x00\x00' @ 0 : 0; will stop at (end)

@@ -1,0 +1,20 @@
+2026/11/19-21:09:51.095 427c Reusing MANIFEST D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_step41_verify\session-vcm-crm-whatsapp-step41-verify-1795102761086\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/11/19-21:09:51.096 427c Recovering log #23
+2026/11/19-21:09:51.096 427c Reusing old log D:\Clients\viralcraftmedia\services\whatsapp-service\.wwebjs_step41_verify\session-vcm-crm-whatsapp-step41-verify-1795102761086\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000023.log 
+2026/11/19-21:09:51.118 427c Compacting 1@1 + 1@2 files
+2026/11/19-21:09:51.120 427c Generated table #26@1: 231 keys, 4782 bytes
+2026/11/19-21:09:51.120 427c Compacted 1@1 + 1@2 files => 4782 bytes
+2026/11/19-21:09:51.121 427c compacted to: files[ 0 0 1 0 0 0 0 ]
+2026/11/19-21:09:51.122 4f60 Level-0 table #28: started
+2026/11/19-21:09:51.123 4f60 Level-0 table #28: 4044 bytes OK
+2026/11/19-21:09:51.126 4f60 Delete type=0 #23
+2026/11/19-21:09:51.126 427c Manual compaction at level-0 from '\x00\x14\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x15\x00\x00\x00' @ 0 : 0; will stop at (end)
+2026/11/19-21:09:51.128 427c Manual compaction at level-0 from '\x00\x13\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x14\x00\x00\x00' @ 0 : 0; will stop at (end)
+2026/11/19-21:09:51.128 427c Manual compaction at level-1 from '\x00\x13\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x14\x00\x00\x00' @ 0 : 0; will stop at '\x00\x14\x00\x00\xc8\x1a\x00u\x00n\x00r\x00e\x00s\x00p\x00o\x00n\x00s\x00i\x00v\x00e\x00n\x00e\x00s\x00s\x00-\x00e\x00v\x00e\x00n\x00t\x00s\x00-\x00v\x002' @ 6456 : 0
+2026/11/19-21:09:51.128 427c Compacting 1@1 + 1@2 files
+2026/11/19-21:09:51.129 427c Generated table #29@1: 251 keys, 6750 bytes
+2026/11/19-21:09:51.129 427c Compacted 1@1 + 1@2 files => 6750 bytes
+2026/11/19-21:09:51.130 427c compacted to: files[ 0 0 1 0 0 0 0 ]
+2026/11/19-21:09:51.130 427c Delete type=2 #22
+2026/11/19-21:09:51.130 427c Delete type=2 #24
+2026/11/19-21:09:51.131 427c Manual compaction at level-1 from '\x00\x14\x00\x00\xc8\x1a\x00u\x00n\x00r\x00e\x00s\x00p\x00o\x00n\x00s\x00i\x00v\x00e\x00n\x00e\x00s\x00s\x00-\x00e\x00v\x00e\x00n\x00t\x00s\x00-\x00v\x002' @ 6456 : 0 .. '\x00\x14\x00\x00\x00' @ 0 : 0; will stop at (end)

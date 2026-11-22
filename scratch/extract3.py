@@ -1,0 +1,5 @@
+src = open('backend/services/whatsappService.js', encoding='utf-8').read()
+ls = src.index('const logStep =')
+la = src.index('const logWhatsAppAudit =')
+open('scratch/logstep.txt','w',encoding='utf-8').write(src[ls:la])
+print('ok')

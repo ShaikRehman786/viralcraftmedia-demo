@@ -1,0 +1,4 @@
+const logStep = (stepName, details) => {
+  console.log(`[WA-AUTOMATION] [${new Date().toISOString()}] [${stepName.toUpperCase()}]`, details || '');
+};
+

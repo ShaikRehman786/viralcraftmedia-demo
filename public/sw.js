@@ -1,12 +1,88 @@
+const CACHE_NAME = 'vcm-crm-static-v4';
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
+    } catch (e) {}
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (!request || request.method !== 'GET') return;
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch (e) {
+    return;
+  }
+
+  // Only handle same-origin requests; let the browser handle external ones.
+  if (url.origin !== self.location.origin) return;
+
+  // Never intercept or cache authenticated API responses.
+  if (url.pathname.startsWith('/api/')) return;
+
+  // Do not intercept development-server / HMR requests.
+  if (
+    url.pathname.startsWith('/@vite') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.startsWith('/@react-refresh') ||
+    url.pathname.startsWith('/@id/') ||
+    url.search.includes('t=') ||
+    url.pathname.endsWith('.map')
+  ) {
+    return;
+  }
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    try {
+      if (request.mode === 'navigate') {
+        try {
+          const networkResponse = await fetch(request);
+          if (networkResponse && networkResponse.ok && networkResponse.type === 'basic') {
+            cache.put(request, networkResponse.clone()).catch(() => {});
+          }
+          return networkResponse;
+        } catch (err) {
+          const cached = await cache.match(request);
+          if (cached) return cached;
+          return new Response('Offline', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+          });
+        }
+      }
+
+      const cached = await cache.match(request);
+      if (cached) return cached;
+
+      const networkResponse = await fetch(request);
+      if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        cache.put(request, networkResponse.clone()).catch(() => {});
+      }
+      return networkResponse;
+    } catch (err) {
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      return new Response('Network error', {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      });
+    }
+  })());
 });
 
 self.addEventListener('push', (event) => {

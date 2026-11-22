@@ -1,0 +1,9 @@
+export const sendTaskNotification = async (projectId, employeeIds) => {
+  try {
+    const { sendProjectAssignmentNotifications } = await import('./notificationService.js');
+    await sendProjectAssignmentNotifications(projectId);
+  } catch (err) {
+    console.error('[WA-NOTIFICATION] sendTaskNotification failed:', err.message);
+  }
+};
+

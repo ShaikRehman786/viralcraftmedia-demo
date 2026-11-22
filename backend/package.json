@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
+    "worker": "node workers/referralWorker.js",
+    "test": "node --experimental-test-module-mocks --test tests/**/*.js",
     "setup:chrome": "node scripts/install-chrome.js",
     "postinstall": "node scripts/install-chrome.js"
   },

@@ -2,7 +2,20 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'crm-dev-rewrite',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url || '').split('?')[0];
+        if (pathOnly === '/app' || pathOnly.startsWith('/app/')) {
+          const qIndex = (req.url || '').indexOf('?');
+          const q = qIndex >= 0 ? (req.url || '').slice(qIndex) : '';
+          req.url = '/index-crm.html' + q;
+        }
+        next();
+      });
+    }
+  }],
   server: {
     host: true,
     allowedHosts: true,

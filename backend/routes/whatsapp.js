@@ -5,12 +5,25 @@ import { body, validationResult } from 'express-validator';
 import whatsappService from '../services/whatsappService.js';
 import WhatsAppMessage from '../models/WhatsAppMessage.js';
 import WhatsAppSession from '../models/WhatsAppSession.js';
+import {
+  whatsappAdapter,
+  isWhatsAppAdapterEnabled,
+  mapStatusToPublic,
+  mapQrToPublic,
+} from '../services/whatsappAdapter.js';
 
 const router = express.Router();
+
+const useAdapter = () => isWhatsAppAdapterEnabled();
 
 // 1. Fetch current connection status
 router.get('/status', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res, next) => {
   try {
+    if (useAdapter()) {
+      const status = await whatsappAdapter.getStatus();
+      return res.status(200).json(mapStatusToPublic(status));
+    }
+
     const session = await WhatsAppSession.findOne();
     const liveStatus = whatsappService.getConnectionStatus();
 
@@ -34,6 +47,11 @@ router.get('/status', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, 
 // 2. Fetch connection QR code
 router.get('/qr', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res, next) => {
   try {
+    if (useAdapter()) {
+      const qr = await whatsappAdapter.getQr();
+      return res.status(200).json(mapQrToPublic(qr));
+    }
+
     const liveStatus = whatsappService.getConnectionStatus();
     return res.status(200).json({
       success: true,
@@ -55,6 +73,25 @@ router.post('/send', protect, authorize('SUPER_ADMIN'), webhookLimiter, [
       return res.status(400).json({ error: 'Validation failed', details: errors.array() });
     }
     const { phoneNumber, text } = req.body;
+
+    if (useAdapter()) {
+      try {
+        const savedMsg = await whatsappAdapter.sendMessage({
+          phoneNumber,
+          text,
+          purpose: 'manual',
+          metadata: { source: 'api' }
+        });
+        return res.status(200).json({
+          success: true,
+          message: 'Message sent successfully via WhatsApp.',
+          data: savedMsg
+        });
+      } catch (err) {
+        return res.status(500).json({ error: err.message });
+      }
+    }
+
     const savedMsg = await whatsappService.sendMessage(phoneNumber, text);
     return res.status(200).json({
       success: true,
@@ -69,6 +106,17 @@ router.post('/send', protect, authorize('SUPER_ADMIN'), webhookLimiter, [
 // 4. Logout / Reset device session
 router.post('/logout', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
+    if (useAdapter()) {
+      const result = await whatsappAdapter.logout();
+      if (!result.success) {
+        return res.status(500).json({ error: result.error || 'Failed to log out from WhatsApp.' });
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'Logged out from WhatsApp device successfully.'
+      });
+    }
+
     await whatsappService.logout();
     return res.status(200).json({
       success: true,
@@ -82,6 +130,17 @@ router.post('/logout', protect, authorize('SUPER_ADMIN'), async (req, res, next)
 // 5. Generate fresh QR for WhatsApp linking
 router.post('/generate-qr', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
+    if (useAdapter()) {
+      const result = await whatsappAdapter.generateQr();
+      if (!result.success) {
+        return res.status(500).json({ error: result.error || 'Failed to generate QR code.' });
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'QR code generation triggered. Scan with WhatsApp to link.'
+      });
+    }
+
     const result = await whatsappService.generateQR();
     if (!result.success) {
       return res.status(500).json({ error: result.error || 'Failed to generate QR code.' });
@@ -98,6 +157,17 @@ router.post('/generate-qr', protect, authorize('SUPER_ADMIN'), async (req, res, 
 // 6. Reconnect WhatsApp service
 router.post('/reconnect', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
+    if (useAdapter()) {
+      const result = await whatsappAdapter.reconnect();
+      if (!result.success) {
+        return res.status(500).json({ error: result.error || 'Failed to reconnect WhatsApp.' });
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'WhatsApp reconnect triggered.'
+      });
+    }
+
     await whatsappService.reconnect();
     return res.status(200).json({
       success: true,
@@ -111,6 +181,17 @@ router.post('/reconnect', protect, authorize('SUPER_ADMIN'), async (req, res, ne
 // 7. Clear session and force fresh QR
 router.post('/clear-session', protect, authorize('SUPER_ADMIN'), async (req, res, next) => {
   try {
+    if (useAdapter()) {
+      const result = await whatsappAdapter.clearSession();
+      if (!result.success) {
+        return res.status(500).json({ error: result.error || 'Failed to clear WhatsApp session.' });
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'Session cleared. Generate a new QR to link WhatsApp.'
+      });
+    }
+
     await whatsappService.logout();
     return res.status(200).json({
       success: true,
@@ -124,6 +205,14 @@ router.post('/clear-session', protect, authorize('SUPER_ADMIN'), async (req, res
 // 8. Fetch logged WhatsApp messages
 router.get('/messages', protect, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res, next) => {
   try {
+    if (useAdapter()) {
+      const messages = await whatsappAdapter.getMessages({ limit: 100 });
+      return res.status(200).json({
+        success: true,
+        data: messages
+      });
+    }
+
     const messages = await WhatsAppMessage.find().sort({ createdAt: -1 }).limit(100);
     return res.status(200).json({
       success: true,

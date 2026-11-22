@@ -17,13 +17,16 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map(ch => ch.charCodeAt(0)));
 }
 
-export async function registerServiceWorker() {
+export async function registerServiceWorker(scope = '/') {
+  if (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop) {
+    return null;
+  }
   if (!('serviceWorker' in navigator)) {
     console.warn('Push: Service Worker not supported');
     return null;
   }
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const registration = await navigator.serviceWorker.register('/sw.js', { scope });
     return registration;
   } catch (err) {
     console.error('Push: SW registration failed:', err.message);
@@ -67,6 +70,9 @@ async function subscribeToPush(registration, publicKey) {
 }
 
 export async function initPushNotifications(registration) {
+  if (typeof window !== 'undefined' && window.vcmDesktop?.isDesktop) {
+    return false;
+  }
   if (!registration) {
     console.warn('Push: no SW registration provided');
     return false;

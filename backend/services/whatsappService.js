@@ -13,6 +13,7 @@ import WhatsAppSession from '../models/WhatsAppSession.js';
 import WhatsAppMessage from '../models/WhatsAppMessage.js';
 import AuditLog from '../models/AuditLog.js';
 import { notifyStaff } from './notificationService.js';
+import { whatsappAdapter, isWhatsAppAdapterEnabled } from './whatsappAdapter.js';
 import { logEvent } from './loggingService.js';
 import { config } from '../config/env.js';
 import { getAuthoritativeCacheDir, findChromeBinary } from '../scripts/puppeteer-cache.js';
@@ -1378,17 +1379,19 @@ const whatsappService = {
 
             const isFromSelf = (senderPhone && clientPhone && recipientPhone && senderPhone === clientPhone && recipientPhone === clientPhone) || (msg.fromMe && recipientPhone && recipientPhone === clientPhone) || msg.fromMe;
 
-            const savedMsg = new WhatsAppMessage({
-              from: senderPhone,
-              to: recipientPhone,
-              body: messageBody,
-              type: msg.fromMe ? 'out' : 'in',
-              timestamp: new Date()
-            });
-            await savedMsg.save();
+            if (!isWhatsAppAdapterEnabled()) {
+              const savedMsg = new WhatsAppMessage({
+                from: senderPhone,
+                to: recipientPhone,
+                body: messageBody,
+                type: msg.fromMe ? 'out' : 'in',
+                timestamp: new Date()
+              });
+              await savedMsg.save();
 
-            if (io) {
-              io.emit('whatsapp_new_message', savedMsg);
+              if (io) {
+                io.emit('whatsapp_new_message', savedMsg);
+              }
             }
 
             if (isFromSelf || matchedUser.role === 'SUPER_ADMIN') {
@@ -1462,6 +1465,9 @@ const whatsappService = {
   },
 
   sendMessage: async (phoneNumber, text) => {
+    if (isWhatsAppAdapterEnabled()) {
+      return whatsappAdapter.sendMessage({ phoneNumber, text, purpose: 'manual', metadata: { source: 'whatsappService' } });
+    }
     if (connectionStatus !== 'CONNECTED' || !client) {
       throw new Error('WhatsApp service not connected.');
     }
@@ -1653,6 +1659,18 @@ const whatsappService = {
   },
 
   sendAdminNotification: async (message) => {
+    if (isWhatsAppAdapterEnabled()) {
+      try {
+        const admins = await User.find({ role: 'SUPER_ADMIN' });
+        for (const admin of admins) {
+          if (!admin.phone) continue;
+          await whatsappAdapter.sendMessage({ phoneNumber: admin.phone, text: message, purpose: 'admin_notification', metadata: { source: 'whatsappService' } }).catch(() => {});
+        }
+      } catch (err) {
+        console.error('Failed to send admin WhatsApp notification via adapter:', err.message);
+      }
+      return;
+    }
     try {
       const admins = await User.find({ role: 'SUPER_ADMIN' });
       let sentCount = 0;
@@ -1744,6 +1762,7 @@ export const sendTaskNotification = async (projectId, employeeIds) => {
 
 whatsappService.sendTaskNotification = sendTaskNotification;
 whatsappService.handleAdminCommand = handleAdminCommand;
+whatsappService.handleEmployeeCommand = handleEmployeeCommand;
 whatsappService.parseNewProjectMessage = parseNewProjectMessage;
 whatsappService.parseDateString = parseDateString;
 

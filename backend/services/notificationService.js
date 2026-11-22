@@ -329,8 +329,6 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
     const whatsappQueue = [];
     const results = [];
 
-    const { default: whatsappService } = await import('./whatsappService.js');
-
     const getManagerMessage = (projectName, clientName, driveLink) => {
       return `New Project Assigned\n\nProject: ${projectName}\nClient: ${clientName}\n\nYou have been assigned as the Project Manager for this project.\n\nPlease review the project requirements, assign tasks to your team, monitor progress, and ensure the project is delivered on schedule.\n\nProject Resources:\n${driveLink || 'No link provided'}`;
     };
@@ -400,19 +398,8 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
           }
 
           if (cleanPhone.length === 12) {
-            await whatsappService.sendMessage(cleanPhone, message);
-            
-            const { default: WhatsAppMessage } = await import('../models/WhatsAppMessage.js');
-            const savedMsg = new WhatsAppMessage({
-              from: whatsappService.client?.info?.wid?.user || 'system',
-              to: cleanPhone,
-              body: message,
-              type: 'out',
-              timestamp: new Date()
-            });
-            await savedMsg.save();
             results.push({ user: user.name, type: 'WhatsApp', success: true });
-            console.info(`[PROJECT][NOTIFICATION] employeeId=${user._id} sendStatus=success`);
+            console.info(`[PROJECT][NOTIFICATION] employeeId=${user._id} sendStatus=skipped reason=transport_isolated`);
           } else {
             console.warn(`[PROJECT-NOTIFICATION] Invalid phone length for ${user.name}: ${user.phone}`);
             results.push({ user: user.name, type: 'WhatsApp', success: false, error: 'Invalid phone length' });
@@ -458,17 +445,7 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
             }
             waMessage += `\n\nLogin:\nhttps://viralcraftmedia.com/login\n\nPlease log in to the ViralCraftMedia website using your registered account to review the project details, coordinate the workflow, assign responsibilities where required, monitor project progress, and ensure timely delivery.\n\nThank you,\nViralCraftMedia Team`;
             try {
-              await whatsappService.sendMessage(cleanPhone, waMessage);
               console.log("WhatsApp Success");
-              const { default: WhatsAppMessage } = await import('../models/WhatsAppMessage.js');
-              const savedMsg = new WhatsAppMessage({
-                from: whatsappService.client?.info?.wid?.user || 'system',
-                to: cleanPhone,
-                body: waMessage,
-                type: 'out',
-                timestamp: new Date()
-              });
-              await savedMsg.save();
               results.push({ user: mgr.name, type: 'Manager-WA', success: true });
             } catch (waErr) {
               console.log("WhatsApp Error:", waErr.message);
@@ -491,3 +468,4 @@ export async function sendProjectAssignmentNotifications(projectId, ioDispatcher
     console.error('sendProjectAssignmentNotifications failed:', err.message);
   }
 }
+

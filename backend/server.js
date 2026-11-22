@@ -6,6 +6,9 @@ import connectDB from './config/db.js';
 import { config } from './config/env.js';
 import { seedSuperAdmin, seedBackupAdmin } from './config/seed.js';
 import whatsappService from './services/whatsappService.js';
+import { createRealtimeDispatcher } from './services/realtimeDispatchService.js';
+import { isWhatsAppAdapterEnabled } from './services/whatsappAdapter.js';
+import { setWhatsAppCommandIo } from './services/whatsappCommandProcessor.js';
 import { startReferralCampaignMonitor, stopReferralCampaignMonitor } from './services/referralCron.js';
 import { getAllowedOrigins } from './middleware/corsConfig.js';
 import { closeRedis } from './config/redis.js';
@@ -34,7 +37,9 @@ const shutdown = async (signal) => {
     process.exit(1);
   }, 25000);
   try {
-    try { await whatsappService.shutdown(); } catch (e) { console.warn('[SHUTDOWN] WhatsApp cleanup warning:', e.message); }
+    if (!isWhatsAppAdapterEnabled()) {
+      try { await whatsappService.shutdown(); } catch (e) { console.warn('[SHUTDOWN] WhatsApp cleanup warning:', e.message); }
+    }
     try { await shutdownBackupServices(); } catch (e) { console.warn('[SHUTDOWN] Backup cleanup warning:', e.message); }
     try { stopReferralCampaignMonitor(); } catch (e) { console.warn('[SHUTDOWN] Referral monitor cleanup warning:', e.message); }
     try { await closeRedis(); } catch (e) { console.warn('[SHUTDOWN] Redis cleanup warning:', e.message); }
@@ -84,15 +89,21 @@ const startServer = async () => {
     });
 
     // Initialize WhatsApp Web automation service (non-blocking)
-    whatsappService.init(io).catch((err) => {
-      console.error('[WA-AUTOMATION] WhatsApp initial startup failed (non-fatal):', err.message);
-    });
+    setWhatsAppCommandIo(io);
+    if (!isWhatsAppAdapterEnabled()) {
+      whatsappService.init(io).catch((err) => {
+        console.error('[WA-AUTOMATION] WhatsApp initial startup failed (non-fatal):', err.message);
+      });
+    }
 
-    // Start background referral campaign status monitor
-    startReferralCampaignMonitor();
+    // Start background referral campaign status monitor in-process only when
+    // RUN_IN_PROCESS_WORKERS is not explicitly disabled (worker service may own it).
+    if (String(process.env.RUN_IN_PROCESS_WORKERS || 'true').toLowerCase() !== 'false') {
+      startReferralCampaignMonitor();
+    }
 
     // Track active connection sockets grouped by User ID
-    const activeClients = new Map();
+    const { dispatch, activeClients } = createRealtimeDispatcher(io);
 
     io.on('connection', (socket) => {
       console.log(`Socket client connected: ${socket.id}`);
@@ -119,23 +130,7 @@ const startServer = async () => {
     });
 
     // Expose WebSocket dispatcher helper in Express app context
-    // Controllers broadcast global refresh events by passing `null` as the target
-    // user. Guard against null/undefined so those broadcasts no longer throw after
-    // the underlying database write has already succeeded.
-    app.set('socketio_dispatch', (userId, eventType, payload) => {
-      if (!userId) {
-        io.emit(eventType, payload);
-        console.log(`Broadcasted real-time WebSocket '${eventType}' event to all connected users`);
-        return;
-      }
-      const socketId = activeClients.get(userId.toString());
-      if (socketId) {
-        io.to(socketId).emit(eventType, payload);
-        console.log(`Dispatched real-time WebSocket '${eventType}' event to user ${userId}`);
-      } else {
-        console.log(`User ${userId} not active. WebSocket dispatch skipped.`);
-      }
-    });
+    app.set('socketio_dispatch', dispatch);
     app.set('socketio_io', io);
     app.set('socketio_clients', activeClients);
 

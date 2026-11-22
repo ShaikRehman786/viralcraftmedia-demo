@@ -100,3 +100,6 @@ test('HMAC contract: canonical message is unambiguous newline-delimited', () => 
   const msg = buildCanonicalMessage({ timestamp: '1', service: 'svc', nonce: 'n', method: 'GET', path: '/p?q=1', body: '' });
   assert.equal(msg, '1\nsvc\nn\nGET\n/p?q=1\n');
 });
+test('HMAC contract: timestamp skew tolerance does not exceed nonce TTL', () => {
+  assert.ok(__internal.SKEW_TOLERANCE_MS <= __internal.NONCE_TTL_SECONDS * 1000);
+});

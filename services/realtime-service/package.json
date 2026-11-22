@@ -1,0 +1,12 @@
+{
+  "name": "viralcraft-realtime-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "health": "node -e \"fetch('http://localhost:'+(process.env.PORT||process.env.REALTIME_PORT||5004)+'/health').then(r=>r.text()).then(console.log).catch(e=>{console.error(e.message);process.exit(1)})\""
+  }
+}

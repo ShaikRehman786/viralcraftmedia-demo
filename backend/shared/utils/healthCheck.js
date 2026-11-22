@@ -42,7 +42,14 @@ export function createHealthHandler(options = {}) {
       },
     };
 
-    return res.status(healthy ? 200 : 503).json(payload);
+    const statusCode = healthy ? 200 : 503;
+    if (typeof res.status === 'function' && typeof res.json === 'function') {
+      return res.status(statusCode).json(payload);
+    }
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify(payload));
+    return payload;
   };
 }
 

@@ -11,6 +11,20 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  if (process.env.INTERNAL_AUTH_MEMORY_NONCE_STORE === 'true' && process.env.NODE_ENV !== 'production') {
+    const nonceMap = new Map();
+    app.set('internalNonceStore', {
+      reserve(key, ttlSeconds) {
+        const now = Date.now();
+        const exp = nonceMap.get(key);
+        if (exp && exp > now) return false;
+        nonceMap.set(key, now + ttlSeconds * 1000);
+        return true;
+      }
+    });
+    logger.warn('INTERNAL_AUTH_MEMORY_NONCE_STORE enabled (non-production only).');
+  }
+
   app.get('/health', (req, res) => {
     const status = whatsappManager.getStatus();
     res.status(200).json({

@@ -1,6 +1,6 @@
 import http from 'http';
 import mongoose from 'mongoose';
-import { connectDB } from '../config/db.js';
+import connectDB from '../config/db.js';
 import { config } from '../config/env.js';
 import { isRedisAvailable, safeSet, safeDel, closeRedis } from '../config/redis.js';
 import { startReferralCampaignMonitor, stopReferralCampaignMonitor } from '../services/referralCron.js';

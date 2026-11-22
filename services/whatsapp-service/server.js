@@ -53,10 +53,14 @@ server.listen(config.port, async () => {
   });
   // Start WhatsApp lifecycle bootstrap in background but log failures clearly.
   // Controlled QR/auth flow: init will emit/hold QR state; generation endpoint can retrigger.
-  try {
-    await whatsappManager.init();
-  } catch (err) {
-    logger.error('Initial WhatsApp init failed (service remains up for /health and internal ops)', { error: err?.message });
+  if (String(process.env.WHATSAPP_SKIP_INIT || 'false').toLowerCase() === 'true') {
+    logger.warn('WHATSAPP_SKIP_INIT=true; skipping WhatsApp client initialization (health/internal endpoints remain available).');
+  } else {
+    try {
+      await whatsappManager.init();
+    } catch (err) {
+      logger.error('Initial WhatsApp init failed (service remains up for /health and internal ops)', { error: err?.message });
+    }
   }
 });
 

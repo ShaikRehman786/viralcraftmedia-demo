@@ -37,10 +37,12 @@ const shutdown = async (signal) => {
     process.exit(1);
   }, 25000);
   try {
-    if (!isWhatsAppAdapterEnabled()) {
+    if (String(process.env.RUN_IN_PROCESS_WHATSAPP || 'true').toLowerCase() !== 'false' && !isWhatsAppAdapterEnabled()) {
       try { await whatsappService.shutdown(); } catch (e) { console.warn('[SHUTDOWN] WhatsApp cleanup warning:', e.message); }
     }
-    try { await shutdownBackupServices(); } catch (e) { console.warn('[SHUTDOWN] Backup cleanup warning:', e.message); }
+    if (String(process.env.RUN_IN_PROCESS_BACKUP || 'true').toLowerCase() !== 'false') {
+      try { await shutdownBackupServices(); } catch (e) { console.warn('[SHUTDOWN] Backup cleanup warning:', e.message); }
+    }
     try { stopReferralCampaignMonitor(); } catch (e) { console.warn('[SHUTDOWN] Referral monitor cleanup warning:', e.message); }
     try { await closeRedis(); } catch (e) { console.warn('[SHUTDOWN] Redis cleanup warning:', e.message); }
     if (httpServer) {
@@ -90,7 +92,7 @@ const startServer = async () => {
 
     // Initialize WhatsApp Web automation service (non-blocking)
     setWhatsAppCommandIo(io);
-    if (!isWhatsAppAdapterEnabled()) {
+    if (String(process.env.RUN_IN_PROCESS_WHATSAPP || 'true').toLowerCase() !== 'false' && !isWhatsAppAdapterEnabled()) {
       whatsappService.init(io).catch((err) => {
         console.error('[WA-AUTOMATION] WhatsApp initial startup failed (non-fatal):', err.message);
       });

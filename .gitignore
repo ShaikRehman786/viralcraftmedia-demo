@@ -41,3 +41,21 @@ node_modules/
 # Desktop app build outputs
 desktop/app/
 desktop/release/
+
+
+
+
+
+# Environment files (keep .env.example templates)
+.env
+.env.*
+!.env.example
+
+# WhatsApp Web JS (root, backend, and isolated whatsapp-service)
+.wwebjs_auth/
+.wwebjs_cache/
+**/.wwebjs_auth/
+**/.wwebjs_cache/
+
+# Local test logs & scratch artifacts
+scratch/

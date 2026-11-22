@@ -23,9 +23,11 @@ export default async function connectDB() {
     console.log('\n[BOOT]\nMongo Connected');
     
     // Initialize Backup Database System in the background (non-blocking to server boot)
-    initBackupSystem().catch((err) => {
-      console.error('[BACKUP] Failed to initialize backup system:', err.message);
-    });
+    if (String(process.env.RUN_IN_PROCESS_BACKUP || 'true').toLowerCase() !== 'false') {
+      initBackupSystem().catch((err) => {
+        console.error('[BACKUP] Failed to initialize backup system:', err.message);
+      });
+    }
 
     return cachedConnection;
   } catch (error) {

@@ -5,6 +5,13 @@ export function createRealtimeDispatcher(io) {
   const activeClients = new Map();
 
   const dispatch = (userId, eventType, payload) => {
+    const remoteUrl = process.env.REALTIME_SERVICE_URL;
+    if (remoteUrl) {
+      // Split mode: forward to dedicated realtime service; keep local emit as fallback/no-op.
+      dispatchToRemoteRealtimeService(eventType, payload, userId).catch(() => {});
+    }
+
+    if (!io) return;
     if (!userId) {
       io.emit(eventType, payload);
       console.log(`Broadcasted real-time WebSocket '${eventType}' event to all connected users`);

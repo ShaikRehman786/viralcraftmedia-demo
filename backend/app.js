@@ -17,6 +17,20 @@ import { isRedisAvailable } from './config/redis.js';
 
 const app = express();
 
+if (process.env.INTERNAL_AUTH_MEMORY_NONCE_STORE === 'true' && process.env.NODE_ENV !== 'production') {
+  const nonceMap = new Map();
+  app.set('internalNonceStore', {
+    reserve(key, ttlSeconds) {
+      const now = Date.now();
+      const exp = nonceMap.get(key);
+      if (exp && exp > now) return false;
+      nonceMap.set(key, now + ttlSeconds * 1000);
+      return true;
+    }
+  });
+  console.warn('[main-api] INTERNAL_AUTH_MEMORY_NONCE_STORE enabled (non-production only).');
+}
+
 function parseTrustProxySetting(raw) {
   if (raw == null || raw === '') return undefined;
   const v = String(raw).trim();
